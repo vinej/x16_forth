@@ -2116,6 +2116,15 @@ VERA_L1_VSCROLL_H = $9F3A		; only low 4 bits are used
 ; ============================================================================
 
 CINV = $0314		; KERNAL RAM IRQ vector
+!if X16ROM {
+; Run-from-ROM: the KERNAL's jmp (CINV) fires with ROM bank 0 selected, so CINV
+; cannot point straight at irq_handler (that address is KERNAL ROM in bank 0).
+; It points at the RAM trampoline bridge_irq, which crosses to the Forth bank,
+; calls irq_handler (which rts's back), restores the bank, and chains.
+IRQ_VECTOR = bridge_irq
+} else {
+IRQ_VECTOR = irq_handler
+}
 
 ; IRQ ( xt -- )   arm (xt<>0) or disarm (xt=0) the per-frame Forth callback
 +header ~irq, ~irq_n, "IRQ"
@@ -2155,9 +2164,9 @@ irq_arm:
 	sta irq_chain
 	lda CINV+1
 	sta irq_chain+1
-	lda #<irq_handler
+	lda #<IRQ_VECTOR
 	sta CINV
-	lda #>irq_handler
+	lda #>IRQ_VECTOR
 	sta CINV+1
 	cli
 irq_arm_done:
@@ -2210,7 +2219,11 @@ irq_handler:
 	jmp invokeax
 
 irq_chainj:
+!if X16ROM {
+	rts				; return to bridge_irq (restores bank, then chains)
+} else {
 	jmp (irq_chain)
+}
 
 ; Tail of the interrupt: restore everything and chain. Entered as the hidden
 ; IRQPAUSE word once the callback has run to completion.
@@ -2222,7 +2235,11 @@ irqpause_impl:
 	sta _stopcheck
 	lda #0
 	sta irq_busy
+!if X16ROM {
+	rts				; SP was restored above via txs; return to bridge_irq
+} else {
 	jmp (irq_chain)
+}
 
 irqpause_list:
 	!byte irqpause			; one-token list: the hidden IRQPAUSE word

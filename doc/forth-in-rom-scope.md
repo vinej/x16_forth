@@ -62,13 +62,25 @@ over the RAM/ROM bank registers (`$00`/`$01`) → crash. Moved to a RAM hmbuffer
 This was the scope's "inline mutable storage in ROM" hazard (item 5); `fsp` was the
 only such case — the standard suite's `DEFER`/`VALUE` tests pass from ROM.
 
-### Still TODO
-- The `IRQ` Forth-callback word's `CINV` (`$0314`) hook needs a bank-switching
-  stub in ROM mode (the handler is in bank 9 but `CINV` is called with bank 0).
-  `SCROLLX`/`SCROLLY` (VERA writes) are fine. `X16IRQ.FTH` is excluded from the ROM
-  test run for now.
-- Finalize the RAM map (the `$9000` hmbuffer base is a placeholder).
-- rom.bin / FPGA `make_compact_rom.py` integration (bank `$09` in place of demo).
+### Completed since (all guarded by `X16ROM`; other builds unaffected)
+- **ROM-mode `IRQ` callback.** The KERNAL's `jmp (CINV)` runs with ROM bank 0
+  selected, so `CINV` (`$0314`) can't point straight at `irq_handler` (that address
+  is KERNAL ROM in bank 0). It now points at `bridge_irq`, a small RAM trampoline
+  (17th entry in the bridge template, at `brg_ram + 17*BRIDGE_LEN`) that saves the
+  bank, selects bank 9, `jsr`s `irq_handler`, restores the bank, then chains. The
+  handler's chain-out sites `rts` back to the trampoline in ROM mode (the callback
+  path returns cleanly because `irqpause` restores the 6502 SP first). `X16IRQ.FTH`
+  now passes from ROM.
+- **RAM map finalized.** hmbuffers grow down from `$9F00` (top byte `$9EFF`, just
+  under I/O at `$9F00`) instead of the old `$9000` placeholder. `UNUSED` reports
+  ~31 KB free for the dictionary at boot (vs ~18 KB in the PRG build).
+- **Boot free-memory report.** `forth_system` now prints "NNNNN BYTES FREE" after
+  the banner, mirroring BASIC.
+- **rom.bin integration.** `makeromforth.bat` copies the pristine 16-bank ROM
+  (`emulator\rom.bin.orig`) to `emulator\rom.bin` and patches bank `$09` (byte
+  offset 147456) with `forthx16rom.bin`. Boot that ROM and type `TEST` to launch
+  Forth. The FPGA ROM path (`rom_banks.sv` / `make_compact_rom.py`) is intentionally
+  left unchanged.
 
 The design notes below are the original plan; the items above record what was
 actually implemented.

@@ -115,6 +115,7 @@ STOP = $FFE1
 ; So typing "TEST" (replacing the demo) boots Forth from ROM. The 16K RAM copy is
 ; scratch (the dictionary overwrites it later). coldstart is also a direct jsrfar
 ; target (a loader can jsr $FF6E / !word coldstart / !byte $09).
+FORTH_BANK = $09		; the ROM bank this image lives in
 * = $C000
 start_of_image:
 	!word $1000 + (test_launcher - start_of_image)	; TEST / TEST 0
@@ -125,7 +126,7 @@ test_launcher:
 	; runs from the $1000 RAM copy (bank 0, IRQs on) - far-call into bank 9
 	jsr $FF6E			; KERNAL jsrfar (real, not the bridge)
 	!word coldstart
-	!byte $09
+	!byte FORTH_BANK
 	rts				; (Forth never returns)
 coldstart:
 	ldx #0				; copy the KERNAL bridge trampolines into RAM
@@ -318,7 +319,16 @@ NEW_LINE = $0D
 
 !if C64 {
 	!if X16ROM {
-		+high_memory_begin $9000		; TODO v3: settle a proper RAM map (buffers grow down)
+		; v3 run-from-ROM RAM map. The interpreter is in ROM bank 9, so all of
+		; low RAM is free for the user dictionary and these buffers. The X16's
+		; contiguous "golden RAM" ends at $9EFF (I/O is $9F00-$9FFF), so the
+		; buffers grow DOWN from $9F00 (top byte used = $9EFF) and the dictionary
+		; grows UP from $0801. They meet in the middle: with ~7.2 KB of buffers
+		; the dictionary gets roughly $0801..$82xx, ~30 KB (vs ~20 KB in the PRG
+		; build, where the interpreter itself occupies low RAM). The 16 KB the
+		; BASIC "TEST" command copies to $1000 is scratch - the dictionary
+		; overwrites it once Forth is running.
+		+high_memory_begin $9f00
 	} else if CART {
 		+high_memory_begin $8000
 	} else {
@@ -389,6 +399,11 @@ KSAVE      = brg_ram + 13*BRIDGE_LEN	; $FFD8 SAVE
 PLOT       = brg_ram + 14*BRIDGE_LEN	; $FFF0 PLOT
 SCREENMODE = brg_ram + 15*BRIDGE_LEN	; $FF5F screen_mode
 ENTROPY    = brg_ram + 16*BRIDGE_LEN	; $FECF entropy_get
+; RAM IRQ trampoline (ROM mode): the KERNAL's jmp (CINV) runs with ROM bank 0
+; selected, but irq_handler lives in bank 9, so CINV must point at this RAM stub
+; which crosses into bank 9, runs the handler, restores the bank, then chains.
+; Lives just past the 17 KERNAL trampolines; its template is copied with them.
+bridge_irq = brg_ram + 17*BRIDGE_LEN
 
 ; jsrfar (FP bank 4 / audio bank $0A) support. brg_jsrfar (ROM, bank 9) is the
 ; ROM part of the KERNAL jsrfar (inc/jsrfar.inc) ported into our bank: it reads
@@ -5606,6 +5621,11 @@ forth_system_c:
 	+literal banner_text
 	+token count, type, cr
 	+token decimal, false, state, poke, xsst
+; BASIC-style free-memory report at boot ("NNNNN BYTES FREE"). UNUSED = MEMTOP -
+; HERE; at cold start the dictionary is empty so this is the full free space.
+	+token unused, dot
+	+literal bytesfree_text
+	+token count, type, cr
 ; Register the root Forth dictionary
 ; One wid with the value 0; one voc with head pointing at the NFA of the last word
 ; Current is also at 0
@@ -5650,6 +5670,8 @@ forth_system_1:
 	+branch forth_system_1
 banner_text:
 	+string "FORTH TX16 " + VERSION_HIGH + "." + VERSION_LOW
+bytesfree_text:
+	+string "BYTES FREE"
 autorun:
 	+string "AUTORUN.FTH"
 
@@ -5686,10 +5708,19 @@ brg_template:
 	+ktramp $FFF0		; 14 PLOT
 	+ktramp $FF5F		; 15 screen_mode
 	+ktramp $FECF		; 16 entropy_get
-	; brg_ff_stub template (copied to RAM right after the 17 trampolines). Runs
-	; from RAM so it survives selecting KERNAL bank 0. Its "jsr $FF6E" inline args
-	; (brg_ff_args) are patched per call by brg_jsrfar. Layout is fixed so that
-	; brg_ff_args = brg_ff_stub + 21 (do not reorder without updating that).
+	; 17 IRQ trampoline (template for bridge_irq). Copied to RAM with the rest,
+	; it must sit exactly at brg_template + 17*BRIDGE_LEN. The KERNAL reaches it
+	; via jmp (CINV) with ROM bank 0 selected; it crosses into the Forth bank,
+	; runs irq_handler (which rts's back), restores the entered bank, then chains
+	; to the original IRQ handler. Absolute operands stay valid after the copy.
+	lda $01			; save the ROM bank we were entered with (KERNAL = 0)
+	pha
+	lda #FORTH_BANK		; cross into the Forth bank so irq_handler can run
+	sta $01
+	jsr irq_handler
+	pla
+	sta $01			; restore the entered ROM bank before chaining
+	jmp (irq_chain)		; chain to the original IRQ handler
 brg_template_end:
 
 ; JSRFAR for bank-9 code (FP bank 4 / audio bank $0A). Ported ROM part of the

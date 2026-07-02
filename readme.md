@@ -309,10 +309,16 @@ command - the same one that used to run the demo. The bank starts with the 4-wor
 vector table `TEST` expects; `TEST` copies the bank to RAM `$1000` and jumps into a
 small launcher there, which `jsrfar`s back into bank 9 to start Forth in place. So
 on a machine whose ROM has Forth in bank 9, you just type `TEST` at the READY
-prompt. (For testing, patch the bank image into a ROM at bank-9 offset `$24000`.)
+prompt.
 
-It is still experimental: the `IRQ` callback word isn't bridged for ROM mode yet,
-and the RAM map isn't finalized. Full details, status, and design notes are in
+To build a ready-to-run ROM: `makex16rom.bat` (produces `forthx16rom.bin`) then
+`makeromforth.bat`, which copies the pristine 16-bank ROM (`emulator\rom.bin.orig`)
+to `emulator\rom.bin` with bank `$09` patched to Forth. Launch the emulator from
+`emulator\` and type `TEST`. Forth cold-starts in place and reports ~31 KB free
+(all of low RAM, since the interpreter is in ROM), including a BASIC-style
+`NNNNN BYTES FREE` line at boot. Floating point/audio (via `jsrfar`), the `IRQ`
+Forth-callback (via a RAM CINV trampoline), VERA, and disk LOAD/SAVE all work from
+ROM; the full test suite passes. Design notes and status are in
 `doc/forth-in-rom-scope.md`.
 
 Wherever it is reasonable the words mirror the corresponding X16 BASIC command,
@@ -602,10 +608,10 @@ a reasonable thing to have. Some parts of the Standard may be added through a to
 Finally, there are also a lot of platform-specific things that would make the system a lot more usable.
 (On the X16 the string, BASIC-alias, and floating-point toolkits are now baked into the build.)
 
-### Run from ROM (v3, in progress)
+### Run from ROM (v3)
 Running ForthX16 in place from an X16 ROM bank (see the "Run-from-ROM build"
 section above and `doc/forth-in-rom-scope.md`) so the interpreter lives in ROM and
-low RAM is freed for the user dictionary. Boots (launched by the BASIC `TEST`
-command, replacing the demo) and passes the full test suite from ROM; remaining
-work is the ROM-mode `IRQ` callback, finalizing the RAM map, and rom.bin / FPGA
-integration.
+low RAM is freed for the user dictionary. Launched by the BASIC `TEST` command
+(replacing the demo), it passes the full test suite from ROM including the ROM-mode
+`IRQ` callback, reports ~31 KB free with the finalized RAM map, and is packaged with
+`makeromforth.bat`. (The FPGA ROM path is left unchanged.)
