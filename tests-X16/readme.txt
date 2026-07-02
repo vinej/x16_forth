@@ -30,10 +30,27 @@ extension words (only present in the X16 build, forthx16.prg):
                   (MONITOR is interactive - run it and exit with X.)
 * X16MEM.FTH    - self-checking test of SETBANK, I2CPEEK, SLEEP, KEYMAP.
                   (I2CPOKE and RESET/REBOOT/POWEROFF reset/alter the machine.)
-* X16STRT.FTH   - self-checking test of the toolkit/X16STR.FTH string functions
-                  (HEX$ BIN$ STR$ VAL ASC CHR$ LEN LEFT$ RIGHT$ MID$ RPT$).
+* X16STRT.FTH   - self-checking test of the string functions now baked into
+                  the X16 build (HEX$ BIN$ STR$ VAL ASC CHR$ LEN LEFT$ RIGHT$
+                  MID$ RPT$), formerly toolkit/X16STR.FTH.
+* X16BAST.FTH   - self-checking test of the BASIC-name aliases baked into the
+                  X16 build (OPEN CLOSE LINPUT SQR SIN COS TAN ATN LOG EXP),
+                  formerly toolkit/X16BASIC.FTH.
+* X16FPT.FTH    - self-checking test of the FP defining words baked into the
+                  X16 build (FVARIABLE FCONSTANT), formerly toolkit/X16FP.FTH.
 * X16FLT.FTH    - self-checking test of the floating-point words (F+ F- F* F/,
                   FSQRT/FSIN/FCOS/FTAN/FATAN/FLN/FEXP, F. and the float stack).
+* X16IRQ.FTH    - self-checking test of VERA layer-1 hardware scroll (SCROLLX,
+                  SCROLLY) and the IRQ Forth-callback word (IRQ): arms a counter
+                  callback, confirms it runs, then stops when disarmed.
+* X16BITS.FTH   - self-checking test of the bit/byte words (CATNIB, SPLIT,
+                  SBIT, CBIT, FBIT) and the core shifts (LSHIFT, RSHIFT).
+* X16GET.FTH    - self-checking test of CURSOR (read text cursor, inverse of
+                  LOCATE) and GETSPR (read a sprite's position, inverse of
+                  SPRITE-POS).
+* X16SAV.FTH    - self-checking test of the VRAM/sprite/tile disk save-load
+                  words (VSAVE + BVLOAD, SPRSAVE/SPRLOAD, TILESAVE/TILELOAD,
+                  TMAPSAVE/TMAPLOAD). Writes TSAV*.BIN on device 8.
 * X16SPRITE.FTH - interactive demo: a 16x16 sprite moved with the cursor keys.
 * X16TONE.FTH   - plays a sustained two-note tone on the VERA PSG (needs audio).
 Run any of them with e.g. INCLUDE X16TEST.FTH after starting forthx16.prg.

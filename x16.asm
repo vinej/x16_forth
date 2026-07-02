@@ -109,6 +109,20 @@ x16_coltab:
 	+dpop
 	jmp next
 
+; CURSOR ( -- row col )   read the text cursor position (inverse of LOCATE)
++header ~cursor, ~cursor_n, "CURSOR"
+	+code
+	sec					; carry set = read cursor
+	jsr $FFF0			; KERNAL PLOT -> X = row, Y = col
+	stx _scratch
+	sty _scratch+1
+	lda _scratch		; push row
+	ldx #0
+	jsr push_dstack
+	lda _scratch+1		; then col on top
+	ldx #0
+	jmp dpush_and_next
+
 ; ==============================================================================
 ; Sprites (VERA sprite attributes at bank 1, offset VRAM_SPRITES; 8 bytes each)
 ;   byte 0-1: graphics address >> 5, and mode (bit 15 = 8bpp)
@@ -167,6 +181,22 @@ x16_coltab:
 	+value VRAM_SPRITES+2
 	+token add, one, swap, vaddr		; VERA -> attr byte 2 (X)
 	+token swap, vwstore, vwstore, exit	; write X then Y as words
+
+; GETSPR ( sprite -- x y )   read a sprite's 12-bit X and Y position (inverse of
+; SPRITE-POS). Reads attr bytes 2-5 back through the auto-incrementing data port.
++header ~getspr, ~getspr_n, "GETSPR"
+	+forth
+	+literal 8
+	+token mult
+	+token lit
+	+value VRAM_SPRITES+2
+	+token add, one, swap, vaddr		; VERA -> attr byte 2 (X low), auto-inc
+	+token vfetch, vfetch			; ( xlo xhi )
+	+literal 8
+	+token lshift, or			; ( x )      x = xhi<<8 | xlo
+	+token vfetch, vfetch			; ( x ylo yhi )
+	+literal 8
+	+token lshift, or, exit			; ( x y )
 
 ; SPRITE-SIZE ( width height sprite -- )   width/height codes 0-3 (8/16/32/64)
 +header ~sprite_size, ~sprite_size_n, "SPRITE-SIZE"
@@ -750,6 +780,103 @@ bv_store:
 	sta _dtop
 	stx _dtop+1
 	jmp next
+
+; VSAVE ( c-addr u bank vaddr len -- )   save 'len' bytes of VRAM at bank:vaddr
+; to a headerless file on device 8. The inverse of BVLOAD - what VSAVE writes,
+; BVLOAD reads straight back into VRAM. (The KERNAL SAVE cannot read VRAM, so
+; the bytes are streamed through the VERA data port to an open file.)
++header ~vsave, ~vsave_n, "VSAVE"
+	+forth
+	+token dovsave, exit
+
+; --- sprite / tile definition save & load (all on device 8) -----------------
+
+; SPRSAVE ( c-addr u sprite -- )   save a sprite's image pixel data. The image
+; address and byte count are taken from the sprite's own attribute bytes.
++header ~sprsave, ~sprsave_n, "SPRSAVE"
+	+forth
+	+token sprinfo				; ( c-addr u bank vaddr len )
+	+token dovsave, exit
+
+; SPRLOAD ( c-addr u sprite -- )   load pixel data into a sprite's image area.
++header ~sprload, ~sprload_n, "SPRLOAD"
+	+forth
+	+token sprinfo, drop			; ( c-addr u bank vaddr )
+	+token tor, tor				; R: vaddr bank   ( c-addr u )
+	+literal 8				; device 8
+	+token rfrom, rfrom			; ( c-addr u 8 bank vaddr )
+	+token dovbload, exit
+
+; TILESAVE ( c-addr u vaddr len -- )   save 'len' bytes of a bank-1 tileset.
++header ~tilesave, ~tilesave_n, "TILESAVE"
+	+forth
+	+token tor, tor				; R: len vaddr   ( c-addr u )
+	+token one				; bank 1
+	+token rfrom, rfrom			; ( c-addr u 1 vaddr len )
+	+token dovsave, exit
+
+; TILELOAD ( c-addr u vaddr -- )   load a tileset into bank-1 VRAM at vaddr.
++header ~tileload, ~tileload_n, "TILELOAD"
+	+forth
+	+token tor				; R: vaddr
+	+literal 8
+	+token one
+	+token rfrom				; ( c-addr u 8 1 vaddr )
+	+token dovbload, exit
+
+; The layer-1 tilemap address (bank, vaddr) is derived from VERA_L1_MAPBASE:
+;   vaddr = (reg & $7F) << 9 ,  bank = reg >> 7
+; and its byte size from VERA_L1_CONFIG map width/height fields:
+;   mapw = 32 << ((cfg>>4)&3) , maph = 32 << ((cfg>>6)&3) , len = mapw*maph*2
+
+; TMAPSAVE ( c-addr u -- )   save the layer-1 tilemap (self-sizing).
++header ~tmapsave, ~tmapsave_n, "TMAPSAVE"
+	+forth
+	+token lit
+	+value VERA_L1_MAPBASE
+	+token cpeek, dup			; ( c-addr u reg reg )
+	+literal 7
+	+token rshift, swap			; ( c-addr u bank reg )
+	+literal 127
+	+token and_op
+	+literal 9
+	+token lshift				; ( c-addr u bank vaddr )
+	+token lit
+	+value VERA_L1_CONFIG
+	+token cpeek, dup			; ( ... cfg cfg )
+	+literal 4
+	+token rshift
+	+literal 3
+	+token and_op
+	+literal 32
+	+token swap, lshift, swap		; ( ... mapw cfg )
+	+literal 6
+	+token rshift
+	+literal 3
+	+token and_op
+	+literal 32
+	+token swap, lshift			; ( ... mapw maph )
+	+token mult
+	+literal 2
+	+token mult				; ( c-addr u bank vaddr len )
+	+token dovsave, exit
+
+; TMAPLOAD ( c-addr u -- )   load the layer-1 tilemap back to its VRAM address.
++header ~tmapload, ~tmapload_n, "TMAPLOAD"
+	+forth
+	+token lit
+	+value VERA_L1_MAPBASE
+	+token cpeek, dup			; ( c-addr u reg reg )
+	+literal 7
+	+token rshift, swap			; ( c-addr u bank reg )
+	+literal 127
+	+token and_op
+	+literal 9
+	+token lshift				; ( c-addr u bank vaddr )
+	+token tor, tor				; R: vaddr bank   ( c-addr u )
+	+literal 8				; device 8
+	+token rfrom, rfrom			; ( c-addr u 8 bank vaddr )
+	+token dovbload, exit
 
 ; ==============================================================================
 ; Bitmap graphics (KERNAL GRAPH API). Call GINIT once to enter 320x240 graphics
@@ -1836,55 +1963,8 @@ fpush_fac:				; push FAC as a new top float
 	jsr fstore_top
 	jmp next
 
-; F! ( f-addr -- ) ( F: r -- )   store the top float at f-addr (5 bytes)
-+header ~fstoremem, ~fstoremem_n, "F!"
-	+code
-	lda fsp				; src = top float
-	sta $02
-	lda fsp+1
-	sta $03
-	lda _dtop			; dest = f-addr
-	sta $04
-	lda _dtop+1
-	sta $05
-	ldy #4
--	lda ($02),y
-	sta ($04),y
-	dey
-	bpl -
-	clc					; pop the float
-	lda fsp
-	adc #5
-	sta fsp
-	lda fsp+1
-	adc #0
-	sta fsp+1
-	+dpop				; pop f-addr
-	jmp next
-
-; F@ ( f-addr -- ) ( F: -- r )   push the float stored at f-addr
-+header ~ffetchmem, ~ffetchmem_n, "F@"
-	+code
-	lda _dtop			; src = f-addr
-	sta $02
-	lda _dtop+1
-	sta $03
-	sec					; dst = fsp - 5 (new top)
-	lda fsp
-	sbc #5
-	sta fsp
-	sta $04
-	lda fsp+1
-	sbc #0
-	sta fsp+1
-	sta $05
-	ldy #4
--	lda ($02),y
-	sta ($04),y
-	dey
-	bpl -
-	+dpop				; pop f-addr
-	jmp next
+; F! and F@ are defined in x16prims.asm (above the token boundary) so the
+; baked-in toolkit word FCONSTANT can reference them by token.
 
 ; F0= ( F: r -- ) ( -- flag )   true if r = 0
 +header ~fzeroeq, ~fzeroeq_n, "F0="
@@ -1977,4 +2057,476 @@ flt_t:
 	+basiccall FP_getadr
 	sta _dtop+1
 	sty _dtop
+	jmp next
+
+; ============================================================================
+; VERA layer-1 hardware scroll (the default text/tile layer). SCROLLX/SCROLLY
+; set the 12-bit horizontal / vertical scroll offset of layer 1, shifting the
+; whole displayed screen. Values wrap modulo the tile-map size.
+; ============================================================================
+
+VERA_L1_HSCROLL_L = $9F37
+VERA_L1_HSCROLL_H = $9F38		; only low 4 bits are used
+VERA_L1_VSCROLL_L = $9F39
+VERA_L1_VSCROLL_H = $9F3A		; only low 4 bits are used
+
+; SCROLLX ( n -- )   set layer-1 horizontal scroll (0..4095)
++header ~scrollx, ~scrollx_n, "SCROLLX"
+	+code
+	lda _dtop
+	sta VERA_L1_HSCROLL_L
+	lda _dtop+1
+	and #$0f
+	sta VERA_L1_HSCROLL_H
+	+dpop
+	jmp next
+
+; SCROLLY ( n -- )   set layer-1 vertical scroll (0..4095)
++header ~scrolly, ~scrolly_n, "SCROLLY"
+	+code
+	lda _dtop
+	sta VERA_L1_VSCROLL_L
+	lda _dtop+1
+	and #$0f
+	sta VERA_L1_VSCROLL_H
+	+dpop
+	jmp next
+
+; ============================================================================
+; IRQ callback: run a Forth word from the 60 Hz VSYNC interrupt.
+;   xt IRQ   arm  - the word (given as an execution token from ') is called
+;                   once per frame in interrupt context.
+;   0  IRQ   disarm - remove the handler.
+; The callback must be short and stack-neutral ( -- ). It runs with the
+; interpreter's VM registers and stacks saved and restored around it, so it
+; cannot corrupt the interrupted foreground Forth code.
+;
+; Implementation notes:
+; - We hook CINV ($0314), the KERNAL RAM IRQ vector (A/X/Y are already saved
+;   by the KERNAL at this point), and chain to the original handler afterwards.
+; - The callback is dispatched through the normal token machinery (invokeax),
+;   after pushing "call-1" exactly like cold start so colon words route through
+;   CALL, and with _ri pointing at a one-token list that runs the hidden
+;   IRQPAUSE word when the callback returns.
+; - IRQPAUSE restores the 6502 stack pointer (captured on entry) which cleanly
+;   absorbs the call/rts bookkeeping regardless of whether the callback was a
+;   colon or a code word, then restores the VM state and chains.
+; ============================================================================
+
+CINV = $0314		; KERNAL RAM IRQ vector
+
+; IRQ ( xt -- )   arm (xt<>0) or disarm (xt=0) the per-frame Forth callback
++header ~irq, ~irq_n, "IRQ"
+	+code
+	lda _dtop
+	ora _dtop+1
+	bne irq_arm
+
+	; --- disarm: restore the original vector if we installed ours ---
+	lda irq_armed
+	beq irq_ret
+	sei
+	lda irq_chain
+	sta CINV
+	lda irq_chain+1
+	sta CINV+1
+	lda #0
+	sta irq_armed
+	cli
+irq_ret:
+	+dpop
+	jmp next
+
+irq_arm:
+	; store the callback token
+	lda _dtop
+	sta irq_cb_token
+	lda _dtop+1
+	sta irq_cb_token+1
+	; install our handler once (leave it chained while armed)
+	lda irq_armed
+	bne irq_arm_done
+	sei
+	lda #0
+	sta irq_busy
+	lda CINV
+	sta irq_chain
+	lda CINV+1
+	sta irq_chain+1
+	lda #<irq_handler
+	sta CINV
+	lda #>irq_handler
+	sta CINV+1
+	cli
+irq_arm_done:
+	lda #1
+	sta irq_armed
+	+dpop
+	jmp next
+
+; The interrupt handler, reached via jmp (CINV) from the KERNAL.
+irq_handler:
+	lda irq_armed
+	beq irq_chainj
+	lda irq_busy			; do not re-enter if a callback is still running
+	bne irq_chainj
+	inc irq_busy
+
+	tsx					; remember the stack pointer for a clean return
+	stx irq_saved_sp
+	jsr irq_savevm			; save the foreground VM state
+
+	lda _stopcheck			; suppress CALL's STOP-key check inside the callback:
+	sta irq_save_sc			; running the KERNAL STOP / ABORT from the IRQ would
+	lda #0				; corrupt everything. (Callbacks must be short anyway.)
+	sta _stopcheck
+
+	lda #<IRQ_RSTACK_TOP		; run the callback on its own stacks so it cannot
+	sta _rstack			; corrupt a half-finished foreground stack operation
+	lda #>IRQ_RSTACK_TOP
+	sta _rstack+1
+	lda #<IRQ_DSTACK_TOP
+	sta _dstack
+	lda #>IRQ_DSTACK_TOP
+	sta _dstack+1
+	lda #0
+	sta _dtop
+	sta _dtop+1
+
+	lda #<irqpause_list		; when the callback returns, run IRQPAUSE
+	sta _ri
+	lda #>irqpause_list
+	sta _ri+1
+
+	lda #>call-1			; harness so colon callbacks route through CALL
+	pha
+	lda #<call-1
+	pha
+
+	lda irq_cb_token		; dispatch the callback by token
+	ldx irq_cb_token+1
+	jmp invokeax
+
+irq_chainj:
+	jmp (irq_chain)
+
+; Tail of the interrupt: restore everything and chain. Entered as the hidden
+; IRQPAUSE word once the callback has run to completion.
+irqpause_impl:
+	ldx irq_saved_sp		; discard callback's call/rts leftovers
+	txs
+	jsr irq_restorevm
+	lda irq_save_sc			; restore the foreground STOP-key counter
+	sta _stopcheck
+	lda #0
+	sta irq_busy
+	jmp (irq_chain)
+
+irqpause_list:
+	!byte irqpause			; one-token list: the hidden IRQPAUSE word
+
+; Save/restore the contiguous VM zero-page registers (_ri.._scratch_2 = 20
+; bytes) plus the float-stack pointer.
+irq_savevm:
+	ldx #19
+-	lda _ri,x
+	sta irq_save,x
+	dex
+	bpl -
+	lda fsp
+	sta irq_save_fsp
+	lda fsp+1
+	sta irq_save_fsp+1
+	rts
+
+irq_restorevm:
+	ldx #19
+-	lda irq_save,x
+	sta _ri,x
+	dex
+	bpl -
+	lda irq_save_fsp
+	sta fsp
+	lda irq_save_fsp+1
+	sta fsp+1
+	rts
+
+; ============================================================================
+; Baked-in toolkit words (formerly the X16BASIC.FTH / X16STR.FTH / X16FP.FTH
+; INCLUDE files). Kept here in x16.asm so they compile into the X16 image and
+; are available without a disk INCLUDE. They sit below the token boundary
+; (leaf words), so they reference only words defined above the boundary; where
+; a needed helper lives below the boundary (MIN, /STRING) its body is inlined,
+; and PAD is reached via its buffer address _pad.
+; ============================================================================
+
+; --- X16BASIC.FTH : BASIC-style aliases ------------------------------------
+
+; OPEN ( c-addr u fam -- fileid ior )
++header ~open, ~open_n, "OPEN"
+	+forth
+	+token openfile, exit
+
+; CLOSE ( fileid -- ior )
++header ~close, ~close_n, "CLOSE"
+	+forth
+	+token closefile, exit
+
+; LINPUT ( c-addr +n -- +n2 )   read a line from the keyboard
++header ~linput, ~linput_n, "LINPUT"
+	+forth
+	+token accept, exit
+
+; BASIC floating-point function names ( F: r -- f(r) ). Each duplicates the
+; corresponding FP word's body rather than adding a code label to it.
+
+; SQR ( F: r -- sqrt )
++header ~sqr, ~sqr_n, "SQR"
+	+code
+	jsr fac_top
+	+basiccall FP_sqr
+	jsr fstore_top
+	jmp next
+
+; SIN ( F: r -- sin )
++header ~sin, ~sin_n, "SIN"
+	+code
+	jsr fac_top
+	+basiccall FP_sin
+	jsr fstore_top
+	jmp next
+
+; COS ( F: r -- cos )
++header ~cos, ~cos_n, "COS"
+	+code
+	jsr fac_top
+	+basiccall FP_cos
+	jsr fstore_top
+	jmp next
+
+; TAN ( F: r -- tan )
++header ~tan, ~tan_n, "TAN"
+	+code
+	jsr fac_top
+	+basiccall FP_tan
+	jsr fstore_top
+	jmp next
+
+; ATN ( F: r -- atan )
++header ~atn, ~atn_n, "ATN"
+	+code
+	jsr fac_top
+	+basiccall FP_atn
+	jsr fstore_top
+	jmp next
+
+; LOG ( F: r -- ln )
++header ~log, ~log_n, "LOG"
+	+code
+	jsr fac_top
+	+basiccall FP_log
+	jsr fstore_top
+	jmp next
+
+; EXP ( F: r -- e^r )
++header ~exp, ~exp_n, "EXP"
+	+code
+	jsr fac_top
+	+basiccall FP_exp
+	jsr fstore_top
+	jmp next
+
+; --- X16STR.FTH : BASIC string / number-conversion words -------------------
+
+; HEX$ ( u -- c-addr u )   unsigned number as hex digits
++header ~hexstr, ~hexstr_n, "HEX$"
+	+forth
+	+token base, peek, tor, hex, zero, bhash, hashs
+	+token hashb, rfrom, base, poke, exit
+
+; BIN$ ( u -- c-addr u )   unsigned number as binary digits
++header ~binstr, ~binstr_n, "BIN$"
+	+forth
+	+token base, peek, tor
+	+literal 2
+	+token base, poke, zero, bhash, hashs, hashb
+	+token rfrom, base, poke, exit
+
+; STR$ ( n -- c-addr u )   signed number as a string (current base)
++header ~strstr, ~strstr_n, "STR$"
+	+forth
+	+token dup, abs, zero, bhash, hashs, rot, sign
+	+token hashb, exit
+
+; VAL ( c-addr u -- n )   string to number (unsigned, current base)
++header ~valstr, ~valstr_n, "VAL"
+	+forth
+	+token zero, zero, twoswap, tonumber, twodrop, drop, exit
+
+; ASC ( c-addr u -- code )   code of the first character
++header ~ascstr, ~ascstr_n, "ASC"
+	+forth
+	+token drop, cpeek, exit
+
+; CHR$ ( code -- c-addr 1 )   one-character string (in PAD)
++header ~chrstr, ~chrstr_n, "CHR$"
+	+forth
+	+literal _pad
+	+token cpoke
+	+literal _pad
+	+token one, exit
+
+; LEN ( c-addr u -- u )   string length
++header ~lenstr, ~lenstr_n, "LEN"
+	+forth
+	+token nip, exit
+
+; LEFT$ ( c-addr u n -- c-addr n2 )   first n characters (n2 = MIN(u,n))
++header ~leftstr, ~leftstr_n, "LEFT$"
+	+forth
+	+token twodup, greater		; inline MIN
+	+qbranch_fwd leftstr_1
+	+token swap
+leftstr_1:
+	+token drop, exit
+
+; RIGHT$ ( c-addr u n -- c-addr2 n2 )   last n characters
++header ~rightstr, ~rightstr_n, "RIGHT$"
+	+forth
+	+token over
+	+token twodup, greater		; inline MIN
+	+qbranch_fwd rightstr_1
+	+token swap
+rightstr_1:
+	+token drop
+	+token tor, rat, sub, add, rfrom, exit
+
+; MID$ ( c-addr u start len -- c-addr2 len2 )   substring, start is 1-based
++header ~midstr, ~midstr_n, "MID$"
+	+forth
+	+token tor, oneminus
+	+token rot, over, add, rot, rot, sub	; inline /STRING
+	+token rfrom
+	+token twodup, greater		; inline MIN
+	+qbranch_fwd midstr_1
+	+token swap
+midstr_1:
+	+token drop, exit
+
+; RPT$ ( char n -- c-addr u )   char repeated n times (in PAD)
++header ~rptstr, ~rptstr_n, "RPT$"
+	+forth
+	+token tor
+	+literal _pad
+	+token rat, rot, fill
+	+literal _pad
+	+token rfrom, exit
+
+; --- X16FP.FTH : Forth-2012 floating-point defining words ------------------
+
+; FVARIABLE name   -- creates a word returning the address of 5 float bytes
++header ~fvariable, ~fvariable_n, "FVARIABLE"
+	+forth
+	+token create
+	+literal 5
+	+token allot, exit
+
+; FCONSTANT name ( F: r -- )   creates a word that pushes the float r
++header ~fconstant, ~fconstant_n, "FCONSTANT"
+	+forth
+	+token create, here, fstoremem
+	+literal 5
+	+token allot, xcode
+	!byte JSR_INSTR
+	+address does
+	+token ffetchmem, exit
+
+; ============================================================================
+; Bit / byte manipulation words. (LSHIFT and RSHIFT already exist in the core.)
+; Native code, self-contained leaf words.
+; ============================================================================
+
+; SPLIT ( n -- bh bl )   split a cell into its high and low bytes
++header ~split, ~split_n, "SPLIT"
+	+code
+	lda _dtop			; bl = low byte
+	pha
+	lda _dtop+1			; bh = high byte
+	sta _dtop
+	lda #0
+	sta _dtop+1			; _dtop = bh (as a cell)
+	pla				; a = bl
+	ldx #0
+	jmp dpush_and_next		; push bh, leave bl on top
+
+; CATNIB ( nh nl -- byte )   concatenate two nibbles: byte = (nh<<4) | nl
++header ~catnib, ~catnib_n, "CATNIB"
+	+code
+	+dpop				; a = nl, _dtop = nh
+	and #$0f
+	sta _scratch			; low nibble
+	lda _dtop
+	and #$0f
+	asl
+	asl
+	asl
+	asl
+	ora _scratch
+	sta _dtop
+	lda #0
+	sta _dtop+1
+	jmp next
+
+; SBIT ( addr mask -- )   set the masked bits of the byte at addr
++header ~sbit, ~sbit_n, "SBIT"
+	+code
+	+dpop				; a = mask, _dtop = addr
+	ldy #0
+	ora (_dtop),y
+	sta (_dtop),y
+	+dpop				; drop addr
+	jmp next
+
+; CBIT ( addr mask -- )   clear the masked bits of the byte at addr
++header ~cbit, ~cbit_n, "CBIT"
+	+code
+	+dpop				; a = mask, _dtop = addr
+	eor #$ff			; ~mask
+	ldy #0
+	and (_dtop),y
+	sta (_dtop),y
+	+dpop				; drop addr
+	jmp next
+
+; FBIT ( flag addr mask -- )   set the masked bits if flag is true, else clear
++header ~fbit, ~fbit_n, "FBIT"
+	+code
+	lda _dtop			; mask (byte op: low byte only)
+	sta _scratch
+	ldy #2				; addr = 2nd stack cell
+	lda (_dstack),y
+	sta _wscratch
+	iny
+	lda (_dstack),y
+	sta _wscratch+1
+	ldy #4				; flag = 3rd stack cell
+	lda (_dstack),y
+	iny
+	ora (_dstack),y
+	beq fbit_clear
+	ldy #0				; flag true -> set
+	lda _scratch
+	ora (_wscratch),y
+	sta (_wscratch),y
+	jmp fbit_done
+fbit_clear:				; flag false -> clear
+	ldy #0
+	lda _scratch
+	eor #$ff
+	and (_wscratch),y
+	sta (_wscratch),y
+fbit_done:
+	+dpop				; drop mask, addr, flag
+	+dpop
+	+dpop
 	jmp next

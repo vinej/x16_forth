@@ -1,5 +1,6 @@
 ; Forth system for Commander X16 - port of Forth Model T
-; by Vasyl Tsvirkunov
+; by Vasyl Tsvirkunov (version 1.5)
+; version 2.0 by Claude Opus 4.8 with the help of Jean-Yves Vinet
 ; At this point the compliance status is:
 ; * Forth-2012 System
 ; * Providing the Core Extensions word set
@@ -9,6 +10,9 @@
 ; * Providing the File Access Extensions word set
 ; * Providing the Search-Order word set
 ; * Providing the Search-Order Extensions word set
+; * version 2.0 add all words to use audio/sprite/string/etc, features find in basic 2.0
+; * version 2.0 is in par with Basic 2.0 and I kept the same names in forth find in Basic
+; * version 2 is only compatible with commander X16
 ; In addition, some words from String, Programming-Tools, and Facility sets are provided.
 ; File Access functionality is limited by the platform
 
@@ -288,6 +292,24 @@ NEW_LINE = $0D
 !if X16 {
 +hmbuffer ~FSTACK, 80		; floating-point stack: 16 x 5-byte MFLPT floats
 FSTACK_TOP = FSTACK + 80
+
+; State for the IRQ Forth-callback (see x16.asm). Kept in RAM (not in the code
+; image) so it works when the interpreter runs from ROM later.
++hmbuffer ~irq_save, 20		; saved VM zero-page registers (_ri.._scratch_2)
++hmbuffer ~irq_save_fsp, 2	; saved float-stack pointer
+; Private data/return stacks for the callback. Re-entering the (non-atomic)
+; push/pop routines on the foreground's stacks would corrupt a half-finished
+; operation, so the callback runs on its own stacks. Keep callbacks shallow.
++hmbuffer ~irq_rstack, 64
++hmbuffer ~irq_dstack, 64
+IRQ_RSTACK_TOP = irq_rstack + 64 - 2
+IRQ_DSTACK_TOP = irq_dstack + 64 - 2
++hmbuffer ~irq_cb_token, 2	; callback execution token (0 = none)
++hmbuffer ~irq_chain, 2		; original CINV vector to chain to
++hmbuffer ~irq_saved_sp, 1	; 6502 stack pointer captured on IRQ entry
++hmbuffer ~irq_save_sc, 1	; saved _stopcheck (STOP-key check suppressed in the callback)
++hmbuffer ~irq_busy, 1		; re-entrancy guard while a callback runs
++hmbuffer ~irq_armed, 1		; non-zero when our handler is installed
 }
 
 !if F256 {
@@ -622,6 +644,10 @@ STACKLIMIT = DSIZE/2 - 2*SSAFE
 	sta fsp
 	lda #>FSTACK_TOP
 	sta fsp+1
+
+	lda #0			; no IRQ callback installed yet
+	sta irq_armed
+	sta irq_busy
 }
 
 	lda #<forth_system_n
