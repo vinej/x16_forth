@@ -1,5 +1,12 @@
 # ForthX16
 ## Intro
+The Forth developement of version 1.5 was done by Vasyl Tsvirkunov on his github here: https://github.com/VasylTsv/ForthX16
+
+Version 2.0 on my github https://github.com/vinej/x16_forth was developed by Claude Opus 4.7
+with my help for testing and debugging. Claude did all the code. Version 2.0 has the same features of X16 Basic 2.0 and all the features of X16 can be used. I only tested the new version with X16.
+
+I am not developer for this case, only the analyst/tester who helped Claude to implement all features.
+
 Forth TX16 or ForthX16 is an enhanced port of my older project [Forth Model T](https://github.com/VasylTsv/ForthModelT) for [Commander X16](https://www.commanderx16.com/) and other 6502-based platforms. It is a completely functional Forth 2012 standard implementation. Unlike Forth Model T which used direct threaded model, Forth TX16 is using token threaded model. This was mostly done to minimize the size - one of the goals of the project was to fit the entire interpreter on 8K C64 cartridge.
 
 The other, or rather the main goal of the project was to create an interpreter as compliant to Forth 2012 standard as possible.
@@ -67,7 +74,7 @@ There are a few non-standard words supported by this implementation:
 * `?COMP` - check if current mode is compilation, abort otherwise
 * `?STACK` - check the data stack for overflow/underflow
 * `UD/MOD ( ud1 u1 -- u2 ud2 )` - commonly used word to divide unsigned double `ud1` by unsigned `u1`. 'u2' is remainder and 'ud2' is quotient. Notice that unlike `UM/MOD`, the quotient is a double.
-* `VER ( -- d )` - returns the interpreter version number. For 1.4 it will return 0x0104
+* `VER ( -- d )` - returns the interpreter version number. For 2.0 it will return 0x0200
 * `C64` or `F256` (only one present) - platform indentifying words to support platform-specific code
 
 ### Block words
@@ -113,7 +120,9 @@ S" (extended) SOURCE-ID	W/O			WRITE-FILE	WRITE-LINE
 FILE-STATUS	FLUSH-FILE	INCLUDE		REFILL (extended) RENAME-FILE	REQUIRE		REQUIRED S\" (extended)
 ```
 ### Floating-Point words
-Not supported and not planned.
+Not supported in the generic (C64/F256) builds. The **Commander X16 build does
+have floating point** - it wraps the ROM's FP package. See the Floating point
+subsection under Commander X16 Extensions below.
 
 ### Local words
 Not supported and not planned. I find this set a very questionable addition to the standard.
@@ -436,10 +445,14 @@ RESET    ( -- )        hardware reset (via the SMC)
 REBOOT   ( -- )        soft reboot through the reset vector
 POWEROFF ( -- )        power off (via the SMC)
 ```
-`EDIT` drives the standalone X16EDIT ROM (not the BASIC wrapper): the usual
-workflow is `S" MYPROG.FTH" EDIT`, write out and exit the editor, then
-`S" MYPROG.FTH" INCLUDED` to compile it - convenient for building larger
-programs directly on the machine.
+`EDIT` drives the standalone X16EDIT ROM (not the BASIC wrapper) to create and
+edit files directly on the machine. KNOWN ISSUE: returning from the editor
+leaves Forth's *first* console operation glitchy - the first RETURN is swallowed
+(it takes several presses), and an `INCLUDED` run immediately afterward won't
+compile. BASIC's own `EDIT` returns cleanly, so the cause is Forth-specific and
+currently unresolved (see `doc/EDIT-known-issue.md`). Reliable workflow:
+`S" MYPROG.FTH" EDIT`, write out and quit the editor, then RESET Forth (relaunch
+or cold start) and `S" MYPROG.FTH" INCLUDED` in the fresh session.
 
 BASIC-style aliases for existing Forth words are available by including
 `toolkit/X16BASIC.FTH`: `OPEN` (=`OPEN-FILE`), `CLOSE` (=`CLOSE-FILE`),
@@ -496,6 +509,10 @@ A few examples and benchmarks are in `other` - `BENCH.FTH` and `ERASTO.FTH` are 
 ## Known Issues
 
 The error recovery has a bug that causes to lock the interpreter in some cases. The cause is not clear yet and the issue seems to be random.
+
+**Fixed in 2.0 - data-stack overflow detection.** `?STACK` compares `DEPTH` (a count in *cells*) against `STACKLIMIT`, but `STACKLIMIT` was previously derived from `DSIZE` in *bytes* - roughly twice the real capacity. As a result a data-stack overflow of a few hundred cells was never detected and silently ran off the end of the stack into the adjacent buffers (the float stack, the INCLUDE and `S"` buffers, etc.), which could corrupt them. `STACKLIMIT` is now a proper cell count (`DSIZE/2 - 2*SSAFE`), so `?STACK` aborts on a genuine overflow before it can corrupt neighbouring memory. This was a distinct, reproducible defect; testing did not tie it to the random error-recovery lock noted above, which remains unconfirmed.
+
+On the Commander X16, `EDIT` returns from the X16 editor with Forth's first console operation broken (the first RETURN is swallowed; an `INCLUDED` run immediately afterward won't compile). BASIC's own `EDIT` returns cleanly, so the cause is Forth-specific and unresolved. Workaround: after editing, reset Forth (relaunch / cold start) before `INCLUDE`-ing the file. Details in `doc/EDIT-known-issue.md`.
 
 ## Roadmap
 

@@ -314,7 +314,14 @@ _sourcestack = _sourcestack_bottom + 120
 
 RSTACK_INIT = RSTACK + RSIZE - 2
 DSTACK_INIT = DSTACK + DSIZE - 2*SSAFE - 2
-STACKLIMIT = DSIZE - 4*SSAFE
+; STACKLIMIT is compared by ?STACK against DEPTH, which is measured in CELLS, so
+; the limit must also be a cell count. DSIZE is in bytes; DSIZE/2 is the stack's
+; cell capacity, less SSAFE reserved cells at each end. (The old value DSIZE-4*SSAFE
+; was a byte count - ~2x the real capacity - so a data-stack overflow of a few
+; hundred cells was never detected and silently corrupted the adjacent buffers.
+; This value still catches underflow too: DEPTH does a logical shift, so an
+; underflowed stack pointer reads back as a large positive value, above the limit.)
+STACKLIMIT = DSIZE/2 - 2*SSAFE
 
 
 ; Some commonly used 6502 idioms. Note that ACME does not allow passing immediate values to macros...

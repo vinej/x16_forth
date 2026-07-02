@@ -479,7 +479,7 @@
 	_dstack	= $28
 	dovalue	= $8f8
 	tof_copy	= $1ec3
-	STACKLIMIT	= $3f0
+	STACKLIMIT	= $1f8
 	fminst_n	= $2ac3
 	qcomp	= $a9	; ?
 	_hightoken	= $49
