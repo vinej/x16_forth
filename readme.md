@@ -1,0 +1,523 @@
+# ForthX16
+## Intro
+Forth TX16 or ForthX16 is an enhanced port of my older project [Forth Model T](https://github.com/VasylTsv/ForthModelT) for [Commander X16](https://www.commanderx16.com/) and other 6502-based platforms. It is a completely functional Forth 2012 standard implementation. Unlike Forth Model T which used direct threaded model, Forth TX16 is using token threaded model. This was mostly done to minimize the size - one of the goals of the project was to fit the entire interpreter on 8K C64 cartridge.
+
+The other, or rather the main goal of the project was to create an interpreter as compliant to Forth 2012 standard as possible.
+## Supported Platforms
+The original target platform was Commander X16. However, in the middle of developmente I've realized that the same code would run on Commodore 64 with reasonable effort. Thus C64 became a second platform. The third platform is quite different and it was added separately - [Foenix F256](https://c256foenix.com). It is also 6502-based (sort of), but not derived from C64, so console and file I/O are very different. More platforms may be coming.
+## Prerequisites and Building
+The instructions below are for Windows-based systems. It should not be difficult to modify them to other platforms as long as ACME assembler is available there.
+[ACME assembler](https://sourceforge.net/projects/acme-crossass/files/win32/) is used to build the interpreter from the source. It is expected to be places in a subfolder ASM in the project folder.
+Optionally, platform emulators can be used for testing. Scripts assume [VICE](https://vice-emu.sourceforge.io/) for C64 and the [official X16 emulator](https://cx16forum.com/forum/viewtopic.php?t=8443) for Commander X16. These should be placed in subfolders VICE and X16 correspondingly. [Foenix F256 IDE](https://github.com/Trinity-11/FoenixIDE) can be used to test that platform, but there is no special support for it in the scripts. Just install the IDE and point the "SD card" to the location of the binaries.
+
+* `makeprg.bat` will build PRG compatible with both C64 and X16
+* `makecart.bat` will build cartridge image for C64
+* `makediskc64.bat` builds a disk image for C64. It can be used on X16, but there is not much point
+* `makef256.bat` build PGZ executable for F256
+
+* `testcart.bat` will build and load the cartridge in VICE
+* `testdiskc64.bat` tests the disk image in VICE as well
+* `testprg.bat` will build and start PRG file in X16 emulator
+
+There are pre-build binaries in the `binary` folder.
+## The Language Support
+
+This implementation closely follows the Forth 2012 Standard. The following describes the list
+of supported words grouped per the said standard.
+
+### Core words
+```
+!			#			#>			#S			'			(			*			*/
+*/MOD		+			+!			+LOOP		,			-			.			."
+/			/MOD		0<			0=			1+			1-			2!			2*
+2/			2@			2DROP		2DUP		2OVER		2SWAP		:			;
+<			<#			=			>			>BODY		>IN			>NUMBER		>R
+?DUP		@			ABORT		ABORT"		ABS			ACCEPT		ALIGN		ALIGNED
+ALLOT		AND			BASE		BEGIN		BL			C!			C,			C@
+CELL+		CELLS		CHAR		CHAR+		CHARS		CONSTANT	COUNT		CR
+CREATE		DECIMAL		DEPTH		DO			DOES>		DROP		DUP			ELSE
+EMIT		ENVIRONMENT? EVALUATE	EXECUTE		EXIT		FILL		FIND		FM/MOD
+HERE		HOLD		I			IF			IMMEDIATE	INVERT		J			KEY
+LEAVE		LITERAL		LOOP		LSHIFT		M*			MAX			MIN			MOD
+MOVE		NEGATE		OR			OVER		POSTPONE	QUIT		R>			R@
+RECURSE		REPEAT		ROT			RSHIFT		S"			S>D			SIGN		SM/REM
+SOURCE		SPACE		SPACES		STATE		SWAP		THEN		TYPE		U.
+U<			UM*			UM/MOD		UNLOOP		UNTIL		VARIABLE	WHILE		WORD
+XOR			[			[']			[CHAR]		]
+```
+### Core Extension words
+```
+.(			.R			0<>			0>			2>R			2R>			2R@			:NONAME
+<>			?DO			ACTION-OF	AGAIN		BUFFER:		C"			CASE		COMPILE,
+DEFER		DEFER!		DEFER@		ENDCASE		ENDOF		ERASE		FALSE		HEX
+HOLDS		IS			MARKER		NIP			OF			PAD			PARSE		PARSE-NAME
+PICK		REFILL		RESTORE-INPUT ROLL		S\"			SAVE-INPUT	SOURCE-ID	TO
+TRUE		TUCK		U.R			U>			UNUSED		VALUE		WITHIN		[COMPILE]
+\
+```
+All of Core and Core Extension words are supported and perform very close to the Standard.
+Note that the cell size for CELL+ and CELLS is 2 bytes as the system is inherently 16-bit.
+However, compilation tokens may be just one byte in size. This does not contradict the standard.
+The word ENVIRONMENT? is recognized but does nothing. It is rarely used and defined in a very
+strange way largely inconsistent with the rest of the language.
+
+There are a few non-standard words supported by this implementation:
+* `0` `-1` `1` `2` - self-explanatory
+* `PLACE` and `+PLACE` - these are two very useful string manipulation words from [a Standard proposal](https://forth-standard.org/proposals/place-place)
+* `?COMP` - check if current mode is compilation, abort otherwise
+* `?STACK` - check the data stack for overflow/underflow
+* `UD/MOD ( ud1 u1 -- u2 ud2 )` - commonly used word to divide unsigned double `ud1` by unsigned `u1`. 'u2' is remainder and 'ud2' is quotient. Notice that unlike `UM/MOD`, the quotient is a double.
+* `VER ( -- d )` - returns the interpreter version number. For 1.4 it will return 0x0104
+* `C64` or `F256` (only one present) - platform indentifying words to support platform-specific code
+
+### Block words
+Not supported and not planned. This set makes more sense for embedded systems without existing filesystems, so not very useful
+for this implementation.
+
+### Double-Number words
+```
+2CONSTANT	2LITERAL	2VARIABLE	D+			D-			D.			D.R			D0<
+D0=			D2*			D2/			D<			D=			D>S			DABS		DMAX
+DMIN		DNEGATE		M*/			M+
+```
+### Double-Number extension words
+```
+2ROT		2VALUE		DU<
+```
+All Double-Number and Extension words are completely supported and compliant.
+
+### Exception words
+Not supported and not planned. This set is optional, but the implementation may be too heavy for 16-bit core.
+
+### Facility words
+No words from the main Facility set are currently supported.
+
+### Facility extension words
+Partial support.
+```
++FIELD   BEGIN-STRUCTURE   CFIELD:   END-STRUCTURE   FIELD:
+```
+Only a small group of Facility words is supported, but those are compliant with the standard.
+The rest of the group is considered for possible extension in the future. Most of those words
+are quite simple but they would take too much RAM just for names.
+
+### File-Access words
+All File-Access words are supported, but not all of them work completely or at all on some platforms. Check platform-specific notes for details
+```
+( (extended) BIN		CLOSE-FILE	CREATE-FILE	DELETE-FILE	FILE-POSITION FILE-SIZE	INCLUDE-FILE
+INCLUDED	OPEN-FILE	R/O			R/W			READ-FILE	READ-LINE	REPOSITION-FILE RESIZE-FILE
+S" (extended) SOURCE-ID	W/O			WRITE-FILE	WRITE-LINE
+```
+### File-Access extension words
+```
+FILE-STATUS	FLUSH-FILE	INCLUDE		REFILL (extended) RENAME-FILE	REQUIRE		REQUIRED S\" (extended)
+```
+### Floating-Point words
+Not supported and not planned.
+
+### Local words
+Not supported and not planned. I find this set a very questionable addition to the standard.
+
+### Memory-Allocation
+Supported as an extension. Include DYNAMIC.FS and initialize that library for complete support.
+
+### Programming-Tools
+```
+.S   ?   WORDS
+```
+### Programming-Tools extension
+Small subset is supported.
+```
+BYE   FORGET
+```
+The following are not supported:
+```
+DUMP		SEE
+
+;CODE		AHEAD		ASSEMBLER	CODE		CS-PICK		CS-ROLL		EDITOR		N>R
+NAME>COMPILE NAME>INTERPRET	NAME>STRING NR>		STATE (extended)		SYNONYM		TRAVERSE-WORDLIST
+[DEFINED]	[ELSE]		[IF]		[THEN]		[UNDEFINED]
+```
+Some of these are planned for extensions.
+
+### Search-Order
+All Search-Order and Extension words are completely supported.
+```
+DEFINITIONS FIND (extended) FORTH-WORDLIST GET-CURRENT GET-ORDER SEARCH-WORDLIST SET-CURRENT
+SET-ORDER WORDLIST
+```
+### Search-Order extension
+```
+ALSO   FORTH   ONLY   ORDER   PREVIOUS
+```
+### String
+```
+/STRING		BLANK		CMOVE		CMOVE>		COMPARE		SLITERAL
+```
+Most words with exception for `-TRAILING` and `SEARCH` are supported. None of the three extension words
+(`REPLACES` `SUBSTITUTE` `UNESCAPE`) are supported at this time. Support through extension is considered.
+### Extended-Character words
+Not supported and not planned.
+
+## Assembler
+Forth 6502 assembler can be added by either `INCLUDE ASSEMBLER.FTH` or `INCLUDE FORTH/ASSEMBLER.FTH` depending on the system. The assembler implementation is based on W. F. Ragsdale's one from Dr. Dobbs Toolbook of Forth (M&T Publishing, 1986, pg.203-214). It is a very compact implementation and in provides access to practically all 6502 opcodes while staying close to Forth conventions and concepts. Because of the latter, it may look a bit unusual and take a while to pick up, but once you get the idea, it makes sense.
+
+To define a word in assembly a special pair words is used instead of colon and semicolon, correpondingly `CODE` and `END-CODE`. Note that `END-CODE` just completes the definition, but it does not finalize the execution (does not emit any opcodes), so in most cases words should explicitly jump to `NEXT`. An example from the original book:
+```
+CODE MON BRK, NEXT JMP, END-CODE
+```
+Note that all opcodes end with comma. This is one of the conventions, and it makes it easier to distinguish opcodes. Instruction parameters precede opcodes.
+
+It is possible to emit opcodes without creating a Forth word as all assembler words are interpreted immediately - there is no strictly compilation stage. The assembler implementation actually contains one example (the `SETUP` routine).
+
+The following opcodes don't have any parameters:
+```
+BRK, CLC, CLD, CLI, CLV, DEX,
+DEY, INX, INY, NOP, PHA, PHP,
+PLA, PLP, RTI, RTS, SEC, SED,
+SEI, TAX, TAY, TSX, TXS, TXA,
+TYA,
+```
+And these take parameters from the stack:
+```
+ADC, AND, CMP, EOR, LDA, ORA,
+SBC, STA, ASL, DEC, INC, LSR,
+ROL, ROR, STX, CPX, CPY, LDX,
+LDY, STY, JSR, JMP, BIT,
+```
+The way it works, the parameter (address or immediate value) goes first (so on the stack), then a modifier for all modes but the memory one follow, and lastly the opcode completes the instruction. These are the modifiers:
+```
+Modifier   Mode                  Operand
+   .A    accumulator           none
+    #    immediate             eight bits only
+   ,X    indexed X             z-page or absolute
+   ,Y    indexed Y             z-page or absolute
+   X)    indexed indirect X    z-page only
+   )Y    indirect indexed Y    z-page only
+    )    indirect absolute     absolute only
+ none    memory                z-page or absolute
+```
+Note that the assembler automatically generates zero page or absolute addresses based on the value on stack.
+
+Here are some examples:
+```
+.A ROL,          rol     or    rol a
+1 # LDY,         ldy #1
+DATA ,X STA,     sta data,x
+DATA ,Y CMP,     cmp data,y
+6 X) ADC,        adc (06,x)
+POINT )Y STA,    sta (point),y
+VECTOR ) JMP,    jmp (vector)
+```
+You may have noticed that the lists above don't contain conditional jumps. This is where this assembler goes a bit further Forth way. Instead of the conditional instructions there are control flow words. There are five words that work very similarly to their Forth counterparts, just with machine code:
+```
+BEGIN, UNTIL, IF, ELSE, THEN,
+```
+Note the comma at the end of each word. The kind of condition is set by words very similar to regular 6502 opcodes. Logically, they have the same meaning, but the implementation is actually such that the inverse condision opcodes are generated (this may be confusing, but it will make sense as soon as you write the first `IF,`/`THEN,` block). Here are the conditions:
+```
+BCC: BCS: BEQ: BNE: BMI: BPL: BVC: BVS:
+```
+A simple example:
+```
+PORT LDA, BNE: IF KEYPRESSED JMP, THEN,
+```
+The equivalent in a more conventional assembler is
+```
+lda port
+beq +
+jmp keypressed
++ ...
+```
+Control flows can be nested and there are some checks that will tell you if a flow is malformed.
+
+Worth noting that the original Ragsdale's implementation used different way to specify conditions (like `0=`, `0>`, etc.) I've found collisions with the standard words too confusing and I hope my solution is cleaner.
+
+There are a few more less important items implemented by the assembler. These came from the original implementation and some may not make that much sense anymore (the original implementation was based on Fig-Forth), but the following are defined:
+
+`IP` and `W` - internal Forth registers. Not documenting them here as they are very hard to use and explain without complete understanding how the current implementation of the Forth interpreter works. Given that the Forth T is using token thread code, it is even harder to use it from assembly.
+`UP` - user pointer containing address of the base of the user area. Also not particularly useful.
+`N` - a utility area in z-page from N-1 through N+7. This is quite useful for safe temporary storage.
+`XSAVE` - one byte storage, typically to stash register X temporarily.
+`DTOP` - address of the top of the data stack.
+`SETUP` - address of routine to move up to four stack elements to the utility area. The code
+```
+3 # LDA, SETUP JSR,
+```
+will remove three top elements from the data stack and place them in N, N+1, and N+2.
+
+Lastly, all assembler words except `CODE` reside in the `ASSEMBLER` wordlist, so they are generally not visible during normal use, but you don't need to add `ASSEMBLER` to search list explictly. `CODE` does that automatically and `END-CODE` removes it again.
+
+## Commander X16 Extensions
+
+There is a dedicated build target for the Commander X16 that adds native words for
+the X16-specific hardware: the VERA video chip, hardware sprites, the PSG and
+YM2151 (FM) audio, and binary LOAD/SAVE. These words are only present in the X16
+build; the plain C64/X16-compatible PRG (`makeprg.bat`) does not include them.
+
+* `makex16.bat` builds `forthx16.prg` (defines `X16 = 1`, which implies the C64
+  KERNAL-compatible core). The build files are `buildx16prg.asm`, `x16prims.asm`
+  (referenceable VERA primitives, placed above the token boundary) and `x16.asm`
+  (the higher-level words).
+* `testx16.bat` builds and launches the result in the X16 emulator.
+
+The platform-identifying word is `X16` (instead of `C64`/`F256`).
+
+#### Cartridge build (ROM bank 32)
+
+The X16 build can also be packaged as a cartridge that auto-boots from ROM bank 32:
+
+* `makex16crt.bat` builds `forthcart.bin` - a 16K ROM-bank image. It first builds
+  `forthx16.prg`, then wraps it with `x16cart.asm`.
+* `testx16crt.bat` builds and boots it: `x16emu -cartbin forthcart.bin`.
+
+The KERNAL detects a cartridge by the PETSCII signature `CX16` at `$C000` in ROM
+bank 32 and calls the entry point at `$C004`. Because bank 32 shares the
+`$C000-$FFFF` window with the KERNAL, `x16cart.asm` is a small loader stub that
+copies the Forth image into low RAM, switches to ROM bank 0, and starts the
+interpreter - so Forth runs from RAM exactly as the PRG does, but boots straight
+from the cartridge with no loading. The whole image fits in one 16K bank
+(currently ~9K, leaving ~7K for more words).
+
+Wherever it is reasonable the words mirror the corresponding X16 BASIC command,
+but follow Forth stack conventions. Arguments are pushed in the same
+left-to-right order as the BASIC command, so BASIC `VPOKE bank,addr,value`
+becomes Forth `bank addr value VPOKE`.
+
+### VERA video
+```
+VADDR  ( bank addr -- )       point VERA's data port at VRAM (bank:addr), auto-increment 1
+V!     ( byte -- )            store a byte through the data port
+V@     ( -- byte )            read a byte through the data port
+V!W    ( w -- )               store a 16-bit word (low byte first)
+VPOKE  ( bank addr value -- ) BASIC VPOKE
+VPEEK  ( bank addr -- value ) BASIC VPEEK
+```
+`bank` is the 17th VRAM address bit (0 or 1). VRAM is 128K: `$0:0000`..`$1:FFFF`.
+
+### Text screen
+```
+SCREEN ( mode -- )   set screen mode (0=80x60, 1=80x30, 2=40x60, 3=40x30, 128=320x240@256c)
+COLOR  ( fg bg -- )  set text colors 0-15 (BASIC COLOR)
+BORDER ( color -- )  set the display border color 0-15
+CLS    ( -- )        clear the text screen
+LOCATE ( row col -- ) move the text cursor (BASIC LOCATE)
+```
+
+### Bitmap graphics
+Enter graphics mode with `GINIT` first (320x240, 256 colors). Coordinates are
+0-319 (x) by 0-239 (y). The rectangle/oval words take two corner points.
+```
+GINIT ( -- )                     enter 320x240x256 graphics mode
+GCLS  ( -- )                     clear the graphics screen
+PSET  ( x y color -- )           set a pixel
+LINE  ( x1 y1 x2 y2 color -- )   draw a line
+FRAME ( x1 y1 x2 y2 color -- )   rectangle outline
+RECT  ( x1 y1 x2 y2 color -- )   filled rectangle
+RING  ( x1 y1 x2 y2 color -- )   ellipse outline
+OVAL  ( x1 y1 x2 y2 color -- )   filled ellipse
+GTEXT ( x y color c-addr u -- )  draw a string into the bitmap (BASIC CHAR)
+```
+
+### Sprites
+Sprite attributes live in VRAM (bank 1). Enable the layer, point a sprite at its
+image data, set size/position/Z-depth. Sprite numbers are 0-127.
+```
+SPRITES-ON   ( -- )                enable the sprite layer
+SPRITES-OFF  ( -- )                disable the sprite layer
+SPRITE-IMAGE ( graphaddr sprite -- ) set 4bpp image address (32-aligned VRAM address)
+SPRITE-POS   ( x y sprite -- )     set position
+SPRITE-SIZE  ( width height sprite -- ) size codes 0-3 = 8/16/32/64 pixels
+SPRITE-Z     ( z sprite -- )       Z-depth 0=off 1=behind 2=between 3=front
+```
+BASIC-compatible sprite commands are also provided:
+```
+SPRITE ( num zdepth -- )    set Z-depth (0=off 1-3) and enable the sprite layer
+MOVSPR ( num x y -- )       set sprite position
+SPRMEM ( num bank addr -- ) set sprite image address (4bpp)
+```
+
+### Audio
+PSG voices (0-15). `PSGFREQ/PSGVOL/PSGWAV` write VERA's PSG registers directly;
+the others use the audio ROM API.
+```
+PSGFREQ  ( freq voice -- )      set frequency word
+PSGVOL   ( vol voice -- )       set volume 0-63 (both L and R)
+PSGWAV   ( waveform voice -- )  0=pulse 1=saw 2=triangle 3=noise
+PSGINIT  ( -- )                 reset all PSG voices
+PSGNOTE  ( note voice -- )      play a note (octave<<4 | 1..12, 0=off)
+PSGPAN   ( pan voice -- )       stereo pan (1=left 2=right 3=both)
+PSGPLAY  ( c-addr u voice -- )  play a play-string (blocking)
+PSGCHORD ( c-addr u voice -- )  play a chord string (blocking)
+```
+FM (YM2151). `YM!` writes chip registers directly and is always safe; the other
+FM words call the audio ROM API through `jsrfar` (channels 0-7):
+```
+YM!     ( value reg -- )        write a YM2151 register (raw)
+FMINIT  ( -- )                  init the chip and load the default patches
+FMINST  ( inst channel -- )     load instrument patch 0-162
+FMVOL   ( vol channel -- )      set volume 0-63
+FMNOTE  ( note channel -- )     play a packed note (octave<<4 | 1..12, 0=off)
+FMFREQ  ( freq channel -- )     play a raw frequency in Hz (17..4434)
+FMDRUM  ( drum channel -- )     play a drum sound (25-87)
+FMVIB   ( speed depth -- )      set the global vibrato (depth 0..127)
+FMPAN   ( pan channel -- )      stereo pan (1=left 2=right 3=both)
+FMPLAY  ( c-addr u channel -- ) play a play-string (blocking)
+FMCHORD ( c-addr u channel -- ) play a chord string (blocking)
+FMPOKE  ( value reg -- )        write a YM2151 register via the API (shadow-tracked)
+```
+
+### Tiles (layer-1 text screen)
+Read and write cells of the layer-1 tilemap. Each cell is a screen/tile code
+plus a colour attribute; the address is derived from the VERA layer-1 registers,
+so it follows the current screen mode.
+```
+TILE  ( x y code attr -- )   write a tile cell
+TDATA ( x y -- code )        read a tile cell's code
+TATTR ( x y -- attr )        read a tile cell's colour attribute
+```
+
+### Math helpers
+Integer helpers matching BASIC (the floating-point functions are not provided,
+as this Forth has no floating point). `ABS MIN MAX MOD` are already core words.
+```
+SGN    ( n -- -1|0|1 )   sign of a signed number
+RND    ( u -- n )        pseudo-random number in 0..u-1
+RANDOM ( -- u )          raw 16-bit pseudo-random number
+POS    ( -- col )        current text cursor column
+```
+
+### Input devices
+```
+JOY    ( n -- buttons )   read joystick/gamepad n (0=keyboard, 1-4 gamepads);
+                          button bits active-high, 0 if not present
+MOUSE  ( mode -- )        configure the mouse (0=off, 1=on, -1=auto-scale)
+MX     ( -- x )           mouse X position
+MY     ( -- y )           mouse Y position
+MB     ( -- buttons )     mouse button bitmask (bit0 left, bit1 right, bit2 mid)
+MWHEEL ( -- delta )       mouse wheel movement since last read (signed)
+```
+
+### Floating point
+The X16 build has floating point, implemented by calling the ROM's FP package
+(the X16 keeps its FP accumulator clear of Forth's zero page). Floats live on a
+dedicated float stack (shown as `F:` below).
+```
+S>F  ( n -- ) ( F: -- r )     integer to float
+F>S  ( -- n ) ( F: r -- )     float to integer (non-negative)
+F+ F- F* F/  ( F: a b -- c )  arithmetic
+FDUP FDROP FSWAP FOVER FNEGATE   float-stack operations
+FSQRT FSIN FCOS FTAN FATAN FLN FEXP   ( F: r -- f(r) )
+F@ F!  ( f-addr -- )          fetch / store a float (5 bytes) in memory
+F< F0< F0=                    comparisons ( -- flag )
+>FLOAT ( c-addr u -- flag )   parse a string as a float (pushes it if valid)
+F.   ( F: r -- )              print a float
+ISQRT ( n -- m )              integer square root
+```
+Float **literals** can be typed directly at the interpreter, e.g. `3.14`, `1E3`,
+`-2.5E-2` — they are recognized and pushed to the float stack. (Inside a `:`
+definition use `S" ..." >FLOAT` or an `FCONSTANT`.)
+`toolkit/X16FP.FTH` adds the defining words `FVARIABLE` and `FCONSTANT`.
+`toolkit/X16BASIC.FTH` adds the BASIC names `SQR SIN COS TAN ATN LOG EXP`.
+Example: `2 S>F FSQRT F.` prints `1.41421356`.
+
+### System / dev
+```
+USR      ( addr -- )   call a machine-language routine at addr (it must RTS)
+MONITOR  ( -- )        enter the built-in ML monitor (exit with X)
+EDIT     ( c-addr u -- )  edit a file in the X16 full-screen editor (u=0 = new)
+SETBANK  ( bank -- )   select the RAM bank visible at $A000-$BFFF
+B@       ( bank off -- byte )   read a byte from banked RAM (off 0..8191)
+B!       ( byte bank off -- )   store a byte into banked RAM (off 0..8191)
+I2CPOKE  ( device register value -- )  write an I2C register (SMC, RTC…)
+I2CPEEK  ( device register -- value )  read an I2C register
+SLEEP    ( jiffies -- )  wait 'jiffies' 1/60-second ticks
+KEYMAP   ( c-addr u -- )  set the keyboard layout, e.g. S" en-us" KEYMAP
+RESET    ( -- )        hardware reset (via the SMC)
+REBOOT   ( -- )        soft reboot through the reset vector
+POWEROFF ( -- )        power off (via the SMC)
+```
+`EDIT` drives the standalone X16EDIT ROM (not the BASIC wrapper): the usual
+workflow is `S" MYPROG.FTH" EDIT`, write out and exit the editor, then
+`S" MYPROG.FTH" INCLUDED` to compile it - convenient for building larger
+programs directly on the machine.
+
+BASIC-style aliases for existing Forth words are available by including
+`toolkit/X16BASIC.FTH`: `OPEN` (=`OPEN-FILE`), `CLOSE` (=`CLOSE-FILE`),
+`LINPUT` (=`ACCEPT`). The other BASIC-integrated commands (`DOS HELP BOOT MENU`)
+are not provided: they parse the BASIC text buffer and use BASIC's zero page,
+which conflicts with Forth.
+
+`toolkit/X16STR.FTH` adds the BASIC string / number-conversion functions
+(`HEX$ BIN$ STR$ VAL ASC CHR$ LEN LEFT$ RIGHT$ MID$ RPT$`), using Forth's
+`c-addr u` string model. INCLUDE it to use them.
+
+### Binary LOAD / SAVE
+Filenames are Forth strings `( c-addr u )`, e.g. `S" DATA.BIN"`. `dev` is the
+device number (usually 8).
+```
+LOAD    ( c-addr u dev -- )              load a PRG to the address in its 2-byte header
+BLOAD   ( c-addr u dev addr -- )         load a PRG relocated to addr
+VLOAD   ( c-addr u dev bank vaddr -- )   load a (headered) file into VRAM
+BVLOAD  ( c-addr u dev bank vaddr -- )   load a headerless file into VRAM
+SAVE    ( c-addr u dev start end -- )    save memory [start,end) as a PRG (BASIC BSAVE)
+BVERIFY ( c-addr u dev addr -- flag )    verify a file against memory (-1 match / 0 mismatch)
+```
+
+## Platform-Specific Notes
+
+### Commodore 64
+* KEY echoes the input character
+* BYE reboots the interpreter in cartridge mode and attempts to return to Basic in PRG (that is not working properly yet).
+* R/W mode is not supported, the word will do the same as W/O.
+* FILE-POSITION FILE-SIZE	REPOSITION-FILE RESIZE-FILE are not functional and will just fail.
+* Opening file for write does not overwrite an existing file. This is a default system behavior but it feels quite wrong.
+* C64 file handling makes it very hard to distinguish 0-byte file from a non-existing one. INCLUDE will just fail on empty files.
+
+### Commander X16
+All Commodore 64 notes apply except for BYE which properly returns to Basic.
+
+### Foenix F256
+* BYE will restart the interpreter.
+* R/W mode is not supported, the word will do the same as W/O.
+* FILE-POSITION FILE-SIZE REPOSITION-FILE RESIZE-FILE are not functional and will just fail.
+
+## Other Notes
+
+A modified copy of dynamic memory support package can be found in `dynamic`. This brings in standard Memory-Allocation set. The modification was needed to fix a non-compliant issue - allocations of negative size were not properly rejected.
+
+The interpreter will look for file `AUTORUN.FTH` and execute it if found.
+
+A modified copy of Forth test suite is in `tests` - copy files from there to the file system of Commander X16 and start it with `INCLUDE RUNTESTS.FTH`. The current version should run all tests without errors. The runtime on the emulator is about 4 minutes on Commander X16 (and a LOT more on C64).
+
+A practically stock copy of Forth test suite is in `tests-F256` as that platform uses ASCII and does not need character hacks.
+
+A few examples and benchmarks are in `other` - `BENCH.FTH` and `ERASTO.FTH` are old benchmarking programs calculating primes, practically unchanged (`BENCH` had a few `ENDIF`s replaced by `THEN`s). `RC4TEST.FTH` is a sample from the [Wikipedia](https://en.wikipedia.org/wiki/Forth_(programming_language)) page, unmodified.
+
+## Known Issues
+
+The error recovery has a bug that causes to lock the interpreter in some cases. The cause is not clear yet and the issue seems to be random.
+
+## Roadmap
+
+I don't have any particular time estimates, but I do have some plans. The following items can be
+considered my roadmap for the project.
+
+### Cleanups
+The project was originally based on the source code written in one weekend so it was already quite messy.
+Multiple optimization passes may have improved the size, but did not make it cleaner. The latest addition
+of F256 target was a bit rushed as well. As a result, the code is not in the best shape, needs some
+cleaning and documenting. Mind you, it is practically impossbile to make a largish 6502 assembly project
+to look clean, there are always some tricks there that would look questionable. So, the best effort here.
+
+### Optimization in F256 specific section
+F256 has a large block of platform specific code for console and file I/O. The file I/O may be more or
+less straightforward, but console I/O may still shed some bytes.
+
+### Atari 8-bit target
+My first computer was Atari 65XE, so it is only right to support that. Now that I have support for two
+very different platforms the actual platform dependencies are easy to identify and port.
+
+### Toolkits
+These are required for any usable Forth system. I am already looking into inline assembler. Editor is
+a reasonable thing to have. Some parts of the Standard may be added through a toolkit expansion.
+Finally, there are also a lot of platform-specific things that would make the system a lot more usable.
