@@ -24,10 +24,21 @@ and binary LOAD/SAVE all work from ROM.
 - **Test (patch rom.bin):** back up the emulator ROM, then write the bank image
   into bank 9 (offset `9*16384 = $24000`):
   `dd if=forthx16rom.bin of=rom.bin bs=1 seek=147456 conv=notrunc`
-- **Invoke:** there is no BASIC keyword yet; a tiny loader PRG enters Forth via
-  `jsr $FF6E / !word $C000 / !byte $09` (jsrfar into the bank-9 cold start).
+- **Invoke:** type **`TEST`** at the BASIC prompt (the command that used to run the
+  demo). The bank starts with the 4-word vector table `TEST` expects; `TEST`
+  copies the bank to RAM `$1000` and jumps into a small launcher there, which
+  `jsrfar`s back into bank 9 to start Forth **in place**. (A loader PRG can also
+  enter directly: `jsr $FF6E / !word coldstart / !byte $09`, where `coldstart` is
+  just past the vector table + launcher.)
 
 ### What was built (all guarded by the `X16ROM` flag; other builds unaffected)
+0. **Launch via `TEST`** — the bank begins with the 4-word vector table the BASIC
+   `TEST` command expects (all four entries point at a launcher). `TEST` copies the
+   16 KB bank to RAM `$1000` and `jmp ($1000+n*2)`; the launcher (now in RAM,
+   bank 0) `jsrfar`s back into bank 9's `coldstart` so Forth runs in place. The RAM
+   copy is scratch (the dictionary overwrites it). So replacing demo → typing
+   `TEST` boots Forth. Verified end-to-end (full suite passes when launched this
+   way).
 1. **Memory map / build config** — code placed at `$C000` with `!pseudopc`; the
    dictionary relocates to RAM (`$0801`, reusing the C64 `CART` path); hmbuffers
    in low RAM (currently from `$9000` down — a placeholder, see TODO).
@@ -56,7 +67,6 @@ only such case — the standard suite's `DEFER`/`VALUE` tests pass from ROM.
   stub in ROM mode (the handler is in bank 9 but `CINV` is called with bank 0).
   `SCROLLX`/`SCROLLY` (VERA writes) are fine. `X16IRQ.FTH` is excluded from the ROM
   test run for now.
-- A proper invocation (a BASIC keyword / boot menu entry instead of the loader).
 - Finalize the RAM map (the `$9000` hmbuffer base is a placeholder).
 - rom.bin / FPGA `make_compact_rom.py` integration (bank `$09` in place of demo).
 

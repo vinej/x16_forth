@@ -304,11 +304,16 @@ porting the KERNAL `jsrfar` into the bank; and the bank's CPU vectors point at t
 KERNAL's low-RAM IRQ handlers. The whole thing boots to `OK` and passes the full
 test suite from ROM (integer, floating point, audio, strings, VERA, LOAD/SAVE).
 
-It is experimental: there is no BASIC keyword to launch it yet (a loader that
-`jsrfar`s into the bank is used for testing), the `IRQ` callback word is not yet
-bridged for ROM mode, and the RAM map isn't finalized. To try it, patch the bank
-into a ROM image (bank 9 is at offset `$24000`) and enter it via `jsrfar`. Full
-details, status, and design notes are in `doc/forth-in-rom-scope.md`.
+Because it replaces the demo bank (`$09`), it is launched by the BASIC **`TEST`**
+command - the same one that used to run the demo. The bank starts with the 4-word
+vector table `TEST` expects; `TEST` copies the bank to RAM `$1000` and jumps into a
+small launcher there, which `jsrfar`s back into bank 9 to start Forth in place. So
+on a machine whose ROM has Forth in bank 9, you just type `TEST` at the READY
+prompt. (For testing, patch the bank image into a ROM at bank-9 offset `$24000`.)
+
+It is still experimental: the `IRQ` callback word isn't bridged for ROM mode yet,
+and the RAM map isn't finalized. Full details, status, and design notes are in
+`doc/forth-in-rom-scope.md`.
 
 Wherever it is reasonable the words mirror the corresponding X16 BASIC command,
 but follow Forth stack conventions. Arguments are pushed in the same
@@ -600,6 +605,7 @@ Finally, there are also a lot of platform-specific things that would make the sy
 ### Run from ROM (v3, in progress)
 Running ForthX16 in place from an X16 ROM bank (see the "Run-from-ROM build"
 section above and `doc/forth-in-rom-scope.md`) so the interpreter lives in ROM and
-low RAM is freed for the user dictionary. Boots and passes the full test suite
-from ROM; remaining work is a BASIC-keyword launcher, the ROM-mode `IRQ` callback,
-finalizing the RAM map, and rom.bin / FPGA integration.
+low RAM is freed for the user dictionary. Boots (launched by the BASIC `TEST`
+command, replacing the demo) and passes the full test suite from ROM; remaining
+work is the ROM-mode `IRQ` callback, finalizing the RAM map, and rom.bin / FPGA
+integration.

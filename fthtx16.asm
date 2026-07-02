@@ -105,15 +105,31 @@ STOP = $FFE1
 }
 
 !if X16ROM {
-; v3: Forth runs in place from an X16 ROM bank at $C000 (see forth-in-rom-scope).
-; The X16 KERNAL is already initialized when the bank is entered, so no C64-style
-; hardware init. Entry is $C000: copy the KERNAL bridge trampolines into RAM
-; (needed before any KERNAL call), then fall through to the cold start.
+; v3: Forth runs in place from an X16 ROM bank ($09) at $C000 (see
+; forth-in-rom-scope). The X16 KERNAL is already up when the bank is entered.
+;
+; Launch: the bank starts with the 4-word vector table the BASIC "TEST" command
+; expects (TEST copies the whole 16K bank to RAM $1000 and does jmp ($1000+n*2)).
+; All four vectors point at test_launcher, which - running from the $1000 RAM copy
+; in bank 0 after TEST's copy - jsrfars back into bank 9 to start Forth IN PLACE.
+; So typing "TEST" (replacing the demo) boots Forth from ROM. The 16K RAM copy is
+; scratch (the dictionary overwrites it later). coldstart is also a direct jsrfar
+; target (a loader can jsr $FF6E / !word coldstart / !byte $09).
 * = $C000
 start_of_image:
+	!word $1000 + (test_launcher - start_of_image)	; TEST / TEST 0
+	!word $1000 + (test_launcher - start_of_image)	; TEST 1
+	!word $1000 + (test_launcher - start_of_image)	; TEST 2
+	!word $1000 + (test_launcher - start_of_image)	; TEST 3
+test_launcher:
+	; runs from the $1000 RAM copy (bank 0, IRQs on) - far-call into bank 9
+	jsr $FF6E			; KERNAL jsrfar (real, not the bridge)
+	!word coldstart
+	!byte $09
+	rts				; (Forth never returns)
 coldstart:
-	ldx #0
--	lda brg_template,x
+	ldx #0				; copy the KERNAL bridge trampolines into RAM
+-	lda brg_template,x		; (needed before any KERNAL call)
 	sta brg_ram,x
 	lda brg_template+$100,x
 	sta brg_ram+$100,x
