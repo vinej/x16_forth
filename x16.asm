@@ -49,7 +49,7 @@
 	+code
 	lda _dtop
 	clc					; carry clear = set mode (set = query)
-	jsr $FF5F			; KERNAL screen_mode
+	jsr SCREENMODE			; KERNAL screen_mode
 	+dpop
 	jmp next
 
@@ -104,7 +104,7 @@ x16_coltab:
 	lda _dtop			; col
 	tay
 	clc					; carry clear = set cursor
-	jsr $FFF0			; KERNAL PLOT
+	jsr PLOT			; KERNAL PLOT
 	+dpop
 	+dpop
 	jmp next
@@ -113,7 +113,7 @@ x16_coltab:
 +header ~cursor, ~cursor_n, "CURSOR"
 	+code
 	sec					; carry set = read cursor
-	jsr $FFF0			; KERNAL PLOT -> X = row, Y = col
+	jsr PLOT			; KERNAL PLOT -> X = row, Y = col
 	stx _scratch
 	sty _scratch+1
 	lda _scratch		; push row
@@ -594,7 +594,7 @@ x16_coltab:
 	ldy #1				; secondary 1 -> use header address
 	jsr SETLFS
 	lda #0				; 0 = load (1 = verify)
-	jsr $FFD5			; KERNAL LOAD
+	jsr KLOAD			; KERNAL LOAD
 	+dpop
 	jmp next
 
@@ -625,7 +625,7 @@ x16_coltab:
 	lda #0
 	ldx _rscratch		; load address low
 	ldy _rscratch+1		; load address high
-	jsr $FFD5			; KERNAL LOAD
+	jsr KLOAD			; KERNAL LOAD
 	+dpop
 	jmp next
 
@@ -662,7 +662,7 @@ x16_coltab:
 	adc #2
 	ldx _rscratch		; VRAM offset low
 	ldy _rscratch+1		; VRAM offset high
-	jsr $FFD5			; KERNAL LOAD
+	jsr KLOAD			; KERNAL LOAD
 	+dpop
 	jmp next
 
@@ -697,7 +697,7 @@ x16_coltab:
 	lda #<_scratch		; zero-page offset of the start-address pointer
 	ldx _rscratch		; end address low
 	ldy _rscratch+1		; end address high
-	jsr $FFD8			; KERNAL SAVE
+	jsr KSAVE			; KERNAL SAVE
 	+dpop
 	jmp next
 
@@ -734,7 +734,7 @@ x16_coltab:
 	adc #2
 	ldx _rscratch		; VRAM offset low
 	ldy _rscratch+1		; VRAM offset high
-	jsr $FFD5			; KERNAL LOAD
+	jsr KLOAD			; KERNAL LOAD
 	+dpop
 	jmp next
 
@@ -766,7 +766,7 @@ x16_coltab:
 	lda #1				; A = 1 -> verify
 	ldx _rscratch		; address low
 	ldy _rscratch+1		; address high
-	jsr $FFD5			; KERNAL LOAD (verify)
+	jsr KLOAD			; KERNAL LOAD (verify)
 	jsr READST			; status: bit $10 set = mismatch
 	and #$10
 	beq bv_ok
@@ -991,7 +991,7 @@ g_convps:
 	+code
 	lda #128			; screen mode 320x240 @ 256 colors
 	clc
-	jsr $FF5F			; screen_mode
+	jsr SCREENMODE			; screen_mode
 	lda #0
 	sta r0L
 	sta r0H				; r0 = 0 -> default graphics mode
@@ -1152,7 +1152,7 @@ joy_absent:
 	lda _dtop			; mode (low byte)
 	pha
 	sec
-	jsr $FF5F			; screen_mode query -> X = columns, Y = rows
+	jsr SCREENMODE			; screen_mode query -> X = columns, Y = rows
 	pla
 	jsr mouse_config	; A = mode, X = cols, Y = rows
 	+dpop
@@ -1233,7 +1233,7 @@ sgn_store:
 +header ~pos, ~pos_n, "POS"
 	+code
 	sec
-	jsr $FFF0			; PLOT read: X = row, Y = column
+	jsr PLOT			; PLOT read: X = row, Y = column
 	tya
 	ldx #0
 	jmp dpush_and_next
@@ -1650,9 +1650,11 @@ FP_atn    = $F5FE
 FP_log    = $EF7A		; natural log
 FP_exp    = $F403
 
-; The float-stack pointer lives in RAM (Forth's zero page is full). It points at
-; the top 5-byte float; the stack grows downward from FSTACK_TOP.
-fsp: !byte 0, 0
+; The float-stack pointer (fsp) points at the top 5-byte float; the stack grows
+; downward from FSTACK_TOP. It now lives in a RAM hmbuffer (declared in
+; fthtx16.asm) instead of an inline !byte here - the inline version is read-only
+; in the ROM (bank-9) build, which left fsp = $0000 so FP wrote over the bank
+; registers. Set at cold start.
 
 ; --- helper subroutines (not Forth words) ------------------------------------
 

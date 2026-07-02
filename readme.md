@@ -287,6 +287,29 @@ interpreter - so Forth runs from RAM exactly as the PRG does, but boots straight
 from the cartridge with no loading. The whole image fits in one 16K bank
 (currently ~9K, leaving ~7K for more words).
 
+#### Run-from-ROM build (v3, experimental)
+
+There is also a build that runs the interpreter **in place from an X16 ROM bank**
+(`$C000-$FFFF`, intended for bank `$09`), so the ~13.5 KB of interpreter code lives
+in ROM instead of low RAM - freeing that RAM for the user dictionary. This is
+different from the cartridge above, which copies itself to RAM.
+
+* `makex16rom.bat` builds `forthx16rom.bin`, a full 16 KB bank image
+  (`buildx16rom.asm` sets `X16ROM = 1`; it must be assembled with `--cpu 65c02`).
+
+Since a bank at `$C000` cannot call the KERNAL (`$FFxx`) directly - that window is
+the bank itself - the build installs a small set of RAM *bridge trampolines* at
+cold start and points the KERNAL symbols at them; FP/audio reach their banks by
+porting the KERNAL `jsrfar` into the bank; and the bank's CPU vectors point at the
+KERNAL's low-RAM IRQ handlers. The whole thing boots to `OK` and passes the full
+test suite from ROM (integer, floating point, audio, strings, VERA, LOAD/SAVE).
+
+It is experimental: there is no BASIC keyword to launch it yet (a loader that
+`jsrfar`s into the bank is used for testing), the `IRQ` callback word is not yet
+bridged for ROM mode, and the RAM map isn't finalized. To try it, patch the bank
+into a ROM image (bank 9 is at offset `$24000`) and enter it via `jsrfar`. Full
+details, status, and design notes are in `doc/forth-in-rom-scope.md`.
+
 Wherever it is reasonable the words mirror the corresponding X16 BASIC command,
 but follow Forth stack conventions. Arguments are pushed in the same
 left-to-right order as the BASIC command, so BASIC `VPOKE bank,addr,value`
@@ -310,6 +333,9 @@ COLOR  ( fg bg -- )  set text colors 0-15 (BASIC COLOR)
 BORDER ( color -- )  set the display border color 0-15
 CLS    ( -- )        clear the text screen
 LOCATE ( row col -- ) move the text cursor (BASIC LOCATE)
+CURSOR ( -- row col ) read the text cursor position (inverse of LOCATE)
+SCROLLX ( n -- )     set the layer-1 hardware horizontal scroll (0-4095)
+SCROLLY ( n -- )     set the layer-1 hardware vertical scroll (0-4095)
 ```
 
 ### Bitmap graphics
@@ -335,6 +361,7 @@ SPRITES-ON   ( -- )                enable the sprite layer
 SPRITES-OFF  ( -- )                disable the sprite layer
 SPRITE-IMAGE ( graphaddr sprite -- ) set 4bpp image address (32-aligned VRAM address)
 SPRITE-POS   ( x y sprite -- )     set position
+GETSPR       ( sprite -- x y )     read a sprite's position (inverse of SPRITE-POS)
 SPRITE-SIZE  ( width height sprite -- ) size codes 0-3 = 8/16/32/64 pixels
 SPRITE-Z     ( z sprite -- )       Z-depth 0=off 1=behind 2=between 3=front
 ```
@@ -386,14 +413,24 @@ TATTR ( x y -- attr )        read a tile cell's colour attribute
 ```
 
 ### Math helpers
-Integer helpers matching BASIC (the floating-point functions are not provided,
-as this Forth has no floating point). `ABS MIN MAX MOD` are already core words.
+Integer helpers matching BASIC. (BASIC's floating-point functions `SQR SIN COS`…
+are provided too - see Floating point below.) `ABS MIN MAX MOD` are core words.
 ```
 SGN    ( n -- -1|0|1 )   sign of a signed number
 RND    ( u -- n )        pseudo-random number in 0..u-1
 RANDOM ( -- u )          raw 16-bit pseudo-random number
 POS    ( -- col )        current text cursor column
 ```
+
+### Bit / byte manipulation
+```
+CATNIB ( nh nl -- byte )  concatenate two nibbles: (nh<<4) | nl
+SPLIT  ( n -- bh bl )     split a cell into high and low bytes
+SBIT   ( addr mask -- )   set the masked bits of the byte at addr
+CBIT   ( addr mask -- )   clear the masked bits of the byte at addr
+FBIT   ( flag addr mask -- ) set the masked bits if flag is true, else clear
+```
+(`LSHIFT` and `RSHIFT` are core words.) These are handy for I/O-register work.
 
 ### Input devices
 ```
@@ -425,13 +462,17 @@ ISQRT ( n -- m )              integer square root
 Float **literals** can be typed directly at the interpreter, e.g. `3.14`, `1E3`,
 `-2.5E-2` — they are recognized and pushed to the float stack. (Inside a `:`
 definition use `S" ..." >FLOAT` or an `FCONSTANT`.)
-`toolkit/X16FP.FTH` adds the defining words `FVARIABLE` and `FCONSTANT`.
-`toolkit/X16BASIC.FTH` adds the BASIC names `SQR SIN COS TAN ATN LOG EXP`.
+The FP defining words `FVARIABLE` and `FCONSTANT` and the BASIC names
+`SQR SIN COS TAN ATN LOG EXP` are **built into the X16 build** (no INCLUDE needed;
+they were formerly `toolkit/X16FP.FTH` / `toolkit/X16BASIC.FTH`).
 Example: `2 S>F FSQRT F.` prints `1.41421356`.
 
 ### System / dev
 ```
 USR      ( addr -- )   call a machine-language routine at addr (it must RTS)
+IRQ      ( xt -- )     run a Forth word on every 60 Hz VSYNC interrupt (arm with
+                       an xt from `'`; `0 IRQ` disarms). The callback must be short
+                       and stack-neutral; it runs on its own stacks. (RAM/PRG build.)
 MONITOR  ( -- )        enter the built-in ML monitor (exit with X)
 EDIT     ( c-addr u -- )  edit a file in the X16 full-screen editor (u=0 = new)
 SETBANK  ( bank -- )   select the RAM bank visible at $A000-$BFFF
@@ -454,15 +495,16 @@ currently unresolved (see `doc/EDIT-known-issue.md`). Reliable workflow:
 `S" MYPROG.FTH" EDIT`, write out and quit the editor, then RESET Forth (relaunch
 or cold start) and `S" MYPROG.FTH" INCLUDED` in the fresh session.
 
-BASIC-style aliases for existing Forth words are available by including
-`toolkit/X16BASIC.FTH`: `OPEN` (=`OPEN-FILE`), `CLOSE` (=`CLOSE-FILE`),
-`LINPUT` (=`ACCEPT`). The other BASIC-integrated commands (`DOS HELP BOOT MENU`)
-are not provided: they parse the BASIC text buffer and use BASIC's zero page,
-which conflicts with Forth.
+BASIC-style aliases for existing Forth words are **built into the X16 build**:
+`OPEN` (=`OPEN-FILE`), `CLOSE` (=`CLOSE-FILE`), `LINPUT` (=`ACCEPT`). The other
+BASIC-integrated commands (`DOS HELP BOOT MENU`) are not provided: they parse the
+BASIC text buffer and use BASIC's zero page, which conflicts with Forth.
 
-`toolkit/X16STR.FTH` adds the BASIC string / number-conversion functions
+The BASIC string / number-conversion functions
 (`HEX$ BIN$ STR$ VAL ASC CHR$ LEN LEFT$ RIGHT$ MID$ RPT$`), using Forth's
-`c-addr u` string model. INCLUDE it to use them.
+`c-addr u` string model, are also **built into the X16 build**. (These, the FP
+names, and `FVARIABLE`/`FCONSTANT` were formerly the `toolkit/*.FTH` files, which
+remain for the C64/F256 builds.)
 
 ### Binary LOAD / SAVE
 Filenames are Forth strings `( c-addr u )`, e.g. `S" DATA.BIN"`. `dev` is the
@@ -473,7 +515,20 @@ BLOAD   ( c-addr u dev addr -- )         load a PRG relocated to addr
 VLOAD   ( c-addr u dev bank vaddr -- )   load a (headered) file into VRAM
 BVLOAD  ( c-addr u dev bank vaddr -- )   load a headerless file into VRAM
 SAVE    ( c-addr u dev start end -- )    save memory [start,end) as a PRG (BASIC BSAVE)
+VSAVE   ( c-addr u bank vaddr len -- )   save 'len' bytes of VRAM to a headerless
+                                         file (device 8); the inverse of BVLOAD
 BVERIFY ( c-addr u dev addr -- flag )    verify a file against memory (-1 match / 0 mismatch)
+```
+The KERNAL `SAVE` cannot read VRAM, so `VSAVE` streams the bytes out through the
+VERA data port to an open file (device 8). Convenience words save/load sprite and
+tile *definitions* on top of `VSAVE`/`BVLOAD` (all on device 8):
+```
+SPRSAVE  ( c-addr u sprite -- )  save a sprite's image pixels (address and byte
+SPRLOAD  ( c-addr u sprite -- )  count are read from the sprite's own attributes)
+TILESAVE ( c-addr u vaddr len -- ) save a bank-1 tileset (explicit address + size)
+TILELOAD ( c-addr u vaddr -- )     load a bank-1 tileset
+TMAPSAVE ( c-addr u -- )         save the layer-1 tilemap (self-sizing, from the
+TMAPLOAD ( c-addr u -- )         VERA layer-1 MAPBASE/CONFIG registers)
 ```
 
 ## Platform-Specific Notes
@@ -501,6 +556,8 @@ A modified copy of dynamic memory support package can be found in `dynamic`. Thi
 The interpreter will look for file `AUTORUN.FTH` and execute it if found.
 
 A modified copy of Forth test suite is in `tests` - copy files from there to the file system of Commander X16 and start it with `INCLUDE RUNTESTS.FTH`. The current version should run all tests without errors. The runtime on the emulator is about 4 minutes on Commander X16 (and a LOT more on C64).
+
+`tests-X16` holds self-checking tests and demos for the Commander X16 extension words (VERA, sprites, tiles, audio, floating point, the baked-in string/BASIC-alias/FP toolkit words, the bit/byte words, `SCROLLX/SCROLLY` + `IRQ`, and the sprite/tile disk save-load words). Each is self-contained - run e.g. `INCLUDE X16TEST.FTH`; see `tests-X16/readme.txt` for the list.
 
 A practically stock copy of Forth test suite is in `tests-F256` as that platform uses ASCII and does not need character hacks.
 
@@ -538,3 +595,11 @@ very different platforms the actual platform dependencies are easy to identify a
 These are required for any usable Forth system. I am already looking into inline assembler. Editor is
 a reasonable thing to have. Some parts of the Standard may be added through a toolkit expansion.
 Finally, there are also a lot of platform-specific things that would make the system a lot more usable.
+(On the X16 the string, BASIC-alias, and floating-point toolkits are now baked into the build.)
+
+### Run from ROM (v3, in progress)
+Running ForthX16 in place from an X16 ROM bank (see the "Run-from-ROM build"
+section above and `doc/forth-in-rom-scope.md`) so the interpreter lives in ROM and
+low RAM is freed for the user dictionary. Boots and passes the full test suite
+from ROM; remaining work is a BASIC-keyword launcher, the ROM-mode `IRQ` callback,
+finalizing the RAM map, and rom.bin / FPGA integration.

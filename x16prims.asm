@@ -29,7 +29,21 @@ YM_DATA       = $9F41
 
 ; ---- Banked audio API (BANK_AUDIO = $0A), entry points in inc/audio.inc ------
 BANK_AUDIO         = $0A
-JSRFAR             = $FF6E
+
+; KERNAL routines called by name. In X16ROM mode these become RAM bridge
+; trampolines (defined in fthtx16.asm); otherwise they are the direct $FFxx /
+; jsrfar entries. JSRFAR routes FP/audio far-calls; the rest replace hard-coded
+; jsr $FFxx sites so they bridge too.
+!if X16ROM {
+JSRFAR = brg_jsrfar
+} else {
+JSRFAR     = $FF6E
+KLOAD      = $FFD5
+KSAVE      = $FFD8
+PLOT       = $FFF0
+SCREENMODE = $FF5F
+ENTROPY    = $FECF
+}
 bas_fmnote          = $C003
 ym_loadpatch        = $C069
 ym_setatten         = $C075
@@ -111,7 +125,7 @@ ym_write            = $C08A
 ; Referenceable primitive so RND (and user code) can build on it.
 +header ~random, ~random_n, "RANDOM"
 	+code
-	jsr $FECF			; entropy_get -> A,X,Y random bits
+	jsr ENTROPY			; entropy_get -> A,X,Y random bits
 	jmp dpush_and_next
 
 ; >FLOAT ( c-addr u -- flag )   parse a string as a float; if valid push it (F: -- r).
@@ -313,7 +327,7 @@ dovsave_ok:
 	adc #2
 	ldx _rscratch
 	ldy _rscratch+1
-	jsr $FFD5			; KERNAL LOAD
+	jsr KLOAD			; KERNAL LOAD
 	+dpop
 	jmp next
 

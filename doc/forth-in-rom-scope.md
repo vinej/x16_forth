@@ -6,6 +6,65 @@ in low RAM. Result: the user dictionary gets ~12 KB more low RAM (roughly 20 KB 
 32 KB), and the door opens to a banked-RAM dictionary later — i.e. "run like BASIC,
 almost all RAM free for code."
 
+---
+
+## STATUS (2026-07-02): working — boots and runs from ROM
+
+The `X16ROM` build target is implemented and **functionally complete**: Forth
+cold-starts in place from ROM bank `$09`, and the **entire test suite passes from
+ROM** (the seven `tests-X16` self-tests plus the standard Forth 2012 suite, 0
+errors). Integer, floating point, audio, strings, VERA/sprite/tile access, RANDOM,
+and binary LOAD/SAVE all work from ROM.
+
+### How to build and test
+- **Build:** `makex16rom.bat` → `forthx16rom.bin`, a full 16 KB bank image
+  (`buildx16rom.asm` sets `X16ROM=1`; assemble with `--cpu 65c02`). The core is
+  ~13.5 KB, so it fits the 16 KB bank with ~2.3 KB to spare after the bridge and
+  vectors.
+- **Test (patch rom.bin):** back up the emulator ROM, then write the bank image
+  into bank 9 (offset `9*16384 = $24000`):
+  `dd if=forthx16rom.bin of=rom.bin bs=1 seek=147456 conv=notrunc`
+- **Invoke:** there is no BASIC keyword yet; a tiny loader PRG enters Forth via
+  `jsr $FF6E / !word $C000 / !byte $09` (jsrfar into the bank-9 cold start).
+
+### What was built (all guarded by the `X16ROM` flag; other builds unaffected)
+1. **Memory map / build config** — code placed at `$C000` with `!pseudopc`; the
+   dictionary relocates to RAM (`$0801`, reusing the C64 `CART` path); hmbuffers
+   in low RAM (currently from `$9000` down — a placeholder, see TODO).
+2. **KERNAL bridge** — a bank at `$C000` cannot call `$FFxx` directly (that window
+   *is* the bank). A ROM template of 17 small RAM trampolines is copied to RAM at
+   cold start; each saves the ROM bank, selects bank 0, `jsr`s the real routine,
+   and restores the bank (preserving A/X/Y and carry). The KERNAL symbols
+   (`CHROUT`, `CHRIN`, `SETNAM`, …, plus `KLOAD`/`KSAVE`/`PLOT`/`SCREENMODE`/
+   `ENTROPY`) are redefined to the trampolines, so no call sites change.
+3. **`jsrfar` bridge** — FP (bank 4) and audio (bank `$0A`) reach their banks via
+   `brg_jsrfar`, the ROM part of the KERNAL `jsrfar` ported into bank 9 (hands off
+   to the KERNAL RAM part `jsrfar3` at `$02C4`).
+4. **CPU vectors** — bank 9's `$FFFA-$FFFF` point at the KERNAL's low-RAM banked
+   IRQ/NMI trampolines (`irq=$038B`, `nmi=$03B7`); no custom IRQ stub is needed for
+   IRQ survival.
+
+### Key bug found and fixed
+`fsp` (the float-stack pointer) was an inline `!byte 0,0` **in the code** — fine in
+RAM/PRG builds, but read-only in ROM, so it stayed `$0000` and FP wrote its results
+over the RAM/ROM bank registers (`$00`/`$01`) → crash. Moved to a RAM hmbuffer.
+This was the scope's "inline mutable storage in ROM" hazard (item 5); `fsp` was the
+only such case — the standard suite's `DEFER`/`VALUE` tests pass from ROM.
+
+### Still TODO
+- The `IRQ` Forth-callback word's `CINV` (`$0314`) hook needs a bank-switching
+  stub in ROM mode (the handler is in bank 9 but `CINV` is called with bank 0).
+  `SCROLLX`/`SCROLLY` (VERA writes) are fine. `X16IRQ.FTH` is excluded from the ROM
+  test run for now.
+- A proper invocation (a BASIC keyword / boot menu entry instead of the loader).
+- Finalize the RAM map (the `$9000` hmbuffer base is a placeholder).
+- rom.bin / FPGA `make_compact_rom.py` integration (bank `$09` in place of demo).
+
+The design notes below are the original plan; the items above record what was
+actually implemented.
+
+---
+
 ## Verdict: feasible, medium effort
 
 A run-from-ROM Forth **already exists** in this codebase: the **C64 cartridge build**

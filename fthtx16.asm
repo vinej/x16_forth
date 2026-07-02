@@ -52,6 +52,14 @@ VERSION_LOW_INT = 0
 ; X16 is a superset of the C64 target: it reuses the C64 KERNAL-compatible I/O
 ; and adds native words for the Commander X16 hardware (VERA video, sprites,
 ; audio, binary LOAD/SAVE). Defining X16 implies C64.
+!ifndef X16ROM {
+X16ROM = 0
+}
+!if X16ROM {
+!ifndef X16 {
+X16 = 1
+}
+}
 !ifndef X16 {
 X16 = 0
 }
@@ -79,7 +87,9 @@ F256 = 0
 }
 
 !if C64 {
-; KERNAL entries
+!if X16ROM = 0 {
+; KERNAL entries (direct). In X16ROM mode these are RAM bridge trampolines
+; instead - see the bridge section further down (SETLFS = brg_ram + ...).
 SETLFS = $FFBA
 SETNAM = $FFBD
 OPEN = $FFC0
@@ -92,8 +102,25 @@ CHROUT = $FFD2
 GETIN = $FFE4
 READST = $FFB7
 STOP = $FFE1
+}
 
-!if CART {
+!if X16ROM {
+; v3: Forth runs in place from an X16 ROM bank at $C000 (see forth-in-rom-scope).
+; The X16 KERNAL is already initialized when the bank is entered, so no C64-style
+; hardware init. Entry is $C000: copy the KERNAL bridge trampolines into RAM
+; (needed before any KERNAL call), then fall through to the cold start.
+* = $C000
+start_of_image:
+coldstart:
+	ldx #0
+-	lda brg_template,x
+	sta brg_ram,x
+	lda brg_template+$100,x
+	sta brg_ram+$100,x
+	inx
+	bne -
+warmstart:
+} else if CART {
 ; Only used in cartridge build
 IOINIT = $ff84
 RAMTAS = $ff87
@@ -274,7 +301,9 @@ NEW_LINE = $0D
 }
 
 !if C64 {
-	!if CART {
+	!if X16ROM {
+		+high_memory_begin $9000		; TODO v3: settle a proper RAM map (buffers grow down)
+	} else if CART {
 		+high_memory_begin $8000
 	} else {
 		+high_memory_begin $a000
@@ -292,6 +321,8 @@ NEW_LINE = $0D
 !if X16 {
 +hmbuffer ~FSTACK, 80		; floating-point stack: 16 x 5-byte MFLPT floats
 FSTACK_TOP = FSTACK + 80
++hmbuffer ~fsp, 2		; float-stack pointer - MUST be in RAM (was inline in x16.asm,
+				; which is read-only in the ROM build -> FP wrote to $0000). Set at cold start.
 
 ; State for the IRQ Forth-callback (see x16.asm). Kept in RAM (not in the code
 ; image) so it works when the interpreter runs from ROM later.
@@ -310,6 +341,68 @@ IRQ_DSTACK_TOP = irq_dstack + 64 - 2
 +hmbuffer ~irq_save_sc, 1	; saved _stopcheck (STOP-key check suppressed in the callback)
 +hmbuffer ~irq_busy, 1		; re-entrancy guard while a callback runs
 +hmbuffer ~irq_armed, 1		; non-zero when our handler is installed
+}
+
+!if X16ROM {
+; --- KERNAL bridge (v3 run-from-ROM) --------------------------------------
+; A bank at $C000 cannot call the KERNAL ($FFxx) directly - that window is the
+; bank itself. So the 12 KERNAL entries below become RAM trampolines: each
+; saves the ROM bank, selects bank 0, JSRs the real routine, restores the bank
+; (preserving A/X/Y and flags/carry). brg_template (in ROM) is copied to brg_ram
+; at cold start; the KERNAL symbols point at the trampolines so no call site
+; changes. TODO: JSRFAR (FP/audio) and the hard-coded jsr $FFxx (PLOT, SCREEN,
+; LOAD, SAVE, entropy) are not bridged yet - those words won't work in ROM mode.
+BRIDGE_LEN = 26			; bytes per trampoline (see the ktramp macro)
++hmbuffer ~brg_ram, 512		; the 12 trampolines live here in RAM
++hmbuffer ~brg_save, 1		; scratch for the saved ROM bank
+SETLFS = brg_ram + 0*BRIDGE_LEN
+SETNAM = brg_ram + 1*BRIDGE_LEN
+OPEN   = brg_ram + 2*BRIDGE_LEN
+CLOSE  = brg_ram + 3*BRIDGE_LEN
+CHKIN  = brg_ram + 4*BRIDGE_LEN
+CHKOUT = brg_ram + 5*BRIDGE_LEN
+CLRCHN = brg_ram + 6*BRIDGE_LEN
+CHRIN  = brg_ram + 7*BRIDGE_LEN
+CHROUT = brg_ram + 8*BRIDGE_LEN
+GETIN  = brg_ram + 9*BRIDGE_LEN
+READST = brg_ram + 10*BRIDGE_LEN
+STOP   = brg_ram + 11*BRIDGE_LEN
+; hard-coded KERNAL calls, converted to symbols so they bridge too:
+KLOAD      = brg_ram + 12*BRIDGE_LEN	; $FFD5 LOAD
+KSAVE      = brg_ram + 13*BRIDGE_LEN	; $FFD8 SAVE
+PLOT       = brg_ram + 14*BRIDGE_LEN	; $FFF0 PLOT
+SCREENMODE = brg_ram + 15*BRIDGE_LEN	; $FF5F screen_mode
+ENTROPY    = brg_ram + 16*BRIDGE_LEN	; $FECF entropy_get
+
+; jsrfar (FP bank 4 / audio bank $0A) support. brg_jsrfar (ROM, bank 9) is the
+; ROM part of the KERNAL jsrfar (inc/jsrfar.inc) ported into our bank: it reads
+; the inline target/bank, then jmp's to the KERNAL's RAM part jsrfar3 ($02C4)
+; which crosses to the target bank (via jmpfr), calls it, restores our bank, and
+; returns to the caller. This is exactly how the KERNAL's own jsrfar works.
+imparm   = $82		; zp scratch pointer (outside Forth's $22-$7F zone)
+jmpfr    = $02df	; KERNAL RAM "jmp $xxxx" (jsrfar sets its operand, then calls it)
+jsrfar3  = $02c4	; KERNAL RAM part of jsrfar (does the ROM-bank crossing)
+
+; One bridge trampoline. Position-independent (only touches $01, brg_save, the
+; fixed $FFxx target); copied verbatim from ROM to RAM. --cpu 6502: no STZ.
+!macro ktramp .kaddr {
+	php
+	pha
+	lda $01			; ROM_SEL: save current ROM bank
+	sta brg_save
+	lda #0			; KERNAL is ROM bank 0
+	sta $01
+	pla
+	plp
+	jsr .kaddr		; call the real KERNAL routine
+	php
+	pha
+	lda brg_save		; restore our ROM bank
+	sta $01
+	pla
+	plp
+	rts
+}
 }
 
 !if F256 {
@@ -654,7 +747,7 @@ STACKLIMIT = DSIZE/2 - 2*SSAFE
 	ldx #>forth_system_n
 	+stax _latest
 	
-!if C64 and CART {
+!if CART or X16ROM {
 	lda #<$0801
 	ldx #>$0801
 } else {
@@ -5367,8 +5460,8 @@ words_done:
 +header ~bye, ~bye_n, "BYE"
 	+code
 !if C64 {
-	!if CART {
-	; Just reset the state in cartridge mode
+	!if CART or X16ROM {
+	; Just reset the state in cartridge / ROM mode
 		jmp coldstart
 	} else {
 	; This works fine on Commander X16 as Forth is only using the user area of the zero page. Unfortunately,
@@ -5554,6 +5647,104 @@ autorun:
 !if C64 and CART {
 * = $9fff
 	!byte 0
+}
+
+!if X16ROM {
+; ROM template of the KERNAL bridge trampolines, copied to brg_ram at cold start.
+; Order must match the SETLFS.. = brg_ram + i*BRIDGE_LEN assignments above.
+brg_template:
+	+ktramp $FFBA		; 0  SETLFS
+	+ktramp $FFBD		; 1  SETNAM
+	+ktramp $FFC0		; 2  OPEN
+	+ktramp $FFC3		; 3  CLOSE
+	+ktramp $FFC6		; 4  CHKIN
+	+ktramp $FFC9		; 5  CHKOUT
+	+ktramp $FFCC		; 6  CLRCHN
+	+ktramp $FFCF		; 7  CHRIN
+	+ktramp $FFD2		; 8  CHROUT
+	+ktramp $FFE4		; 9  GETIN
+	+ktramp $FFB7		; 10 READST
+	+ktramp $FFE1		; 11 STOP
+	+ktramp $FFD5		; 12 LOAD
+	+ktramp $FFD8		; 13 SAVE
+	+ktramp $FFF0		; 14 PLOT
+	+ktramp $FF5F		; 15 screen_mode
+	+ktramp $FECF		; 16 entropy_get
+	; brg_ff_stub template (copied to RAM right after the 17 trampolines). Runs
+	; from RAM so it survives selecting KERNAL bank 0. Its "jsr $FF6E" inline args
+	; (brg_ff_args) are patched per call by brg_jsrfar. Layout is fixed so that
+	; brg_ff_args = brg_ff_stub + 21 (do not reorder without updating that).
+brg_template_end:
+
+; JSRFAR for bank-9 code (FP bank 4 / audio bank $0A). Ported ROM part of the
+; KERNAL jsrfar (6502/65C02 path). Reads the inline target/bank after the
+; caller's "jsr brg_jsrfar", then hands off to the KERNAL RAM part jsrfar3
+; ($02C4) which crosses to the target bank, calls it, restores our bank, and
+; returns past the 3 arg bytes.
+brg_jsrfar:
+	php			; reserve 1 byte on the stack (for the saved bank)
+	php			; save registers & status
+	clc			; 65C02: emulation path (carry clear for the adc #3)
+	pha
+	phx
+	phy
+	tsx
+	lda $0106,x		; return address lo
+	sta imparm
+	adc #3			; skip the 3 inline arg bytes
+	sta $0106,x
+	lda $0107,x		; return address hi
+	sta imparm+1
+	adc #0
+	sta $0107,x
+	ldy #1
+	lda (imparm),y		; target lo
+	sta jmpfr+1
+	iny
+	lda (imparm),y		; target hi
+	sta jmpfr+2
+	cmp #$c0
+	bcc brg_jf_ram		; target is in RAM
+	lda $01			; target in ROM: save current ROM bank into reserved byte
+	sta $0105,x
+	iny
+	lda (imparm),y		; target bank
+	ply
+	plx
+	jmp jsrfar3		; KERNAL RAM part completes the ROM-bank call
+brg_jf_ram:
+	lda $00			; target in RAM: save current RAM bank
+	sta $0105,x
+	iny
+	lda (imparm),y		; target RAM bank
+	sta $00
+	ply
+	plx
+	pla
+	plp
+	jsr jmpfr
+	php
+	pha
+	phx
+	tsx
+	lda $0104,x
+	sta $00			; restore RAM bank
+	lda $0103,x
+	sta $0104,x
+	plx
+	pla
+	plp
+	plp
+	rts
+
+; This bank's CPU vectors. Every X16 ROM bank points these at the KERNAL's
+; low-RAM trampolines so an IRQ/NMI taken while the bank is selected is handled
+; (bank saved, KERNAL entered, bank restored). See inc/banks.inc: irq=$038b,
+; nmi=$03b7. Pad the image up to the 16K bank's vector table.
+	!fill $FFFA - *, $ff
+	!word $03b7		; NMI  -> KERNAL NMI RAM trampoline
+	!word $ffff		; RESET (hardware forces ROM bank 0 on reset; unused here)
+	!word $038b		; IRQ  -> KERNAL banked-IRQ RAM handler
 }
 
 end_of_image:
