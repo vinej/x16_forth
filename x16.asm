@@ -462,6 +462,7 @@ x16_coltab:
 	tax
 	ldy #0				; no extra semitones
 	lda _dtop			; channel
+	clc				; C clear = retrigger (re-attack) the note, like BASIC
 	+audiocall bas_fmnote
 	+dpop
 	+dpop

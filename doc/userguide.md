@@ -15,7 +15,8 @@ three parts:
   calculator, and a worked example of floating point + currency formatting.
 - **[Section 5 — RPN calculator (HP50.FTH)](#section-5)**: the optional `HP50.FTH`
   library — an HP-50g-style RPN scientific calculator (reals, integers, bases,
-  bitwise), with a fast turnkey-image reload.
+  bitwise, complex numbers, lists, vectors & matrices), with a fast
+  turnkey-image reload.
 
 Notation used throughout: a word's **stack effect** is written `( before -- after )`
 with the top of stack on the right. `n`=signed number, `u`=unsigned, `d`=double
@@ -1153,15 +1154,22 @@ The status line shows the angle mode (`DEG`/`RAD`), the number format
 (`STD`, or `FIX n`), the integer base when it is not decimal (`HEX`/`OCT`/`BIN`),
 and the stack depth.
 
-## 5.2 Numbers
+## 5.2 Object types
 
-- **Reals** are entered with a decimal point or exponent: `3.14`, `-2.5`, `1E3`.
-  They display in `STD` (natural) or `FIX n` (fixed decimals) format.
-- **Integers** are exact 32-bit whole numbers, entered without a point: `42`,
-  `-7`, `1000000`. In `HEX`/`OCT`/`BIN` mode you enter and see them in that base,
-  with a trailing base letter (`FFH`, `377O`, `1010B`).
+The stack holds typed objects, entered like this:
 
-Integer `+ - *` stay exact; `/` and the scientific functions produce a real.
+| Type | Entry | Example | Displays as |
+|---|---|---|---|
+| Real | with a `.` or `E` | `3.14`, `-2.5`, `1E3` | `3.14` (STD) or `3.1400` (FIX 4) |
+| Integer | plain digits (no `.`) | `42`, `-7`, `1000000` | `42`; in HEX/OCT/BIN with a letter: `FFH` |
+| Complex | `(re,im)` | `(3,4)`, `(1.5,-2)` | `(3,4)` |
+| List | `[ … ]` | `[ 1 2 3 ]` | `[ 1 2 3 ]` |
+
+Lists use square brackets `[ ]` (the X16 keyboard/charset has no usable `{ }`).
+A **vector** is just a list of numbers; a **matrix** is a list of row-lists,
+e.g. `[ [ 1 2 ] [ 3 4 ] ]`. Integer `+ - *` stay exact; `/` and the scientific
+functions produce a real. Mixing a real and an integer, or a real and a complex,
+promotes to the wider type.
 
 ## 5.3 Commands
 
@@ -1171,33 +1179,110 @@ Integer `+ - *` stay exact; `/` and the scientific functions produce a real.
 | Scientific | `SIN` `COS` `TAN` `ASIN` `ACOS` `ATAN` `LN` `EXP` `LOG` `ALOG` `PI` |
 | Integer / bitwise | `AND` `OR` `XOR` `NOT` `->I` (to integer) `->R` (to real) |
 | Bases | `BIN` `OCT` `DEC` `HEX` |
+| Complex | `CONJ` `RE` `IM` `ARG` `R->C` `C->R` (and `ABS` = magnitude) |
+| Lists | `SIZE` `GET` (and `+` = concatenate) |
+| Vectors | `DOT` `V+` `V-` `NORM` `CROSS` |
+| Matrices | `DET` `TRN` (transpose) |
 | Stack | `DUP` `DROP` `SWAP` `OVER` `ROT` `CLEAR` `DEPTH` |
 | Modes | `DEG` `RAD` `STD` `n FIX` |
 | Exit | `OFF` |
 
-Trigonometric functions honour the current `DEG`/`RAD` mode.
+Trigonometric functions honour the current `DEG`/`RAD` mode. Angle mode, number
+format, and base are **persistent** — they stay set until you change them.
 
-## 5.4 Scripting and testing
+## 5.4 Complex numbers
+
+Enter a complex as `(re,im)`. Arithmetic and the type-conversion words work on
+them; real/integer operands promote to complex automatically.
+
+| Word | Effect |
+|---|---|
+| `+ - * / NEG INV SQ` | complex arithmetic |
+| `ABS` | magnitude \|z\| (a real) |
+| `ARG` | argument/angle (in the current angle mode) |
+| `CONJ` | complex conjugate |
+| `RE` / `IM` | real / imaginary part (a real) |
+| `R->C` | ( re im -- (re,im) ) build from two reals |
+| `C->R` | ( (re,im) -- re im ) split into two reals |
+
+```
+(1,2) (3,4) *        → (-5,10)
+(3,4) ABS            → 5
+(0,1) SQ             → (-1,0)     ( i² = -1 )
+DEG (0,1) ARG        → 90
+```
+
+The scientific functions (`SIN`, `LN`, …) are real-only and reject a complex
+argument.
+
+## 5.5 Lists
+
+A list is an ordered collection of any objects, entered between `[` and `]`.
+
+| Word | Stack | Effect |
+|---|---|---|
+| `[` `…` `]` | ( -- list ) | build a list from the items typed between the brackets |
+| `SIZE` | ( list -- n ) | number of elements |
+| `GET` | ( list n -- obj ) | the n-th element (1-based) |
+| `+` | ( list1 list2 -- list ) | concatenate |
+
+```
+[ 1 2 3 ] SIZE               → 3
+[ 10 20 30 ] 2 GET           → 20
+[ 1 2 ] [ 3 4 5 ] +          → [ 1 2 3 4 5 ]
+[ 1 3.5 (2,3) ]              → a list mixing an integer, a real and a complex
+```
+
+List memory comes from a small heap that is freed by `CLEAR`; if it fills you get
+`LIST FULL` — just `CLEAR`.
+
+## 5.6 Vectors and matrices
+
+A **vector** is a list of numbers; a **matrix** is a list of equal-length row
+lists. The same `[ ]` entry is used.
+
+| Word | Stack | Effect |
+|---|---|---|
+| `DOT` | ( v1 v2 -- s ) | dot product |
+| `V+` / `V-` | ( v1 v2 -- v ) | element-wise add / subtract |
+| `NORM` | ( v -- s ) | Euclidean length |
+| `CROSS` | ( v1 v2 -- v ) | 3-element cross product |
+| `DET` | ( m -- s ) | determinant (2×2 or 3×3) |
+| `TRN` | ( m -- mᵀ ) | transpose |
+
+```
+[ 1 2 3 ] [ 4 5 6 ] DOT              → 32
+[ 3 4 ] NORM                         → 5
+[ 1 2 ] [ 3 4 ] V+                   → [ 4 6 ]
+[ [ 1 2 3 ] [ 4 5 6 ] ] TRN          → [ [ 1 4 ] [ 2 5 ] [ 3 6 ] ]
+[ [ 1 2 3 ] [ 4 5 6 ] [ 7 8 10 ] ] DET   → -3
+```
+
+Note: `+` concatenates two lists (list semantics); use `V+` to add vectors.
+
+## 5.7 Scripting and testing
 
 - **`RUN"` `…"`** ( -- ) runs a line of calculator input non-interactively, e.g.
   `RUN" CLEAR 3 4 + 5 *"`. This is how the self-test `other/HP50TEST.FTH`
-  exercises the calculator (29 checks; `INCLUDE HP50TEST.FTH` runs them).
+  exercises the calculator (66 checks across reals, integers, bases/bitwise,
+  complex, lists and vectors/matrices; `INCLUDE HP50TEST.FTH` runs them).
 
-## 5.5 Fast reload
+## 5.8 Fast reload
 
 `HP50.FTH` compiles in ~30 s (compilation is dictionary-search bound). To avoid
 that on every boot, snapshot the compiled image once with `SAVE-IMAGE` and
 reload it with `LOAD-IMAGE` (~1 s) — see
 [Turnkey compiled image](#turnkey-compiled-image-fast-reload) in Section 2. The
-shipped `emulator/AUTORUN.FTH` already calls `LOAD-IMAGE`, so booting drops you
-straight to "type `HP`".
+shipped `emulator/AUTORUN.FTH` loads the image and even auto-starts `HP`, so the
+calculator is on screen about a second after boot.
 
-## 5.6 Notes and limits
+## 5.9 Notes and limits
 
 - ~9-digit floats: `STD` display may show a trailing rounding artifact
   (e.g. `3.14159` as `3.141590001`).
 - Integer arithmetic wraps at 32 bits; `/` promotes to a real.
-- No complex numbers, matrices, or programs yet — those are planned phases.
+- `DET` covers 2×2 and 3×3; there is no matrix multiply yet.
+- No symbolic algebra (CAS) and no user programs — out of scope for this port.
 
 
 *Generated for ForthX16 / TX16 2.0. See also `readme.md`, `doc/forth-in-rom-scope.md`,
