@@ -10,6 +10,8 @@ I am not developer for this case, only the analyst/tester who helped Claude to i
 Forth TX16 or ForthX16 is an enhanced port of my older project [Forth Model T](https://github.com/VasylTsv/ForthModelT) for [Commander X16](https://www.commanderx16.com/) and other 6502-based platforms. It is a completely functional Forth 2012 standard implementation. Unlike Forth Model T which used direct threaded model, Forth TX16 is using token threaded model. This was mostly done to minimize the size - one of the goals of the project was to fit the entire interpreter on 8K C64 cartridge.
 
 The other, or rather the main goal of the project was to create an interpreter as compliant to Forth 2012 standard as possible.
+
+**New to Forth or this system?** See [doc/userguide.md](doc/userguide.md) for a tutorial and a full reference of every built-in word (with an alphabetical index).
 ## Supported Platforms
 The original target platform was Commander X16. However, in the middle of developmente I've realized that the same code would run on Commodore 64 with reasonable effort. Thus C64 became a second platform. The third platform is quite different and it was added separately - [Foenix F256](https://c256foenix.com). It is also 6502-based (sort of), but not derived from C64, so console and file I/O are very different. More platforms may be coming.
 ## Prerequisites and Building
