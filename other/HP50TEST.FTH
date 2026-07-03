@@ -74,4 +74,17 @@ CR .( HP50 SELF-TEST - LISTS) CR
 .( DISPLAY $ ) RUN" CLEAR [ 1 2 3 ]"             S" [ 1 2 3 ]" SCK
 .( MIXED $   ) RUN" CLEAR [ 1 3.5 (2,3) ]"       S" [ 1 3.5 (2,3) ]" SCK
 
+CR .( HP50 SELF-TEST - VECTORS/MATRICES) CR
+.( DOT 32    ) RUN" CLEAR [ 1 2 3 ] [ 4 5 6 ] DOT"   32 S>F CK
+.( NORM 5    ) RUN" CLEAR [ 3 4 ] NORM"              5 S>F CK
+.( V+ EL     ) RUN" CLEAR [ 1 2 ] [ 3 4 ] V+ 2 GET"  6 S>F CK
+.( V- EL     ) RUN" CLEAR [ 5 7 ] [ 1 2 ] V- 1 GET"  4 S>F CK
+.( V+ DISP   ) RUN" CLEAR [ 1 2 ] [ 3 4 ] V+"        S" [ 4 6 ]" SCK
+.( CROSS EL  ) RUN" CLEAR [ 1 0 0 ] [ 0 1 0 ] CROSS 3 GET" 1 S>F CK
+.( DET 2X2   ) RUN" CLEAR [ [ 1 2 ] [ 3 4 ] ] DET"   -2 S>F CK
+.( DET 3X3   ) RUN" CLEAR [ [ 1 2 3 ] [ 4 5 6 ] [ 7 8 10 ] ] DET" -3 S>F CK
+.( MAT DISP  ) RUN" CLEAR [ [ 1 2 ] [ 3 4 ] ]"       S" [ [ 1 2 ] [ 3 4 ] ]" SCK
+.( TRN SIZE  ) RUN" CLEAR [ [ 1 2 3 ] [ 4 5 6 ] ] TRN SIZE" 3 S>F CK
+.( TRN DISP  ) RUN" CLEAR [ [ 1 2 3 ] [ 4 5 6 ] ] TRN" S" [ [ 1 4 ] [ 2 5 ] [ 3 6 ] ]" SCK
+
 CR .( FAILURES: ) #FAIL @ . CR

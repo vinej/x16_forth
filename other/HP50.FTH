@@ -158,6 +158,14 @@ VARIABLE LC1  VARIABLE LC2  VARIABLE LCP1  VARIABLE LCP2  VARIABLE LCB
    LCP1 @ 2 +  LCB @ 2 + LC2 @ OCELL * +    LC1 @ OCELL * CMOVE
    ODROP ODROP  LCB @ PUSHL ;
 
+\ ---- vector element access (treat a list of reals/ints as a vector) --------
+: A>F ( addr -- ) ( F: -- r )   DUP C@ T-INT = IF 1+ 2@ D>F ELSE 1+ F@ THEN ;
+: VEL ( ptr i -- ) ( F: -- r )  OCELL * + 2 + A>F ;         \ element i (0-based) as float
+: VST ( blk i -- ) ( F: r -- )  OCELL * + 2 +  DUP T-REAL SWAP C!  1+ F! ;
+\ matrix = a list of row-lists.  MROW i -> row block pointer; MEL i j -> M[i][j].
+: MROW ( mptr i -- rowptr )      OCELL * + 2 + 1+ @ ;
+: MEL  ( mptr i j -- ) ( F: -- r )  >R MROW R> VEL ;
+
 \ ===========================================================================
 \ 3. NUMBER FORMATTING  (right-justified STD / FIX, ~9 significant digits)
 \ ===========================================================================
@@ -176,9 +184,12 @@ CREATE FRB  16 ALLOT
 CREATE CBUF 44 ALLOT   VARIABLE CP           \ complex "(re,im)" is built here
 : CBC ( c -- )   CBUF CP @ + C!  1 CP +! ;
 : CBS ( a u -- ) 0 ?DO DUP I + C@ CBC LOOP DROP ;
-CREATE LBUF 80 ALLOT   VARIABLE LP           \ list "{ ... }" is built here
+CREATE LBUF 80 ALLOT   VARIABLE LP           \ outer list "[ ... ]" is built here
 : LBC ( c -- )   LBUF LP @ + C!  1 LP +! ;
 : LBS ( a u -- ) 0 ?DO DUP I + C@ LBC LOOP DROP ;
+CREATE LBUF2 80 ALLOT  VARIABLE LP2          \ one nested level (matrix rows) here
+: LBC2 ( c -- )  LBUF2 LP2 @ + C!  1 LP2 +! ;
+: LBS2 ( a u -- ) 0 ?DO DUP I + C@ LBC2 LOOP DROP ;
 
 \ format r to NDEC decimals into NBUF; returns ( a u ).  Integer and fraction
 \ are digitized separately so  r*10^n  never overflows a 32-bit double.
@@ -229,17 +240,30 @@ VARIABLE DOTF
    DUP 1+ F@ FSTR CBS  [CHAR] , CBC
    6 + F@ FSTR CBS  [CHAR] ) CBC  CBUF CP @ ;
 
-\ format the object stored AT AN ADDRESS (tag at addr).  Nested lists show as {..}.
-: CELL$ ( addr -- a u )
-   DUP C@                                    ( addr tag )
+\ scalar formatter for the deepest level (a list here shows as [..])
+: SCALAR$ ( addr -- a u )
+   DUP C@
    DUP T-REAL = IF DROP 1+ F@ FSTR EXIT THEN
    DUP T-INT  = IF DROP 1+ 2@ INT$ EXIT THEN
    DUP T-CPLX = IF DROP CPLXA$ EXIT THEN
    DUP T-MARK = IF 2DROP S" [" EXIT THEN
-   T-LIST = IF DROP S" [..]" EXIT THEN
-   DROP S" ?" ;
+   T-LIST = IF DROP S" [..]" EXIT THEN  DROP S" ?" ;
+\ format a nested list (e.g. a matrix row) into LBUF2, elements via SCALAR$
+: LIST2$ ( ptr -- a u )
+   0 LP2 !  [CHAR] [ LBC2  BL LBC2
+   DUP @  SWAP 2 +  SWAP
+   0 ?DO  DUP SCALAR$ LBS2  BL LBC2  OCELL +  LOOP
+   DROP  [CHAR] ] LBC2  LBUF2 LP2 @ ;
+\ format the object at an address; a nested list is expanded one level (LIST2$)
+: CELL$ ( addr -- a u )
+   DUP C@
+   DUP T-REAL = IF DROP 1+ F@ FSTR EXIT THEN
+   DUP T-INT  = IF DROP 1+ 2@ INT$ EXIT THEN
+   DUP T-CPLX = IF DROP CPLXA$ EXIT THEN
+   DUP T-MARK = IF 2DROP S" [" EXIT THEN
+   T-LIST = IF 1+ @ LIST2$ EXIT THEN  DROP S" ?" ;
 
-\ format a whole list block "{ e0 e1 ... }" into LBUF
+\ format a whole (outer) list block "[ e0 e1 ... ]" into LBUF
 : LIST$ ( ptr -- a u )
    0 LP !  [CHAR] [ LBC  BL LBC
    DUP @  SWAP 2 +  SWAP                     ( elem0addr count )
@@ -446,6 +470,70 @@ VARIABLE GN    VARIABLE GCNT   VARIABLE GPTR   VARIABLE GSRC
             GSRC @ OSP @ OIDX@ OCELL CMOVE  1 OSP +!
          ELSE DERR THEN ELSE UNDERR THEN ;
 
+\ ---- vector commands (a vector is a list [ ] of reals/ints) ----------------
+VARIABLE VP1  VARIABLE VP2  VARIABLE VN  VARIABLE VB
+: VSAMELEN ( -- f )  2 R@P VP1 !  1 R@P VP2 !  VP1 @ @ VP2 @ @ = ;
+: VNEWBLK  ( -- f )  \ allocate an N-element result block in VB (VN must be set); f=ok
+   VN @ OCELL * 2 + LALLOC ?DUP IF VB !  VN @ VB @ !  TRUE ELSE FALSE THEN ;
+: cDOT  NEED2 IF BOTHLIST IF VSAMELEN IF
+           VP1 @ @ VN !  0 S>F
+           VN @ 0 ?DO  VP1 @ I VEL  VP2 @ I VEL  F*  F+  LOOP
+           ODROP ODROP PUSHR
+        ELSE DERR THEN ELSE DERR THEN ELSE UNDERR THEN ;
+: cVADD NEED2 IF BOTHLIST IF VSAMELEN IF
+           VP1 @ @ VN !  VNEWBLK 0= IF S" LIST FULL" ERRMSG EXIT THEN
+           VN @ 0 ?DO  VP1 @ I VEL  VP2 @ I VEL  F+  VB @ I VST  LOOP
+           ODROP ODROP VB @ PUSHL
+        ELSE DERR THEN ELSE DERR THEN ELSE UNDERR THEN ;
+: cVSUB NEED2 IF BOTHLIST IF VSAMELEN IF
+           VP1 @ @ VN !  VNEWBLK 0= IF S" LIST FULL" ERRMSG EXIT THEN
+           VN @ 0 ?DO  VP1 @ I VEL  VP2 @ I VEL  F-  VB @ I VST  LOOP
+           ODROP ODROP VB @ PUSHL
+        ELSE DERR THEN ELSE DERR THEN ELSE UNDERR THEN ;
+: cNORM NEED1 IF 1 OLIST? IF
+           1 R@P VP1 !  VP1 @ @ VN !  0 S>F
+           VN @ 0 ?DO  VP1 @ I VEL  FDUP F*  F+  LOOP
+           FSQRT ODROP PUSHR
+        ELSE DERR THEN ELSE UNDERR THEN ;
+: cCROSS NEED2 IF BOTHLIST IF
+           2 R@P VP1 !  1 R@P VP2 !
+           VP1 @ @ 3 = VP2 @ @ 3 = AND 0= IF DERR EXIT THEN
+           3 VN !  VNEWBLK 0= IF S" LIST FULL" ERRMSG EXIT THEN
+           VP1 @ 1 VEL VP2 @ 2 VEL F*  VP1 @ 2 VEL VP2 @ 1 VEL F* F-  VB @ 0 VST
+           VP1 @ 2 VEL VP2 @ 0 VEL F*  VP1 @ 0 VEL VP2 @ 2 VEL F* F-  VB @ 1 VST
+           VP1 @ 0 VEL VP2 @ 1 VEL F*  VP1 @ 1 VEL VP2 @ 0 VEL F* F-  VB @ 2 VST
+           ODROP ODROP VB @ PUSHL
+        ELSE DERR THEN ELSE UNDERR THEN ;
+
+\ ---- matrix commands (a matrix is a list [ ] of equal-length row lists) -----
+VARIABLE MR  VARIABLE MC  VARIABLE MP  VARIABLE MOUT  VARIABLE MROWB
+: cDET NEED1 IF 1 OLIST? IF
+     1 R@P MP !  MP @ @ MR !
+     MR @ 2 = IF
+        MP @ 0 0 MEL  MP @ 1 1 MEL  F*
+        MP @ 0 1 MEL  MP @ 1 0 MEL  F*  F-  ODROP PUSHR
+     ELSE MR @ 3 = IF
+        MP @ 0 0 MEL  MP @ 1 1 MEL MP @ 2 2 MEL F*  MP @ 1 2 MEL MP @ 2 1 MEL F* F-  F*
+        MP @ 0 1 MEL  MP @ 1 0 MEL MP @ 2 2 MEL F*  MP @ 1 2 MEL MP @ 2 0 MEL F* F-  F*  F-
+        MP @ 0 2 MEL  MP @ 1 0 MEL MP @ 2 1 MEL F*  MP @ 1 1 MEL MP @ 2 0 MEL F* F-  F*  F+
+        ODROP PUSHR
+     ELSE DERR THEN THEN
+   ELSE DERR THEN ELSE UNDERR THEN ;
+: cTRN NEED1 IF 1 OLIST? IF
+     1 R@P MP !  MP @ @ MR !
+     MR @ 0= IF DERR EXIT THEN
+     MP @ 0 MROW @ MC !                         \ columns = length of row 0
+     MC @ OCELL * 2 + LALLOC ?DUP 0= IF S" LIST FULL" ERRMSG EXIT THEN  MOUT !
+     MC @ MOUT @ !
+     MC @ 0 DO                                  \ J = output row = original column
+        MR @ OCELL * 2 + LALLOC ?DUP 0= IF S" LIST FULL" ERRMSG EXIT THEN  MROWB !
+        MR @ MROWB @ !
+        MR @ 0 DO  MP @ I J MEL  MROWB @ I VST  LOOP
+        MROWB @  MOUT @ 2 + I OCELL * +  T-LIST OVER C!  1+ !
+     LOOP
+     ODROP  MOUT @ PUSHL
+   ELSE DERR THEN ELSE UNDERR THEN ;
+
 \ ===========================================================================
 \ 6. COMMAND TABLE  (name -> xt, a simple linked list)
 \ ===========================================================================
@@ -522,6 +610,13 @@ VARIABLE CMDLIST   0 CMDLIST !
 ' cRBRACE DEFCMD ]
 ' cSIZE DEFCMD SIZE
 ' cGET  DEFCMD GET
+' cDOT  DEFCMD DOT
+' cVADD DEFCMD V+
+' cVSUB DEFCMD V-
+' cNORM DEFCMD NORM
+' cCROSS DEFCMD CROSS
+' cDET  DEFCMD DET
+' cTRN  DEFCMD TRN
 
 \ ===========================================================================
 \ 7. THE PARSER / EVALUATOR
