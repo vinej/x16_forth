@@ -2280,23 +2280,62 @@ irq_restorevm:
 ; jiffy timer (read via RDTIM) advances - the jiffy is bumped once per VSYNC
 ; IRQ, so this returns at the start of the next frame. Use it to pace a game
 ; loop and to update VRAM tear-free. (RDTIM is bridged in the ROM build.)
+; Install the frame-tick IRQ stub into RAM and hook CINV, once. A 6-byte stub
+; (frame_isr) bumps frame_tick every VSYNC IRQ and chains to the previous
+; handler; it is pure RAM (increment + indirect jump) so it also works from the
+; ROM bank - no bank switch. Shared by VSYNC and FRAMES.
+vsync_arm:
+	lda CINV+1			; already installed?  (CINV == frame_isr)
+	cmp #>frame_isr
+	bne varm_do
+	lda CINV
+	cmp #<frame_isr
+	beq varm_ok
+varm_do:
+	ldx #5				; copy the stub template into RAM
+varm_cp:
+	lda frame_isr_tmpl,x
+	sta frame_isr,x
+	dex
+	bpl varm_cp
+	sei
+	lda CINV			; save the current vector to chain to
+	sta frame_chain
+	lda CINV+1
+	sta frame_chain+1
+	lda #<frame_isr			; point CINV at our RAM stub
+	sta CINV
+	lda #>frame_isr
+	sta CINV+1
+	cli
+varm_ok:
+	rts
+
+; VSYNC ( -- )   wait for exactly one video frame (frame-locked 60 Hz).
 +header ~vsync, ~vsync_n, "VSYNC"
 	+code
-	; Pace to VERA's video timing by waiting for the scanline counter ($9F28,
-	; a free-running 0..255 value on this VERA) to WRAP (a decrease). This relies
-	; only on the video clock - no jiffy, no interrupts, no bank switching - so it
-	; is reliable inside a tight game loop (the jiffy/RDTIM path was not). One wrap
-	; is roughly a video frame's worth of pacing; call twice for a slower loop.
-	lda $9F28			; prev = current scanline
-	sta $02
-vsync_lp:
-	lda $9F28
-	cmp $02				; current < prev ?  (counter wrapped)
-	bcc vsync_done
-	sta $02				; else remember the new high-water scanline
-	jmp vsync_lp
-vsync_done:
+	jsr vsync_arm
+	lda frame_tick
+vsync_w2:
+	cmp frame_tick			; spin until the IRQ bumps the tick
+	beq vsync_w2
 	jmp next
+
+; FRAMES ( -- n )   the frame counter (0..255), bumped once per video frame.
+; Take deltas (byte subtraction wraps correctly) for elapsed-frame timing,
+; fixed-timestep catch-up, or an FPS/dropped-frame check.
++header ~frames, ~frames_n, "FRAMES"
+	+code
+	jsr vsync_arm
+	lda frame_tick
+	ldx #0
+	jmp dpush_and_next
+
+; Template for frame_isr, copied to RAM (above). Position-independent: it only
+; touches the fixed RAM addresses frame_tick and frame_chain.
+frame_isr_tmpl:
+	inc frame_tick
+	jmp (frame_chain)
 
 ; VFILL ( value count -- )   write the byte 'value' to the VERA data port
 ; 'count' times (count is 16-bit). Set the start address first with VADDR; the

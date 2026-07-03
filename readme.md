@@ -500,7 +500,9 @@ REBOOT   ( -- )        soft reboot through the reset vector
 POWEROFF ( -- )        power off (via the SMC)
 
   -- game-support primitives --
-VSYNC    ( -- )        wait for the next video frame (pace a loop, tear-free draw)
+VSYNC    ( -- )        wait for the next video frame (frame-locked 60 Hz, via a
+                       VERA-VSYNC IRQ counter; pace a loop, tear-free draw)
+FRAMES   ( -- n )      the video frame counter 0..255 (deltas for timing/FPS)
 VFILL    ( value count -- )  fill 'count' VRAM bytes with a value (set addr with
                        VADDR first) - fast native loop for clearing bitmaps/tilemaps
 *.       ( n1 n2 -- n3 )  signed 8.8 fixed-point multiply (n1*n2>>8), for sub-pixel motion

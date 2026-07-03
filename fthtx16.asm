@@ -367,6 +367,13 @@ IRQ_DSTACK_TOP = irq_dstack + 64 - 2
 +hmbuffer ~irq_save_sc, 1	; saved _stopcheck (STOP-key check suppressed in the callback)
 +hmbuffer ~irq_busy, 1		; re-entrancy guard while a callback runs
 +hmbuffer ~irq_armed, 1		; non-zero when our handler is installed
+; VSYNC frame counter: a tiny RAM IRQ stub (frame_isr, copied from a template on
+; first use) hooks CINV, bumps frame_tick every VSYNC, and chains. VSYNC waits
+; for frame_tick to change -> exactly one wait per video frame. All in RAM so it
+; works in the ROM build too (no bank switch needed).
++hmbuffer ~frame_tick, 1	; incremented once per frame by the stub
++hmbuffer ~frame_chain, 2	; previous CINV vector the stub chains to
++hmbuffer ~frame_isr, 6		; the 6-byte stub lives here (RAM, so CINV can reach it)
 }
 
 !if X16ROM {
