@@ -10,6 +10,9 @@ three parts:
   alphabetical **[index](#index)**.
 - **[Section 3 — Split-screen & bitmap graphics](#section-3)**: the optional
   `SPLIT.FTH` library — a bitmap graphics toolkit and a graphics/text split screen.
+- **[Section 4 — Mortgage calculator](#section-4)**: the optional `MORTGAGE.FTH`
+  library — a Canadian (semi-annual-compounding) mortgage payment and amortization
+  calculator, and a worked example of floating point + currency formatting.
 
 Notation used throughout: a word's **stack effect** is written `( before -- after )`
 with the top of stack on the right. `n`=signed number, `u`=unsigned, `d`=double
@@ -953,6 +956,123 @@ than two corners.)
   built-in GRAPH words (before loading `SPLIT.FTH`) are faster.
 - The library **redefines** `PSET LINE FRAME RECT RING OVAL GTEXT GCLS`; the
   original ROM versions only worked in full-screen graphics mode 128.
+
+
+<a name="section-4"></a>
+
+---
+
+# Section 4 — Mortgage calculator (MORTGAGE.FTH)
+
+`other/MORTGAGE.FTH` is an optional, loadable library (not built into the ROM). It
+computes the monthly payment for a fixed-rate mortgage and prints a full
+capital/interest **amortization grid**, using the **Canadian** interest rule.
+
+```
+INCLUDE MORTGAGE.FTH        \ (or:  S" MORTGAGE.FTH" INCLUDED )
+300000. 25 550  MTG         \ $300,000 loan, 25-year amortization, 5.50%
+SCHEDULE                    \ then: the full month-by-month table
+```
+
+It needs the [floating-point words](#floating-point) (built into TX16), so no other
+library is required.
+
+## 4.1 The Canadian rule
+
+In Canada, fixed-rate mortgages are **compounded semi-annually** (twice a year), not
+monthly like a typical US loan — this is set by the *Interest Act* and is the main
+thing that makes a "Canadian" mortgage different. The effective monthly rate is
+therefore derived from a half-yearly rate:
+
+```
+    i = (1 + j/2) ^ (1/6) - 1          j = nominal annual rate, as a fraction
+```
+
+(the `1/6` because two compoundings a year spread over twelve months is `2/12`).
+The level monthly payment for a loan `L` amortized over `n` monthly payments is the
+standard annuity formula:
+
+```
+    M = L * i / (1 - (1+i)^-n)
+```
+
+## 4.2 Entering a loan
+
+**`MTG`** ( d.principal years rate-bp -- ) — compute the loan, then print the
+summary and a one-line-per-year grid.
+
+Two input conventions matter:
+
+- **The principal has a trailing dot** — `300000.` — which makes it a 32-bit
+  *double*, so it can exceed 65535. Plain `300000` would overflow a 16-bit cell.
+- **The rate is in hundredths of a percent** (basis points of a percent):
+  `550` = 5.50%, `1025` = 10.25%, `10000` = 100%.
+
+```
+100000. 20 625  MTG         \ $100,000, 20 years, 6.25%
+```
+
+## 4.3 Reports
+
+| Word | Stack | Purpose |
+|---|---|---|
+| **`MTG`** | ( d.principal years rate-bp -- ) | set the loan, then show `SUMMARY` + `YEARLY` |
+| **`SUMMARY`** | ( -- ) | loan amount, rate, term, monthly payment, totals |
+| **`YEARLY`** | ( -- ) | one aggregated row per year: principal, interest, year-end balance |
+| **`SCHEDULE`** | ( -- ) | the full monthly grid: payment, principal, interest, balance |
+
+`SUMMARY` / `YEARLY` / `SCHEDULE` all reuse the last loan set by `MTG` (or by
+`SET-LOAN`), so you can run them in any order after `MTG`.
+
+Example `SUMMARY` + `SCHEDULE` for `100000. 1 550 MTG`:
+
+```
+=== CANADIAN MORTGAGE (SEMI-ANNUAL COMPOUNDING) ===
+LOAN AMOUNT:       $100000.00
+ANNUAL RATE:        5.50%
+AMORTIZATION:       1 YR  (12 PAYMENTS)
+MONTHLY PAYMENT:   $8580.83
+TOTAL OF PAYMENTS: $102970.01
+TOTAL INTEREST:    $2970.01
+
+ PMT      PAYMENT    PRINCIPAL     INTEREST      BALANCE
+   1      8580.83      8127.67       453.17     91872.33
+   2      8580.83      8164.50       416.34     83707.84
+   ...
+  12      8580.84      8542.13        38.71         0.00
+```
+
+The final payment is adjusted by a cent so the balance lands exactly on `0.00`.
+
+## 4.4 Under the hood (a floating-point / currency example)
+
+`MORTGAGE.FTH` is a compact example of two things that are easy to get wrong on a
+16-bit Forth, and are worth copying for your own programs:
+
+- **Power function.** There is no `F**`, so it builds one from logs:
+  `: FPOW ( f: x y -- x^y )  FSWAP FLN F* FEXP ;` — because `x^y = e^(y·ln x)`.
+- **Money to the cent, past 16 bits.** `F>S` tops out at 65535, but a payment in
+  cents (e.g. `$2000.00` = 200000 cents) is larger. So amounts are converted to a
+  32-bit **double** and printed with **pictured numeric output**:
+  `: (.$) ( ud -- c-addr u )  <# # # [CHAR] . HOLD #S #> ;` places the two cent
+  digits, then the decimal point, then the dollars.
+- **Double → float.** The principal comes in as a double; `D>F` converts it using a
+  *logical* `RSHIFT`/`AND` split so the low 16-bit word is treated as unsigned
+  (a plain `S>F` would read a low word ≥ 32768 as negative).
+
+Everything is ordinary Forth — no new native/primitive words were needed.
+
+## 4.5 Notes and limits
+
+- **Charset.** The report text is uppercase, to read correctly in the X16's default
+  uppercase/graphics character set (see [1.10](#110-using-the-system-on-the-x16)).
+  If you have switched to the mixed-case set with `14 EMIT`, PETSCII inverts the
+  letter case, so run the calculator from a fresh screen (or `142 EMIT` first).
+- **Precision.** The BASIC ROM floats carry ~9 significant digits; over a long
+  amortization the running balance can drift by a cent or two. `SCHEDULE` corrects
+  the last payment so it ends on exactly `0.00`; `YEARLY` clamps a tiny residual to
+  `0.00`.
+- These are Forth definitions loaded into RAM, so they cost no ROM space.
 
 
 *Generated for ForthX16 / TX16 2.0. See also `readme.md`, `doc/forth-in-rom-scope.md`,
