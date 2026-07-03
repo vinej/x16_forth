@@ -1,13 +1,15 @@
 # ForthX16 (TX16 2.0) — User Guide
 
 A Forth 2012 system for the Commander X16 (and C64 / Foenix F256). This guide has
-two parts:
+three parts:
 
 - **[Section 1 — Tutorial](#section-1--tutorial)**: what Forth is, how to use the
   system, and how to program in it.
 - **[Section 2 — Word reference](#section-2--word-reference)**: every word built
   into TX16, with its stack effect, purpose, and a small example, preceded by an
   alphabetical **[index](#index)**.
+- **[Section 3 — Split-screen & bitmap graphics](#section-3)**: the optional
+  `SPLIT.FTH` library — a bitmap graphics toolkit and a graphics/text split screen.
 
 Notation used throughout: a word's **stack effect** is written `( before -- after )`
 with the top of stack on the right. `n`=signed number, `u`=unsigned, `d`=double
@@ -803,6 +805,142 @@ the corresponding FP word's body under a BASIC name.
 - **`KEYMAP`** ( c-addr u -- ) — set the keyboard layout by name. `S" en-us" KEYMAP`
 
 ---
+
+<a id="section-3"></a>
+# Section 3 — Split-screen & bitmap graphics (SPLIT.FTH)
+
+`other/SPLIT.FTH` is an optional, loadable library (not built into the ROM). It
+gives you a **320×240 256-colour bitmap** to draw on, and — its headline feature —
+a **split screen**: graphics on top with a scrolling **text console window** at the
+bottom, at the same time, with no raster interrupt.
+
+It works because the X16's VERA video chip composites two independent layers: the
+library puts the bitmap on **layer 0** and keeps the KERNAL text console on
+**layer 1** on top of it. The same drawing words also work in ordinary full-screen
+graphics mode (after `GINIT`), because both use the identical bitmap at VRAM
+`$0000`.
+
+```
+INCLUDE SPLIT.FTH      \ (or:  S" SPLIT.FTH" INCLUDED )
+SPLIT-DEMO             \ a demonstration
+SPLITOFF               \ return to the normal text screen
+```
+
+## 3.1 Turning the split on and off
+
+- **`SPLITON`** ( -- ) — enter the split: a 320×240 bitmap fills the screen with a
+  text window at the bottom. While active the console is 40×30 and confined to the
+  bottom rows; typing and scrolling stay inside that window and never disturb the
+  graphics above.
+- **`SPLITOFF`** ( -- ) — leave the split and return to the normal 80×60 text
+  screen.
+- **`SPLIT-ROWS`** ( -- n ) — a `VALUE` holding the text-window height (default 6).
+  Change it *before* `SPLITON`: `8 TO SPLIT-ROWS`.
+
+Text in the window uses the ordinary words — `LOCATE ( row col )`, `EMIT`, `TYPE`,
+`."` — with window rows numbered `0 .. SPLIT-ROWS-1`.
+
+You do **not** need the split to draw: after `GINIT` (full-screen graphics) the
+same drawing words below work on the whole screen.
+
+## 3.2 Colours and coordinates
+
+The bitmap is 320 wide (x = 0..319) by 240 high (y = 0..239). Colours are palette
+indices **0..255**; the first 16 are the usual C64 colours. **Colour 0 is
+transparent**, so on a split screen the graphics show through wherever the text
+layer (or a colour-0 pixel) is clear.
+
+## 3.3 Drawing words (colour given per call)
+
+Same names and signatures as the built-in KERNAL graphics words, which they
+replace so they work in the split as well as full-screen.
+
+| Word | Stack | Purpose |
+|---|---|---|
+| **`GCLS`** | ( -- ) | clear the whole bitmap (to colour 0) |
+| **`PSET`** | ( x y color -- ) | plot one pixel |
+| **`LINE`** | ( x1 y1 x2 y2 color -- ) | line between two points |
+| **`FRAME`** | ( x1 y1 x2 y2 color -- ) | rectangle outline |
+| **`RECT`** | ( x1 y1 x2 y2 color -- ) | filled rectangle |
+| **`RING`** | ( x1 y1 x2 y2 color -- ) | ellipse outline (in the bounding box) |
+| **`OVAL`** | ( x1 y1 x2 y2 color -- ) | filled ellipse |
+| **`CIRCLE`** | ( x y r color -- ) | circle outline (centre x,y radius r) |
+| **`FCIRCLE`** | ( x y r color -- ) | filled circle |
+| **`GTEXT`** | ( x y color c-addr u -- ) | draw a string into the bitmap |
+
+Two-corner shapes accept their corners in any order.
+
+```
+GCLS
+10 10 300 150 3 FRAME
+20 20 150 100 2 RECT
+230 80 55 6 CIRCLE
+230 80 25 5 FCIRCLE
+10 160 300 160 7 LINE
+40 40 1 S" HELLO" GTEXT
+```
+
+## 3.4 Pen API (set the colour once)
+
+Call `GCOLOR` to set a persistent pen colour, then use the colour-less words.
+
+| Word | Stack | Purpose |
+|---|---|---|
+| **`GCOLOR`** | ( n -- ) | set the pen colour (default 1 = white) |
+| **`PLOT`** | ( x y -- ) | pixel |
+| **`DRAW`** | ( x1 y1 x2 y2 -- ) | line |
+| **`BOX`** | ( x1 y1 x2 y2 -- ) | rectangle outline |
+| **`FBOX`** | ( x1 y1 x2 y2 -- ) | filled rectangle |
+| **`ELL`** | ( x1 y1 x2 y2 -- ) | ellipse outline |
+| **`FELL`** | ( x1 y1 x2 y2 -- ) | filled ellipse |
+| **`CIRC`** | ( x y r -- ) | circle outline |
+| **`DISC`** | ( x y r -- ) | filled circle |
+| **`SAY`** | ( x y c-addr u -- ) | text |
+
+```
+2 GCOLOR  20 20 150 100 FBOX
+1 GCOLOR  20 20 150 100 BOX
+6 GCOLOR  245 70 55 DISC
+3 GCOLOR  30 45 S" PEN API" SAY
+```
+
+## 3.5 Low-level helpers
+
+The words above are built on these direct-to-VERA primitives, which you can also
+use: **`BPSET`** ( x y color -- ), **`BHLINE`** ( x y len color -- ),
+**`BVLINE`** ( x y len color -- ), **`BLINE`** ( x1 y1 x2 y2 color -- ),
+**`BFILL`** ( x y w h color -- ), **`BRECT`** ( x y w h color -- ),
+**`BCLS`** ( color -- ). (`BFILL`/`BRECT` take a corner plus width/height rather
+than two corners.)
+
+## 3.6 A worked example: a gauge with a live readout
+
+```
+: GAUGE ( percent -- )
+   SPLITON  GCLS
+   5 GCOLOR   0 0 319 191 BOX               \ frame the graphics area
+   2 GCOLOR   10 20 300 60 FBOX             \ bar background (track)
+   6 GCOLOR   DUP 3 * 10 + >R  10 20 R> 60 FBOX   \ filled part: x2 = 10 + percent*3
+   1 0 COLOR
+   0 0 LOCATE ." Level: " DUP . ." %" DROP ;
+75 GAUGE
+```
+
+## 3.7 Notes and limits
+
+- **Resolution while split:** VERA's scale is global, so both layers share one
+  resolution; `SPLITON` uses `SCREEN 3` (40×30 text ⇒ 320×240), which is why the
+  console is 40 columns while the split is active. `SPLITOFF` restores 80×60.
+- **`RING`/`OVAL`/`CIRCLE`/`FCIRCLE`** use the floating-point unit (to avoid 16-bit
+  overflow in the radius maths) and therefore disturb the FP stack.
+- **`GTEXT`/`SAY`** render the 8×8 ROM font and assume the mixed-case character set
+  (the state after `14 EMIT`, which the test/boot scripts set).
+- These words are Forth definitions, so they are slower than the ROM GRAPH
+  routines. That is fine interactively; for heavy full-screen animation the
+  built-in GRAPH words (before loading `SPLIT.FTH`) are faster.
+- The library **redefines** `PSET LINE FRAME RECT RING OVAL GTEXT GCLS`; the
+  original ROM versions only worked in full-screen graphics mode 128.
+
 
 *Generated for ForthX16 / TX16 2.0. See also `readme.md`, `doc/forth-in-rom-scope.md`,
 and the self-checking examples in `tests-X16/`.*

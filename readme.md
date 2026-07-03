@@ -574,7 +574,7 @@ A modified copy of Forth test suite is in `tests` - copy files from there to the
 
 A practically stock copy of Forth test suite is in `tests-F256` as that platform uses ASCII and does not need character hacks.
 
-A few examples and benchmarks are in `other` - `BENCH.FTH` and `ERASTO.FTH` are old benchmarking programs calculating primes, practically unchanged (`BENCH` had a few `ENDIF`s replaced by `THEN`s). `RC4TEST.FTH` is a sample from the [Wikipedia](https://en.wikipedia.org/wiki/Forth_(programming_language)) page, unmodified.
+A few examples and benchmarks are in `other` - `BENCH.FTH` and `ERASTO.FTH` are old benchmarking programs calculating primes, practically unchanged (`BENCH` had a few `ENDIF`s replaced by `THEN`s). `RC4TEST.FTH` is a sample from the [Wikipedia](https://en.wikipedia.org/wiki/Forth_(programming_language)) page, unmodified. `SPLIT.FTH` is a split-screen helper library for the X16: it puts a 320x240 bitmap on VERA layer 0 and confines the text console to a window on layer 1 (composited on top), giving a graphics-top / text-bottom screen with no raster interrupt - `INCLUDE SPLIT.FTH` then `SPLIT-DEMO`; `SPLITON`/`SPLITOFF` enter/leave it (`SPLIT-ROWS` sets the text-window height). It also provides the full bitmap-graphics vocabulary as direct-to-VERA words that work in BOTH the split and normal `GINIT` full-screen mode (both use the same $0000 bitmap): `GCLS PSET LINE FRAME RECT RING OVAL GTEXT`, radius circles `CIRCLE`/`FCIRCLE` (same names/signatures as the KERNAL GRAPH words, which they redefine), plus low-level `BPSET BHLINE BVLINE BLINE BFILL BRECT BCLS`. A persistent-pen API avoids repeating the colour: `n GCOLOR` then `PLOT DRAW BOX FBOX ELL FELL CIRC DISC SAY`.
 
 ## Known Issues
 
