@@ -101,8 +101,8 @@ VARIABLE br-x VARIABLE br-y VARIABLE br-w VARIABLE br-h VARIABLE br-c
    br-x @ br-y @ br-h @ br-c @ BVLINE
    br-x @ br-w @ 1- +  br-y @ br-h @ br-c @ BVLINE ;
 
-: BCLS ( color -- )
-   0 0 VADDR  240 0 DO  320 0 DO  DUP V!  LOOP  LOOP  DROP ;
+: BCLS ( color -- )                   \ 76800 bytes = 2 x 38400 (VFILL count is 16-bit)
+   0 0 VADDR  DUP 38400 VFILL  38400 VFILL ;
 
 \ ===========================================================================
 \ Full drawing vocabulary with the SAME names/signatures as the KERNAL GRAPH

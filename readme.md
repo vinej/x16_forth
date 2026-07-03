@@ -498,6 +498,13 @@ KEYMAP   ( c-addr u -- )  set the keyboard layout, e.g. S" en-us" KEYMAP
 RESET    ( -- )        hardware reset (via the SMC)
 REBOOT   ( -- )        soft reboot through the reset vector
 POWEROFF ( -- )        power off (via the SMC)
+
+  -- game-support primitives --
+VSYNC    ( -- )        wait for the next video frame (pace a loop, tear-free draw)
+VFILL    ( value count -- )  fill 'count' VRAM bytes with a value (set addr with
+                       VADDR first) - fast native loop for clearing bitmaps/tilemaps
+*.       ( n1 n2 -- n3 )  signed 8.8 fixed-point multiply (n1*n2>>8), for sub-pixel motion
+COLLIDE? ( ax ay aw ah bx by bw bh -- flag )  bounding-box overlap test
 ```
 `EDIT` drives the standalone X16EDIT ROM (not the BASIC wrapper) to create and
 edit files directly on the machine. KNOWN ISSUE: returning from the editor
@@ -574,7 +581,7 @@ A modified copy of Forth test suite is in `tests` - copy files from there to the
 
 A practically stock copy of Forth test suite is in `tests-F256` as that platform uses ASCII and does not need character hacks.
 
-A few examples and benchmarks are in `other` - `BENCH.FTH` and `ERASTO.FTH` are old benchmarking programs calculating primes, practically unchanged (`BENCH` had a few `ENDIF`s replaced by `THEN`s). `RC4TEST.FTH` is a sample from the [Wikipedia](https://en.wikipedia.org/wiki/Forth_(programming_language)) page, unmodified. `SPLIT.FTH` is a split-screen helper library for the X16: it puts a 320x240 bitmap on VERA layer 0 and confines the text console to a window on layer 1 (composited on top), giving a graphics-top / text-bottom screen with no raster interrupt - `INCLUDE SPLIT.FTH` then `SPLIT-DEMO`; `SPLITON`/`SPLITOFF` enter/leave it (`SPLIT-ROWS` sets the text-window height). It also provides the full bitmap-graphics vocabulary as direct-to-VERA words that work in BOTH the split and normal `GINIT` full-screen mode (both use the same $0000 bitmap): `GCLS PSET LINE FRAME RECT RING OVAL GTEXT`, radius circles `CIRCLE`/`FCIRCLE` (same names/signatures as the KERNAL GRAPH words, which they redefine), plus low-level `BPSET BHLINE BVLINE BLINE BFILL BRECT BCLS`. A persistent-pen API avoids repeating the colour: `n GCOLOR` then `PLOT DRAW BOX FBOX ELL FELL CIRC DISC SAY`.
+A few examples and benchmarks are in `other` - `BENCH.FTH` and `ERASTO.FTH` are old benchmarking programs calculating primes, practically unchanged (`BENCH` had a few `ENDIF`s replaced by `THEN`s). `RC4TEST.FTH` is a sample from the [Wikipedia](https://en.wikipedia.org/wiki/Forth_(programming_language)) page, unmodified. `GAME.FTH` is a small proof-of-concept 2D game ("catch the dots") showing the game-support primitives together - hardware sprites, `VSYNC` pacing, `COLLIDE?` collision, `VFILL` (building sprite images), `JOY` input and `RND`: `INCLUDE GAME.FTH` then `PLAY` (arrow keys to move, Start to quit), or `SELFTEST` for a non-interactive frame. `SPLIT.FTH` is a split-screen helper library for the X16: it puts a 320x240 bitmap on VERA layer 0 and confines the text console to a window on layer 1 (composited on top), giving a graphics-top / text-bottom screen with no raster interrupt - `INCLUDE SPLIT.FTH` then `SPLIT-DEMO`; `SPLITON`/`SPLITOFF` enter/leave it (`SPLIT-ROWS` sets the text-window height). It also provides the full bitmap-graphics vocabulary as direct-to-VERA words that work in BOTH the split and normal `GINIT` full-screen mode (both use the same $0000 bitmap): `GCLS PSET LINE FRAME RECT RING OVAL GTEXT`, radius circles `CIRCLE`/`FCIRCLE` (same names/signatures as the KERNAL GRAPH words, which they redefine), plus low-level `BPSET BHLINE BVLINE BLINE BFILL BRECT BCLS`. A persistent-pen API avoids repeating the colour: `n GCOLOR` then `PLOT DRAW BOX FBOX ELL FELL CIRC DISC SAY`.
 
 ## Known Issues
 

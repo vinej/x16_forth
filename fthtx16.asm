@@ -399,11 +399,12 @@ KSAVE      = brg_ram + 13*BRIDGE_LEN	; $FFD8 SAVE
 PLOT       = brg_ram + 14*BRIDGE_LEN	; $FFF0 PLOT
 SCREENMODE = brg_ram + 15*BRIDGE_LEN	; $FF5F screen_mode
 ENTROPY    = brg_ram + 16*BRIDGE_LEN	; $FECF entropy_get
+RDTIM      = brg_ram + 17*BRIDGE_LEN	; $FFDE rdtim (jiffy clock; used by SLEEP/VSYNC)
 ; RAM IRQ trampoline (ROM mode): the KERNAL's jmp (CINV) runs with ROM bank 0
 ; selected, but irq_handler lives in bank 9, so CINV must point at this RAM stub
 ; which crosses into bank 9, runs the handler, restores the bank, then chains.
-; Lives just past the 17 KERNAL trampolines; its template is copied with them.
-bridge_irq = brg_ram + 17*BRIDGE_LEN
+; Lives just past the KERNAL trampolines; its template is copied with them.
+bridge_irq = brg_ram + 18*BRIDGE_LEN
 
 ; jsrfar (FP bank 4 / audio bank $0A) support. brg_jsrfar (ROM, bank 9) is the
 ; ROM part of the KERNAL jsrfar (inc/jsrfar.inc) ported into our bank: it reads
@@ -5708,8 +5709,9 @@ brg_template:
 	+ktramp $FFF0		; 14 PLOT
 	+ktramp $FF5F		; 15 screen_mode
 	+ktramp $FECF		; 16 entropy_get
-	; 17 IRQ trampoline (template for bridge_irq). Copied to RAM with the rest,
-	; it must sit exactly at brg_template + 17*BRIDGE_LEN. The KERNAL reaches it
+	+ktramp $FFDE		; 17 rdtim (jiffy clock)
+	; 18 IRQ trampoline (template for bridge_irq). Copied to RAM with the rest,
+	; it must sit exactly at brg_template + 18*BRIDGE_LEN. The KERNAL reaches it
 	; via jmp (CINV) with ROM bank 0 selected; it crosses into the Forth bank,
 	; runs irq_handler (which rts's back), restores the entered bank, then chains
 	; to the original IRQ handler. Absolute operands stay valid after the copy.

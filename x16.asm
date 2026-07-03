@@ -1464,7 +1464,9 @@ edit_zpsave:
 i2c_read_byte  = $FEC6
 i2c_write_byte = $FEC9
 keymap         = $FED2
-RDTIM          = $FFDE
+!if X16ROM = 0 {
+RDTIM          = $FFDE			; ROM build defines RDTIM as a RAM bridge trampoline
+}
 SMC_I2C_ADDR   = $42
 
 ; SETBANK ( bank -- )   select the RAM bank visible at $A000-$BFFF (register $00).
@@ -2269,6 +2271,167 @@ irq_restorevm:
 	lda irq_save_fsp+1
 	sta fsp+1
 	rts
+
+; ============================================================================
+; Game-support primitives (fast paths for 2D games).
+; ============================================================================
+
+; VSYNC ( -- )   wait for the next video frame. Spins until the KERNAL 60 Hz
+; jiffy timer (read via RDTIM) advances - the jiffy is bumped once per VSYNC
+; IRQ, so this returns at the start of the next frame. Use it to pace a game
+; loop and to update VRAM tear-free. (RDTIM is bridged in the ROM build.)
++header ~vsync, ~vsync_n, "VSYNC"
+	+code
+	; Pace to VERA's video timing by waiting for the scanline counter ($9F28,
+	; a free-running 0..255 value on this VERA) to WRAP (a decrease). This relies
+	; only on the video clock - no jiffy, no interrupts, no bank switching - so it
+	; is reliable inside a tight game loop (the jiffy/RDTIM path was not). One wrap
+	; is roughly a video frame's worth of pacing; call twice for a slower loop.
+	lda $9F28			; prev = current scanline
+	sta $02
+vsync_lp:
+	lda $9F28
+	cmp $02				; current < prev ?  (counter wrapped)
+	bcc vsync_done
+	sta $02				; else remember the new high-water scanline
+	jmp vsync_lp
+vsync_done:
+	jmp next
+
+; VFILL ( value count -- )   write the byte 'value' to the VERA data port
+; 'count' times (count is 16-bit). Set the start address first with VADDR; the
+; port auto-increments, so this fills 'count' consecutive VRAM bytes in a tight
+; native loop - far faster than a Forth V! loop for clearing bitmaps/tilemaps.
++header ~vfill, ~vfill_n, "VFILL"
+	+code
+	+ldax _dtop			; count -> _rscratch
+	+stax _rscratch
+	ldy #2
+	lda (_dstack),y			; value (low byte) -> X
+	tax
+vfill_lp:
+	lda _rscratch
+	ora _rscratch+1
+	beq vfill_dn
+	stx VERA_DATA0
+	lda _rscratch
+	bne vfill_nb
+	dec _rscratch+1
+vfill_nb:
+	dec _rscratch
+	jmp vfill_lp
+vfill_dn:
+	+dpop				; drop count
+	+dpop				; drop value
+	jmp next
+
+; *. ( n1 n2 -- n3 )   signed 8.8 fixed-point multiply: n3 = (n1*n2) >> 8.
+; Lets you move sprites at fractional speeds. n1,n2 and n3 are 8.8 (8 integer
+; bits, 8 fraction bits) held in one cell. Takes bits 8..23 of the 32-bit
+; product (M* gives the full signed product; the shift/OR extracts the middle).
++header ~fixmul, ~fixmul_n, "*."
+	+forth
+	+token mmult
+	+literal 8
+	+token lshift, swap
+	+literal 8
+	+token rshift, or, exit
+
+; COLLIDE? ( ax ay aw ah bx by bw bh -- flag )
+; Axis-aligned bounding-box overlap test for two boxes (x,y = top-left,
+; w,h = size). Returns TRUE if they overlap, else FALSE. Coordinates are
+; compared unsigned (screen/sprite coordinates are non-negative). Boxes that
+; only touch at an edge do NOT count as overlapping. Stack items (16-bit) are
+; read in place: bh=_dtop, and below it at (_dstack)+2,+4,... bw by bx ah aw ay ax.
++header ~collide, ~collide_n, "COLLIDE?"
+	+code
+	clc				; t = bx + bw
+	ldy #6
+	lda (_dstack),y			; bx lo
+	ldy #2
+	adc (_dstack),y			; + bw lo
+	sta _scratch
+	ldy #7
+	lda (_dstack),y			; bx hi
+	ldy #3
+	adc (_dstack),y			; + bw hi
+	sta _scratch+1
+	ldy #14				; ax < bx+bw ?
+	lda (_dstack),y
+	cmp _scratch
+	ldy #15
+	lda (_dstack),y
+	sbc _scratch+1
+	bcs collide_no
+	clc				; t = ax + aw
+	ldy #14
+	lda (_dstack),y
+	ldy #10
+	adc (_dstack),y
+	sta _scratch
+	ldy #15
+	lda (_dstack),y
+	ldy #11
+	adc (_dstack),y
+	sta _scratch+1
+	ldy #6				; bx < ax+aw ?
+	lda (_dstack),y
+	cmp _scratch
+	ldy #7
+	lda (_dstack),y
+	sbc _scratch+1
+	bcs collide_no
+	clc				; t = by + bh   (bh = _dtop)
+	ldy #4
+	lda (_dstack),y			; by lo
+	adc _dtop
+	sta _scratch
+	ldy #5
+	lda (_dstack),y			; by hi
+	adc _dtop+1
+	sta _scratch+1
+	ldy #12				; ay < by+bh ?
+	lda (_dstack),y
+	cmp _scratch
+	ldy #13
+	lda (_dstack),y
+	sbc _scratch+1
+	bcs collide_no
+	clc				; t = ay + ah
+	ldy #12
+	lda (_dstack),y
+	ldy #8
+	adc (_dstack),y
+	sta _scratch
+	ldy #13
+	lda (_dstack),y
+	ldy #9
+	adc (_dstack),y
+	sta _scratch+1
+	ldy #4				; by < ay+ah ?
+	lda (_dstack),y
+	cmp _scratch
+	ldy #5
+	lda (_dstack),y
+	sbc _scratch+1
+	bcs collide_no
+	lda #$ff			; all four overlap conditions hold
+	bne collide_set
+collide_no:
+	lda #0
+collide_set:
+	sta _scratch			; save flag; collapse 8 stack cells to 1
+	jsr pop_dstack
+	jsr pop_dstack
+	jsr pop_dstack
+	jsr pop_dstack
+	jsr pop_dstack
+	jsr pop_dstack
+	jsr pop_dstack
+	lda _scratch
+	sta _dtop
+	sta _dtop+1
+	jmp next
 
 ; ============================================================================
 ; Baked-in toolkit words (formerly the X16BASIC.FTH / X16STR.FTH / X16FP.FTH
