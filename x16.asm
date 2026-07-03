@@ -790,8 +790,9 @@ bv_store:
 ;   F.TOK = user token table   [core+1 .. hightoken)  (core tokens already valid)
 ;   F.VAR = dictionary-state zero-page block (HERE/LATEST/HIGHTOKEN/wordlists)
 ; LOAD-IMAGE is native so it can overwrite the dictionary safely (the core, from
-; which it runs, lives below the dictionary).  PRG/C64 builds only - in the ROM
-; build the KERNAL (bank 0) cannot read a filename stored in the bank-9 ROM.
+; which it runs, lives below the dictionary).  Works in every build (PRG, C64 cart,
+; and the bank-9 ROM): the filenames are copied to RAM via img_setnam first, so the
+; bridged KERNAL (which runs with bank 0 mapped) can read them.
 ; ===========================================================================
 !if CART or X16ROM {
 IMG_DICT_START = $0801
@@ -830,6 +831,25 @@ ivl2:	lda IMGBUF+7,x
 	bpl ivl2
 	rts
 
+; SETNAM with the filename copied to RAM first.  A = length, X/Y = source pointer
+; (a code literal - lives in ROM in the bank-9 / cart builds).  The copy runs with
+; the Forth bank mapped so it can read the literal; the bridged KERNAL later reads
+; the name from RAM (imgnam), which is visible in every bank.
+img_setnam:				; ( A=len, X=lo, Y=hi ) -> copy to imgnam, SETNAM
+	stx _scratch
+	sty _scratch+1
+	tax				; X = length (counts down)
+	ldy #0
+isn1:	lda (_scratch),y
+	sta imgnam,y
+	iny
+	dex
+	bne isn1
+	tya				; A = length (Y counted up to len)
+	ldx #<imgnam
+	ldy #>imgnam
+	jmp SETNAM
+
 img_setlfs_save:			; logical 1, device 8, secondary 0 (header = start addr)
 	lda #1
 	ldx #8
@@ -848,7 +868,7 @@ img_setlfs_load:			; logical 1, device 8, secondary 1 (load to header addr)
 	lda #5
 	ldx #<imgn_var
 	ldy #>imgn_var
-	jsr SETNAM
+	jsr img_setnam
 	jsr img_setlfs_save
 	lda #<IMGBUF
 	sta _scratch
@@ -862,7 +882,7 @@ img_setlfs_load:			; logical 1, device 8, secondary 1 (load to header addr)
 	lda #5
 	ldx #<imgn_dic
 	ldy #>imgn_dic
-	jsr SETNAM
+	jsr img_setnam
 	jsr img_setlfs_save
 	lda #<IMG_DICT_START
 	sta _scratch
@@ -876,7 +896,7 @@ img_setlfs_load:			; logical 1, device 8, secondary 1 (load to header addr)
 	lda #5
 	ldx #<imgn_tok
 	ldy #>imgn_tok
-	jsr SETNAM
+	jsr img_setnam
 	jsr img_setlfs_save
 	lda #<IMG_TOKUSER
 	sta _scratch
@@ -912,7 +932,7 @@ img_setlfs_load:			; logical 1, device 8, secondary 1 (load to header addr)
 	lda #5
 	ldx #<imgn_dic
 	ldy #>imgn_dic
-	jsr SETNAM
+	jsr img_setnam
 	jsr img_setlfs_load
 	lda #0
 	jsr KLOAD
@@ -926,7 +946,7 @@ li_have:
 	lda #5
 	ldx #<imgn_tok
 	ldy #>imgn_tok
-	jsr SETNAM
+	jsr img_setnam
 	jsr img_setlfs_load
 	lda #0
 	jsr KLOAD
@@ -934,7 +954,7 @@ li_have:
 	lda #5
 	ldx #<imgn_var
 	ldy #>imgn_var
-	jsr SETNAM
+	jsr img_setnam
 	jsr img_setlfs_load
 	lda #0
 	jsr KLOAD

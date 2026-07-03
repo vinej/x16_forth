@@ -379,6 +379,11 @@ IRQ_DSTACK_TOP = irq_dstack + 64 - 2
 ; SAVE-IMAGE/LOAD-IMAGE turnkey: 64-byte buffer holding the saved dictionary-state
 ; zero-page block (see x16.asm).
 +hmbuffer ~IMGBUF, 64
+; RAM copy of the image filenames (F.DIC/F.TOK/F.VAR). The names are code literals,
+; which live in ROM in the bank-9 / cart builds; the bridged KERNAL runs with bank 0
+; mapped and cannot read them there, so SAVE-IMAGE/LOAD-IMAGE copy the name into this
+; RAM buffer (readable in any bank) before SETNAM.
++hmbuffer ~imgnam, 8
 
 !if X16ROM {
 ; --- KERNAL bridge (v3 run-from-ROM) --------------------------------------
