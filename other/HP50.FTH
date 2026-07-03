@@ -534,9 +534,88 @@ VARIABLE MR  VARIABLE MC  VARIABLE MP  VARIABLE MOUT  VARIABLE MROWB
      ODROP  MOUT @ PUSHL
    ELSE DERR THEN ELSE UNDERR THEN ;
 
+\ ---- matrix multiply   ( A B M* -> A*B ;  A is m x n, B is n x p ) ----------
+VARIABLE MMA  VARIABLE MMB  VARIABLE MMM  VARIABLE MMN  VARIABLE MMP
+VARIABLE MMOUT  VARIABLE MMROW  VARIABLE MMI  VARIABLE MMJ
+: cMMUL NEED2 IF BOTHLIST IF
+     2 R@P MMA !  1 R@P MMB !
+     MMA @ @ MMM !                              \ m = rows of A
+     MMB @ @ MMN !                              \ n = rows of B
+     MMA @ 0 MROW @  MMN @ <> IF DERR EXIT THEN \ inner dims must match (A cols = B rows)
+     MMB @ 0 MROW @ MMP !                       \ p = columns of B (length of B's row 0)
+     MMM @ OCELL * 2 + LALLOC ?DUP 0= IF S" LIST FULL" ERRMSG EXIT THEN  MMOUT !
+     MMM @ MMOUT @ !
+     MMM @ 0 DO                                 \ I stored in MMI (shadowed by inner loops)
+        I MMI !
+        MMP @ OCELL * 2 + LALLOC ?DUP 0= IF S" LIST FULL" ERRMSG EXIT THEN  MMROW !
+        MMP @ MMROW @ !
+        MMP @ 0 DO
+           I MMJ !
+           0 S>F
+           MMN @ 0 DO                           \ I = k here
+              MMA @ MMI @ I MEL   MMB @ I MMJ @ MEL   F*  F+
+           LOOP
+           MMROW @ MMJ @ VST                    \ C[i][j]
+        LOOP
+        MMROW @  MMOUT @ 2 + MMI @ OCELL * +  T-LIST OVER C!  1+ !
+     LOOP
+     ODROP ODROP  MMOUT @ PUSHL
+   ELSE DERR THEN ELSE UNDERR THEN ;
+
 \ ===========================================================================
-\ 6. COMMAND TABLE  (name -> xt, a simple linked list)
+\ 5b. USER VARIABLES  (STO / RCL / PURGE)  -  a persistent name -> object store
 \ ===========================================================================
+\ Variables SURVIVE CLEAR (unlike stack lists).  List/matrix values are DEEP-COPIED
+\ into a separate persistent arena (VARENA) so CLEAR (which frees LARENA) can't
+\ dangle them.  Deep copy handles two levels (vectors and matrices).
+2048 CONSTANT VARENASZ
+CREATE VARENA VARENASZ ALLOT
+VARIABLE VHP   0 VHP !
+: VALLOC ( n -- addr | 0 )
+   VHP @ TUCK +  DUP VARENASZ > IF 2DROP 0 ELSE VHP !  VARENA + THEN ;
+
+VARIABLE LCS  VARIABLE LCN  VARIABLE LCD
+: LCOPY1 ( srcptr -- dstptr | 0 )              \ copy one list block verbatim into VARENA
+   LCS !
+   LCS @ @ LCN !
+   LCN @ OCELL * 2 + VALLOC ?DUP 0= IF DROP 0 EXIT THEN  LCD !
+   LCS @ LCD @  LCN @ OCELL * 2 +  CMOVE
+   LCD @ ;
+VARIABLE LMD  VARIABLE LMN
+: LCOPYD ( srcptr -- dstptr | 0 )              \ deep copy: outer block + any row lists
+   DUP LCOPY1 ?DUP 0= IF DROP 0 EXIT THEN  LMD !   ( srcptr )
+   @ LMN !                                    \ element count
+   LMN @ 0 DO
+      LMD @ 2 + I OCELL * +                    ( cell )
+      DUP C@ T-LIST = IF
+         DUP 1+ @ LCOPY1 ?DUP 0= IF DROP 0 UNLOOP EXIT THEN  ( cell newrow )
+         SWAP 1+ !
+      ELSE DROP THEN
+   LOOP
+   LMD @ ;
+
+8 CONSTANT VNAMEMAX
+16 CONSTANT MAXVAR
+VNAMEMAX 1+ OCELL +  CONSTANT VREC             \ record = [namelen:1][name:8][value:OCELL]
+CREATE VARS  MAXVAR VREC * ALLOT
+VARS  MAXVAR VREC *  0 FILL                    \ namelen 0 = free slot
+: VREC@ ( i -- addr )  VREC *  VARS + ;
+VARIABLE VFA  VARIABLE VFU  VARIABLE VFR
+: VFIND ( a u -- rec | 0 )                     \ find a variable by exact name
+   VFU !  VFA !  0 VFR !
+   MAXVAR 0 DO
+      I VREC@
+      DUP C@ VFU @ =   OVER 1+ VFU @ VFA @ VFU @ COMPARE 0=  AND
+      IF VFR ! ELSE DROP THEN
+   LOOP  VFR @ ;
+VARIABLE VNR
+: VNEWREC ( -- rec | 0 )                       \ first free slot, else 0
+   0 VNR !
+   MAXVAR 0 DO  VNR @ 0=  I VREC@ C@ 0=  AND IF I VREC@ VNR ! THEN  LOOP  VNR @ ;
+: VPUSH ( rec -- )                             \ push a variable's stored value
+   OROOM 0= IF DROP OVFERR EXIT THEN
+   1+ VNAMEMAX +  OSP @ OIDX@  OCELL CMOVE  1 OSP +! ;
+: cCLVAR  VARS MAXVAR VREC * 0 FILL  0 VHP ! ; \ delete all variables
 VARIABLE CMDLIST   0 CMDLIST !
 : ,STR ( a u -- )  DUP C,  0 ?DO DUP C@ C, 1+ LOOP DROP ;
 : DEFCMD ( xt -- )                         \ ' RSIN DEFCMD SIN
@@ -617,6 +696,7 @@ VARIABLE CMDLIST   0 CMDLIST !
 ' cCROSS DEFCMD CROSS
 ' cDET  DEFCMD DET
 ' cTRN  DEFCMD TRN
+' cMMUL DEFCMD M*
 
 \ ===========================================================================
 \ 7. THE PARSER / EVALUATOR
@@ -668,6 +748,7 @@ VARIABLE CMX   VARIABLE IA   VARIABLE IU   VARIABLE CIDX
 
 \ push a numeric token: complex "(re,im)", else a real if it looks like one (only
 \ in DEC mode), else an integer in the current base; otherwise unknown.
+\ push a numeric token, else recall a user variable of that name, else unknown.
 : NUMTOKEN ( a u -- )
    OVER C@ [CHAR] ( = IF PARSE-CPLX EXIT THEN
    CBASE @ 10 = IF
@@ -675,18 +756,61 @@ VARIABLE CMX   VARIABLE IA   VARIABLE IU   VARIABLE CIDX
          2DUP >FLOAT IF  2DROP PUSHR EXIT  THEN
       THEN
    THEN
-   >CINT IF PUSHI ELSE TKA @ TKU @ UNKNOWN THEN ;
+   >CINT IF PUSHI EXIT THEN
+   TKA @ TKU @ VFIND ?DUP IF VPUSH EXIT THEN      \ a bare variable name recalls it
+   TKA @ TKU @ UNKNOWN ;
 
+\ The remaining input line lives in REMA/REMU so a command (STO/RCL/PURGE) can
+\ pull the NEXT token itself (the variable name).
+VARIABLE REMA   VARIABLE REMU
+: NEXT-TOKEN ( -- ta tu )                        \ next token; advances REMA/REMU
+   REMA @ REMU @ TOKEN  REMU !  REMA !  TKA @ TKU @ ;
 : EVAL$ ( a u -- )
    \ Look up commands FIRST: the BASIC number parser treats "+"/"-" as 0, so a
    \ number-first order would swallow those operators as the value zero.
-   BEGIN SKIPBL DUP 0> WHILE
-      TOKEN
-      TKA @ TKU @ FIND-CMD ?DUP
-      IF   EXECUTE
-      ELSE TKA @ TKU @ NUMTOKEN
+   REMU !  REMA !
+   BEGIN
+      REMA @ REMU @ SKIPBL  REMU !  REMA !
+      REMU @ 0>
+   WHILE
+      NEXT-TOKEN                                  ( ta tu )
+      2DUP FIND-CMD ?DUP
+      IF   NIP NIP EXECUTE
+      ELSE NUMTOKEN
       THEN
-   REPEAT 2DROP ;
+   REPEAT ;
+
+\ ---- STO / RCL / PURGE : take the variable NAME from the next token ---------
+VARIABLE STR
+: cSTO ( -- )                                    \ e.g.  5 STO A     [ 1 2 ] STO V
+   NEED1 0= IF UNDERR EXIT THEN
+   NEXT-TOKEN
+   DUP 0= IF 2DROP S" STO NEEDS A NAME" ERRMSG EXIT THEN
+   DUP VNAMEMAX > IF 2DROP S" NAME TOO LONG" ERRMSG EXIT THEN
+   2DUP VFIND ?DUP IF STR !
+      ELSE VNEWREC ?DUP IF STR ! ELSE 2DROP S" TOO MANY VARS" ERRMSG EXIT THEN THEN
+   ( a u )
+   DUP STR @ C!  STR @ 1+ SWAP CMOVE             \ store namelen + name
+   1 OLIST? IF
+      1 R@P LCOPYD ?DUP 0= IF S" VAR MEM FULL" ERRMSG EXIT THEN
+      STR @ 1+ VNAMEMAX +  T-LIST OVER C!  1+ !  \ store T-LIST cell -> VARENA copy
+   ELSE
+      1 OLVL  STR @ 1+ VNAMEMAX +  OCELL CMOVE   \ scalar/complex: copy the cell
+   THEN
+   ODROP ;
+: cRCL ( -- )                                    \ e.g.  RCL A
+   NEXT-TOKEN
+   DUP 0= IF 2DROP S" RCL NEEDS A NAME" ERRMSG EXIT THEN
+   VFIND ?DUP 0= IF S" UNKNOWN VAR" ERRMSG EXIT THEN
+   VPUSH ;
+: cPURGE ( -- )                                  \ e.g.  PURGE A
+   NEXT-TOKEN
+   DUP 0= IF 2DROP S" PURGE NEEDS A NAME" ERRMSG EXIT THEN
+   VFIND ?DUP IF 0 SWAP C! ELSE S" UNKNOWN VAR" ERRMSG THEN ;
+' cSTO   DEFCMD STO
+' cRCL   DEFCMD RCL
+' cPURGE DEFCMD PURGE
+' cCLVAR DEFCMD CLVAR
 
 \ ===========================================================================
 \ 8. USER ENTRY POINTS

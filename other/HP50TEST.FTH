@@ -87,4 +87,34 @@ CR .( HP50 SELF-TEST - VECTORS/MATRICES) CR
 .( TRN SIZE  ) RUN" CLEAR [ [ 1 2 3 ] [ 4 5 6 ] ] TRN SIZE" 3 S>F CK
 .( TRN DISP  ) RUN" CLEAR [ [ 1 2 3 ] [ 4 5 6 ] ] TRN" S" [ [ 1 4 ] [ 2 5 ] [ 3 6 ] ]" SCK
 
+\ NOTE: keep each line under ~80 chars - the INCLUDE input buffer truncates
+\ longer lines (e.g. "SCK" -> "SC ?").  Long tests put RUN" and the check on
+\ separate lines: RUN" leaves its result on the object stack for the next line.
+CR .( HP50 SELF-TEST - USER VARIABLES) CR
+.( STO/RCALL ) RUN" CLVAR CLEAR 42 STO A A"          42 S>F CK
+.( RCL       ) RUN" CLVAR CLEAR 5 STO B RCL B"        5 S>F CK
+.( OVERWRITE ) RUN" CLVAR CLEAR 1 STO A 2 STO A A"    2 S>F CK
+.( LIST SIZE ) RUN" CLVAR CLEAR [ 7 8 9 ] STO V CLEAR RCL V SIZE" 3 S>F CK
+.( LIST SURV )
+   RUN" CLVAR CLEAR [ 7 8 9 ] STO V CLEAR RCL V"   S" [ 7 8 9 ]" SCK
+.( MAT SURV  )
+   RUN" CLVAR CLEAR [ [ 1 2 ] [ 3 4 ] ] STO M CLEAR RCL M"
+   S" [ [ 1 2 ] [ 3 4 ] ]" SCK
+.( PURGE+NEW ) RUN" CLVAR CLEAR 9 STO Z PURGE Z 8 STO Z Z"  8 S>F CK
+
+CR .( HP50 SELF-TEST - MATRIX MULTIPLY) CR
+.( M* DISP   )
+   RUN" CLEAR [ [ 1 2 ] [ 3 4 ] ] [ [ 5 6 ] [ 7 8 ] ] M*"
+   S" [ [ 19 22 ] [ 43 50 ] ]" SCK
+.( M* EL 1,1 )
+   RUN" CLEAR [ [ 1 2 ] [ 3 4 ] ] [ [ 5 6 ] [ 7 8 ] ] M* 1 GET 1 GET" 19 S>F CK
+.( M* EL 2,2 )
+   RUN" CLEAR [ [ 1 2 ] [ 3 4 ] ] [ [ 5 6 ] [ 7 8 ] ] M* 2 GET 2 GET" 50 S>F CK
+.( M* 2X3    )
+   RUN" CLEAR [ [ 1 2 3 ] [ 4 5 6 ] ] [ [ 1 0 ] [ 0 1 ] [ 1 1 ] ] M* 2 GET 2 GET"
+   11 S>F CK
+.( M* IDENT  )
+   RUN" CLEAR [ [ 5 6 ] [ 7 8 ] ] [ [ 1 0 ] [ 0 1 ] ] M*"
+   S" [ [ 5 6 ] [ 7 8 ] ]" SCK
+
 CR .( FAILURES: ) #FAIL @ . CR

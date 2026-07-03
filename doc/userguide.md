@@ -1182,7 +1182,8 @@ promotes to the wider type.
 | Complex | `CONJ` `RE` `IM` `ARG` `R->C` `C->R` (and `ABS` = magnitude) |
 | Lists | `SIZE` `GET` (and `+` = concatenate) |
 | Vectors | `DOT` `V+` `V-` `NORM` `CROSS` |
-| Matrices | `DET` `TRN` (transpose) |
+| Matrices | `DET` `TRN` (transpose) `M*` (multiply) |
+| Variables | `STO` `RCL` `PURGE` `CLVAR` |
 | Stack | `DUP` `DROP` `SWAP` `OVER` `ROT` `CLEAR` `DEPTH` |
 | Modes | `DEG` `RAD` `STD` `n FIX` |
 | Exit | `OFF` |
@@ -1249,6 +1250,7 @@ lists. The same `[ ]` entry is used.
 | `CROSS` | ( v1 v2 -- v ) | 3-element cross product |
 | `DET` | ( m -- s ) | determinant (2×2 or 3×3) |
 | `TRN` | ( m -- mᵀ ) | transpose |
+| `M*` | ( a b -- a·b ) | matrix multiply (inner dims must match) |
 
 ```
 [ 1 2 3 ] [ 4 5 6 ] DOT              → 32
@@ -1256,18 +1258,46 @@ lists. The same `[ ]` entry is used.
 [ 1 2 ] [ 3 4 ] V+                   → [ 4 6 ]
 [ [ 1 2 3 ] [ 4 5 6 ] ] TRN          → [ [ 1 4 ] [ 2 5 ] [ 3 6 ] ]
 [ [ 1 2 3 ] [ 4 5 6 ] [ 7 8 10 ] ] DET   → -3
+[ [ 1 2 ] [ 3 4 ] ] [ [ 5 6 ] [ 7 8 ] ] M*   → [ [ 19 22 ] [ 43 50 ] ]
 ```
 
 Note: `+` concatenates two lists (list semantics); use `V+` to add vectors.
+`M*` needs the columns of `A` to equal the rows of `B` (else `BAD ARGUMENT VALUE`).
 
-## 5.7 Scripting and testing
+## 5.7 User variables
+
+Store any object under a name with `STO`, get it back with `RCL`. The name is the
+**next word** on the line (no quotes). Variables are **persistent** — unlike the
+stack, they survive `CLEAR` (list/matrix values are deep-copied into their own
+storage). Typing a bare variable name also recalls it.
+
+| Word | Effect |
+|---|---|
+| `STO` | ( obj -- ) store level 1 into the named variable: `5 STO A` |
+| `RCL` | ( -- obj ) recall the named variable: `RCL A` |
+| *bare name* | ( -- obj ) using a variable name recalls it: `A` |
+| `PURGE` | delete a variable: `PURGE A` |
+| `CLVAR` | delete **all** variables |
+
+```
+5 STO A            store 5 in A
+A A *              → 25         ( bare names recall )
+[ 1 2 3 ] STO V    store a vector
+CLEAR  RCL V       → [ 1 2 3 ]  ( survived CLEAR )
+```
+
+Up to 16 variables, names up to 8 characters. `CLVAR` also reclaims their storage.
+
+## 5.8 Scripting and testing
 
 - **`RUN"` `…"`** ( -- ) runs a line of calculator input non-interactively, e.g.
   `RUN" CLEAR 3 4 + 5 *"`. This is how the self-test `other/HP50TEST.FTH`
-  exercises the calculator (66 checks across reals, integers, bases/bitwise,
-  complex, lists and vectors/matrices; `INCLUDE HP50TEST.FTH` runs them).
+  exercises the calculator (78 checks across reals, integers, bases/bitwise,
+  complex, lists, vectors/matrices, user variables and matrix multiply;
+  `INCLUDE HP50TEST.FTH` runs them). Keep script lines under ~80 characters — the
+  input buffer truncates longer lines.
 
-## 5.8 Fast reload
+## 5.9 Fast reload
 
 `HP50.FTH` compiles in ~30 s (compilation is dictionary-search bound). To avoid
 that on every boot, snapshot the compiled image once with `SAVE-IMAGE` and
@@ -1276,12 +1306,12 @@ reload it with `LOAD-IMAGE` (~1 s) — see
 shipped `emulator/AUTORUN.FTH` loads the image and even auto-starts `HP`, so the
 calculator is on screen about a second after boot.
 
-## 5.9 Notes and limits
+## 5.10 Notes and limits
 
 - ~9-digit floats: `STD` display may show a trailing rounding artifact
   (e.g. `3.14159` as `3.141590001`).
 - Integer arithmetic wraps at 32 bits; `/` promotes to a real.
-- `DET` covers 2×2 and 3×3; there is no matrix multiply yet.
+- `DET` covers 2×2 and 3×3; `M*` works for any conformable sizes.
 - No symbolic algebra (CAS) and no user programs — out of scope for this port.
 
 
