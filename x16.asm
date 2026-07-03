@@ -781,6 +781,166 @@ bv_store:
 	stx _dtop+1
 	jmp next
 
+; ===========================================================================
+; SAVE-IMAGE / LOAD-IMAGE - turnkey compiled-dictionary snapshot (device 8).
+; Save the compiled dictionary once, reload it in ~1s instead of recompiling
+; the source. Three files:
+;   F.DIC = dictionary bytes   [dict-start .. HERE)
+;   F.TOK = user token table   [core+1 .. hightoken)  (core tokens already valid)
+;   F.VAR = dictionary-state zero-page block (HERE/LATEST/HIGHTOKEN/wordlists)
+; LOAD-IMAGE is native so it can overwrite the dictionary safely (the core, from
+; which it runs, lives below the dictionary).  PRG/C64 builds only - in the ROM
+; build the KERNAL (bank 0) cannot read a filename stored in the bank-9 ROM.
+; ===========================================================================
+!if CART or X16ROM {
+IMG_DICT_START = $0801
+} else {
+IMG_DICT_START = end_of_image
+}
+IMG_TOKUSER = TOKENS + ((forth_system + 1) << 1)
+
+imgn_dic: !text "F.DIC"
+imgn_tok: !text "F.TOK"
+imgn_var: !text "F.VAR"
+
+; copy the 61-byte dictionary-state zp block  (_here..7, _hightoken..54) <-> IMGBUF
+img_vars_save:
+	ldx #6
+ivs1:	lda _here,x
+	sta IMGBUF,x
+	dex
+	bpl ivs1
+	ldx #53
+ivs2:	lda _hightoken,x
+	sta IMGBUF+7,x
+	dex
+	bpl ivs2
+	rts
+img_vars_load:
+	ldx #6
+ivl1:	lda IMGBUF,x
+	sta _here,x
+	dex
+	bpl ivl1
+	ldx #53
+ivl2:	lda IMGBUF+7,x
+	sta _hightoken,x
+	dex
+	bpl ivl2
+	rts
+
+img_setlfs_save:			; logical 1, device 8, secondary 0 (header = start addr)
+	lda #1
+	ldx #8
+	ldy #0
+	jmp SETLFS
+img_setlfs_load:			; logical 1, device 8, secondary 1 (load to header addr)
+	lda #1
+	ldx #8
+	ldy #1
+	jmp SETLFS
+
++header ~saveimage, ~saveimage_n, "SAVE-IMAGE"
+	+code
+	jsr img_vars_save
+	; ---- F.VAR : [IMGBUF .. IMGBUF+61) ----
+	lda #5
+	ldx #<imgn_var
+	ldy #>imgn_var
+	jsr SETNAM
+	jsr img_setlfs_save
+	lda #<IMGBUF
+	sta _scratch
+	lda #>IMGBUF
+	sta _scratch+1
+	lda #<_scratch
+	ldx #<(IMGBUF+61)
+	ldy #>(IMGBUF+61)
+	jsr KSAVE
+	; ---- F.DIC : [IMG_DICT_START .. HERE) ----
+	lda #5
+	ldx #<imgn_dic
+	ldy #>imgn_dic
+	jsr SETNAM
+	jsr img_setlfs_save
+	lda #<IMG_DICT_START
+	sta _scratch
+	lda #>IMG_DICT_START
+	sta _scratch+1
+	lda #<_scratch
+	ldx _here
+	ldy _here+1
+	jsr KSAVE
+	; ---- F.TOK : [IMG_TOKUSER .. TOKENS + 2*hightoken) ----
+	lda #5
+	ldx #<imgn_tok
+	ldy #>imgn_tok
+	jsr SETNAM
+	jsr img_setlfs_save
+	lda #<IMG_TOKUSER
+	sta _scratch
+	lda #>IMG_TOKUSER
+	sta _scratch+1
+	; end = TOKENS + 2*(hightoken+1)   (hightoken is the highest USED token,
+	; so the last-defined word's entry must be included)
+	clc
+	lda _hightoken
+	adc #1
+	sta _rscratch
+	lda _hightoken+1
+	adc #0
+	sta _rscratch+1			; _rscratch = hightoken+1
+	asl _rscratch			; _rscratch = 2*(hightoken+1)
+	rol _rscratch+1
+	clc
+	lda _rscratch
+	adc #<TOKENS			; <TOKENS = 0
+	tax
+	lda _rscratch+1
+	adc #>TOKENS
+	tay
+	lda #<_scratch
+	jsr KSAVE
+	jmp next
+
+; LOAD-IMAGE ( -- flag )   flag = -1 if the image loaded, 0 if F.DIC was missing
++header ~loadimage, ~loadimage_n, "LOAD-IMAGE"
+	+code
+	; F.DIC -> IMG_DICT_START (file header address)
+	lda #5
+	ldx #<imgn_dic
+	ldy #>imgn_dic
+	jsr SETNAM
+	jsr img_setlfs_load
+	lda #0
+	jsr KLOAD
+	bcc li_have
+	jsr CLRCHN			; no image: leave the dictionary untouched, return false
+	lda #0
+	tax
+	jmp dpush_and_next
+li_have:
+	; F.TOK -> IMG_TOKUSER (file header address)
+	lda #5
+	ldx #<imgn_tok
+	ldy #>imgn_tok
+	jsr SETNAM
+	jsr img_setlfs_load
+	lda #0
+	jsr KLOAD
+	; F.VAR -> IMGBUF (file header address)
+	lda #5
+	ldx #<imgn_var
+	ldy #>imgn_var
+	jsr SETNAM
+	jsr img_setlfs_load
+	lda #0
+	jsr KLOAD
+	jsr img_vars_load
+	lda #$ff			; success -> true
+	tax
+	jmp dpush_and_next
+
 ; VSAVE ( c-addr u bank vaddr len -- )   save 'len' bytes of VRAM at bank:vaddr
 ; to a headerless file on device 8. The inverse of BVLOAD - what VSAVE writes,
 ; BVLOAD reads straight back into VRAM. (The KERNAL SAVE cannot read VRAM, so

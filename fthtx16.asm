@@ -376,6 +376,10 @@ IRQ_DSTACK_TOP = irq_dstack + 64 - 2
 +hmbuffer ~frame_isr, 6		; the 6-byte stub lives here (RAM, so CINV can reach it)
 }
 
+; SAVE-IMAGE/LOAD-IMAGE turnkey: 64-byte buffer holding the saved dictionary-state
+; zero-page block (see x16.asm).
++hmbuffer ~IMGBUF, 64
+
 !if X16ROM {
 ; --- KERNAL bridge (v3 run-from-ROM) --------------------------------------
 ; A bank at $C000 cannot call the KERNAL ($FFxx) directly - that window is the

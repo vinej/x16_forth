@@ -13,6 +13,9 @@ three parts:
 - **[Section 4 — Mortgage calculator](#section-4)**: the optional `MORTGAGE.FTH`
   library — a Canadian (semi-annual-compounding) mortgage payment and amortization
   calculator, and a worked example of floating point + currency formatting.
+- **[Section 5 — RPN calculator (HP50.FTH)](#section-5)**: the optional `HP50.FTH`
+  library — an HP-50g-style RPN scientific calculator (reals, integers, bases,
+  bitwise), with a fast turnkey-image reload.
 
 Notation used throughout: a word's **stack effect** is written `( before -- after )`
 with the top of stack on the right. `n`=signed number, `u`=unsigned, `d`=double
@@ -729,6 +732,33 @@ strings.
 - **`TMAPSAVE`** ( c-addr u -- ) — save the layer-1 tilemap (self-sizing).
 - **`TMAPLOAD`** ( c-addr u -- ) — load the layer-1 tilemap back to its VRAM address.
 
+### Turnkey compiled image (fast reload)
+
+Compiling a large `.FTH` library recompiles from source every boot (the cost is
+the per-word dictionary search, ~30 s for a few hundred definitions). These two
+words snapshot the **compiled** dictionary so it reloads in about a second. They
+are generic — they work for any compiled code, not a specific program.
+
+- **`SAVE-IMAGE`** ( -- ) — write the current compiled dictionary to three files
+  on device 8: `F.DIC` (dictionary bytes), `F.TOK` (the user portion of the
+  token table), `F.VAR` (the dictionary-state pointers: `HERE`, the wordlist
+  heads, the high token). Run it once, after loading your library.
+- **`LOAD-IMAGE`** ( -- flag ) — reload those files and restore the dictionary,
+  making every saved word available immediately. `flag` is `TRUE` if the image
+  loaded, `FALSE` if `F.DIC` was not found.
+
+```
+INCLUDE HP50.FTH   SAVE-IMAGE      \ once: the slow compile, then snapshot
+( reboot )
+LOAD-IMAGE DROP    HP              \ every boot after: ~1 s, ready to use
+```
+
+Notes: the image is tied to the exact `forthx16.prg` build (it stores absolute
+addresses and token numbers) — if you rebuild the interpreter, regenerate the
+image. Call `LOAD-IMAGE` from the keyboard or as the **last** line of
+`AUTORUN.FTH` (it replaces the dictionary, so nothing compiled can run after it
+in the same file). PRG/C64 builds only.
+
 ## X16 input devices
 
 - **`JOY`** ( n -- buttons ) — read joystick/gamepad n (0 = keyboard, 1-4 = gamepads); button bits active-high, 0 if absent.
@@ -1073,6 +1103,101 @@ Everything is ordinary Forth — no new native/primitive words were needed.
   the last payment so it ends on exactly `0.00`; `YEARLY` clamps a tiny residual to
   `0.00`.
 - These are Forth definitions loaded into RAM, so they cost no ROM space.
+
+
+<a name="section-5"></a>
+
+---
+
+# Section 5 — RPN calculator (HP50.FTH)
+
+`other/HP50.FTH` is an optional, loadable library: an **HP-50g-style RPN
+scientific calculator**. It shows off the floating-point word set, a typed value
+stack, and a small interpreter written in Forth. It is not the real 50g (no CAS
+/ symbolic algebra; reals carry ~9 significant digits), but it behaves like an
+RPN scientific/programmer calculator.
+
+```
+INCLUDE HP50.FTH   SAVE-IMAGE      \ once (slow compile, then snapshot)
+LOAD-IMAGE DROP                    \ every boot after (fast)  - or just INCLUDE HP50.FTH
+HP                                 \ start the calculator
+```
+
+At the `>` prompt you enter numbers and commands RPN-style — numbers push onto a
+stack, commands act on it:
+
+```
+3 4 + 5 *        ( -> 35 )
+2 10 ^           ( -> 1024 )
+45 SIN           ( sine of 45 degrees )
+255 15 AND       ( -> 15 )
+```
+
+Type `OFF` to leave. Use the X16's default uppercase character set (do not
+`14 EMIT` first — see [1.10](#110-using-the-system-on-the-x16)).
+
+## 5.1 The stack display
+
+The screen shows a status line and the numbered stack levels (level 1 = the top,
+just above the input line), HP-style:
+
+```
+[ DEG   STD   DEPTH 3 ]
+ 3:                          3.1416
+ 2:                              42
+ 1:                          -1.500
+> _
+```
+
+The status line shows the angle mode (`DEG`/`RAD`), the number format
+(`STD`, or `FIX n`), the integer base when it is not decimal (`HEX`/`OCT`/`BIN`),
+and the stack depth.
+
+## 5.2 Numbers
+
+- **Reals** are entered with a decimal point or exponent: `3.14`, `-2.5`, `1E3`.
+  They display in `STD` (natural) or `FIX n` (fixed decimals) format.
+- **Integers** are exact 32-bit whole numbers, entered without a point: `42`,
+  `-7`, `1000000`. In `HEX`/`OCT`/`BIN` mode you enter and see them in that base,
+  with a trailing base letter (`FFH`, `377O`, `1010B`).
+
+Integer `+ - *` stay exact; `/` and the scientific functions produce a real.
+
+## 5.3 Commands
+
+| Group | Words |
+|---|---|
+| Arithmetic | `+` `-` `*` `/` `NEG` `INV` `SQ` `SQRT` `^` `ABS` |
+| Scientific | `SIN` `COS` `TAN` `ASIN` `ACOS` `ATAN` `LN` `EXP` `LOG` `ALOG` `PI` |
+| Integer / bitwise | `AND` `OR` `XOR` `NOT` `->I` (to integer) `->R` (to real) |
+| Bases | `BIN` `OCT` `DEC` `HEX` |
+| Stack | `DUP` `DROP` `SWAP` `OVER` `ROT` `CLEAR` `DEPTH` |
+| Modes | `DEG` `RAD` `STD` `n FIX` |
+| Exit | `OFF` |
+
+Trigonometric functions honour the current `DEG`/`RAD` mode.
+
+## 5.4 Scripting and testing
+
+- **`RUN"` `…"`** ( -- ) runs a line of calculator input non-interactively, e.g.
+  `RUN" CLEAR 3 4 + 5 *"`. This is how the self-test `other/HP50TEST.FTH`
+  exercises the calculator (29 checks; `INCLUDE HP50TEST.FTH` runs them).
+
+## 5.5 Fast reload
+
+`HP50.FTH` compiles in ~30 s (compilation is dictionary-search bound). To avoid
+that on every boot, snapshot the compiled image once with `SAVE-IMAGE` and
+reload it with `LOAD-IMAGE` (~1 s) — see
+[Turnkey compiled image](#turnkey-compiled-image-fast-reload) in Section 2. The
+shipped `emulator/AUTORUN.FTH` already calls `LOAD-IMAGE`, so booting drops you
+straight to "type `HP`".
+
+## 5.6 Notes and limits
+
+- ~9-digit floats: `STD` display may show a trailing rounding artifact
+  (e.g. `3.14159` as `3.141590001`).
+- Integer arithmetic wraps at 32 bits; `/` promotes to a real.
+- No complex numbers, matrices, or programs yet — those are planned phases.
 
 
 *Generated for ForthX16 / TX16 2.0. See also `readme.md`, `doc/forth-in-rom-scope.md`,

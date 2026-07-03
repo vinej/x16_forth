@@ -48,12 +48,27 @@ FVARIABLE FP10                            \ scratch: 10^n for the formatter
 : FFLOOR ( F: x -- floor )   F>UD D>F ;                  \ x >= 0
 : TEN**  ( n -- ) ( F: -- 10^n )   1 S>F  0 ?DO 10 S>F F* LOOP ;
 
+\ ---- 32-bit integer (double-cell) helpers --------------------------------
+VARIABLE ML1  VARIABLE MH1  VARIABLE ML2  VARIABLE MH2
+: D* ( d1 d2 -- d3 )                       \ low 32 bits of the product
+   MH2 ! ML2 !  MH1 ! ML1 !
+   ML1 @ ML2 @ UM*                         ( lo3 hi3 )
+   ML1 @ MH2 @ *  +                        ( lo1*hi2 into hi3 )
+   MH1 @ ML2 @ *  + ;                      ( hi1*lo2 into hi3 )
+: DAND ( d1 d2 -- d3 )  ROT AND -ROT AND SWAP ;
+: DOR  ( d1 d2 -- d3 )  ROT OR  -ROT OR  SWAP ;
+: DXOR ( d1 d2 -- d3 )  ROT XOR -ROT XOR SWAP ;
+: DNOT ( d -- d' )      INVERT SWAP INVERT SWAP ;
+: F>SD ( F: r -- ) ( -- d )                \ signed float -> double (trunc toward 0)
+   FDUP F0< IF FNEGATE F>UD DNEGATE ELSE F>UD THEN ;
+
 \ ===========================================================================
 \ 2. THE OBJECT STACK   (8-byte cells: [tag][5-byte float][spare])
 \ ===========================================================================
 16 CONSTANT MAXLVL
 8  CONSTANT OCELL
-0  CONSTANT T-REAL              \ (T-INT etc. reserved for later phases)
+0  CONSTANT T-REAL              \ real   : 5-byte float in bytes 1..5
+1  CONSTANT T-INT               \ integer: 32-bit (double) in bytes 1..4
 
 CREATE OSTK   MAXLVL OCELL * ALLOT
 VARIABLE OSP   0 OSP !          \ number of items on the stack
@@ -61,8 +76,11 @@ CREATE OTMP   OCELL ALLOT
 
 : OIDX@  ( index -- addr )  OCELL *  OSTK + ;
 : OLVL   ( level -- addr )  OSP @ SWAP -  OIDX@ ;        \ level 1 = top
+: OTAG   ( level -- tag )   OLVL C@ ;
+: OINT?  ( level -- f )     OTAG T-INT = ;
 : OCP    ( src dest -- )    OCELL CMOVE ;
 : R@F    ( level -- ) ( F: -- r )   OLVL 1+ F@ ;         \ fetch a level's float
+: R@D    ( level -- d )     OLVL 1+ 2@ ;                 \ fetch a level's int
 : ODROP  ( -- )   OSP @ 1- 0 MAX OSP ! ;
 
 : NEED1 ( -- f )  OSP @ 0 > ;
@@ -80,10 +98,21 @@ CREATE ENAME 32 ALLOT   VARIABLE ELEN   VARIABLE ERRF   0 ERRF !
 : PUSHR ( F: r -- )
    OROOM 0= IF FDROP OVFERR EXIT THEN
    OSP @ OIDX@   T-REAL OVER C!   1+ F!   1 OSP +! ;
+: PUSHI ( d -- )
+   OROOM 0= IF 2DROP OVFERR EXIT THEN
+   OSP @ OIDX@   T-INT OVER C!   1+ 2!   1 OSP +! ;
 
-\ pop operands to the FP stack (they leave the object stack)
-: RUNPREP ( -- ) ( F: -- r )      1 R@F  ODROP ;
-: RBINPREP ( -- ) ( F: -- r2 r1 ) 2 R@F  1 R@F  ODROP ODROP ;
+\ type-aware operand fetch: a level's value as a float, or as an integer
+: OL>F ( level -- ) ( F: -- r )   DUP OINT? IF R@D D>F ELSE R@F THEN ;
+: OL>I ( level -- d )             DUP OINT? IF R@D    ELSE R@F F>SD THEN ;
+
+\ pop operands (they leave the object stack); ints are promoted to reals
+: RUNPREP  ( -- ) ( F: -- r )      1 OL>F  ODROP ;
+: RBINPREP ( -- ) ( F: -- r2 r1 )  2 OL>F 1 OL>F  ODROP ODROP ;
+\ pop operands as 32-bit integers (reals truncated toward zero)
+: IUNPREP  ( -- d )                1 OL>I  ODROP ;
+: IBINPREP ( -- d2 d1 )            2 OL>I 1 OL>I  ODROP ODROP ;
+: BOTHINT  ( -- f )                1 OINT?  2 OINT?  AND ;
 
 \ ===========================================================================
 \ 3. NUMBER FORMATTING  (right-justified STD / FIX, ~9 significant digits)
@@ -91,6 +120,7 @@ CREATE ENAME 32 ALLOT   VARIABLE ELEN   VARIABLE ERRF   0 ERRF !
 VARIABLE DISPMODE   0 DISPMODE !     \ 0 = STD, 1 = FIX
 VARIABLE DISPDEC    4 DISPDEC !      \ decimals for FIX
 VARIABLE ANGDEG    -1 ANGDEG !       \ -1 = degrees, 0 = radians
+VARIABLE CBASE     10 CBASE !        \ integer base: 2 / 8 / 10 / 16
 
 VARIABLE NDEC
 VARIABLE NEGF
@@ -130,8 +160,24 @@ VARIABLE DOTF
 
 : FSTR ( -- a u ) ( F: r -- )
    DISPMODE @ IF DISPDEC @ (F$) ELSE 9 (F$) TRIMZ THEN ;
+
+\ format a 32-bit integer d in the current base into NBUF; returns ( a u ).
+\ Decimal is signed; other bases are unsigned with a trailing base letter.
+: INT$ ( d -- a u )
+   0 NP !
+   BASE @ >R   CBASE @ BASE !
+   CBASE @ 10 = IF  DUP >R DABS <# #S R> SIGN #>  ELSE  <# #S #>  THEN
+   R> BASE !   NBS
+   CBASE @ 10 <> IF
+      CBASE @ 16 = IF [CHAR] H ELSE CBASE @ 8 = IF [CHAR] O ELSE [CHAR] B THEN THEN NBC
+   THEN
+   NBUF NP @ ;
+
+\ format the object at a level into a string ( real or integer )
+: OBJ$ ( level -- a u )
+   DUP OINT? IF  R@D INT$  ELSE  R@F FSTR  THEN ;
 : RJ$  ( a u width -- )   OVER - SPACES TYPE ;
-: .RLVL ( width -- ) ( F: r -- )   >R FSTR R> RJ$ ;
+: .LVL ( level width -- )   >R OBJ$ R> RJ$ ;
 
 \ ===========================================================================
 \ 4. THE DISPLAY
@@ -140,6 +186,9 @@ VARIABLE DOTF
 : STATUS ( -- )
    ." [ " ANGDEG @ IF ." DEG" ELSE ." RAD" THEN
    ."   " DISPMODE @ IF ." FIX " DISPDEC @ 0 .R ELSE ." STD" THEN
+   CBASE @ 10 <> IF
+      ."   " CBASE @ 16 = IF ." HEX" ELSE CBASE @ 8 = IF ." OCT" ELSE ." BIN" THEN THEN
+   THEN
    ."   DEPTH " OSP @ 0 .R ."  ]" ;
 : .STACK ( -- )
    CLS  STATUS CR
@@ -148,7 +197,7 @@ VARIABLE DOTF
    OSP @ SHOWN MIN
    BEGIN DUP 0> WHILE
       DUP 3 .R ." : "
-      DUP R@F 30 .RLVL  CR
+      DUP 30 .LVL  CR
       1-
    REPEAT DROP ;
 
@@ -161,22 +210,35 @@ VARIABLE DOTF
 : QUARTER ( F: -- q ) ANGDEG @ IF 90 S>F ELSE FPI 2 S>F F/ THEN ;
 : F<=0 ( F: x -- flag )  FDUP F0< F0= OR ;
 
-\ ---- arithmetic ----
-: RADD  NEED2 IF RBINPREP F+ PUSHR ELSE UNDERR THEN ;
-: RSUB  NEED2 IF RBINPREP F- PUSHR ELSE UNDERR THEN ;
-: RMUL  NEED2 IF RBINPREP F* PUSHR ELSE UNDERR THEN ;
-: RDIV  NEED2 IF 1 R@F F0= IF DERR ELSE RBINPREP F/ PUSHR THEN ELSE UNDERR THEN ;
-: RNEG  NEED1 IF RUNPREP FNEGATE PUSHR ELSE UNDERR THEN ;
-: RINV  NEED1 IF 1 R@F F0= IF DERR ELSE RUNPREP 1 S>F FSWAP F/ PUSHR THEN ELSE UNDERR THEN ;
-: RSQ   NEED1 IF RUNPREP FDUP F* PUSHR ELSE UNDERR THEN ;
-: RSQRT NEED1 IF 1 R@F F0< IF DERR ELSE RUNPREP FSQRT PUSHR THEN ELSE UNDERR THEN ;
+\ ---- arithmetic (exact when both operands are integers, else real) ----
+: RADD  NEED2 IF BOTHINT IF IBINPREP D+ PUSHI ELSE RBINPREP F+ PUSHR THEN ELSE UNDERR THEN ;
+: RSUB  NEED2 IF BOTHINT IF IBINPREP D- PUSHI ELSE RBINPREP F- PUSHR THEN ELSE UNDERR THEN ;
+: RMUL  NEED2 IF BOTHINT IF IBINPREP D* PUSHI ELSE RBINPREP F* PUSHR THEN ELSE UNDERR THEN ;
+: RDIV  NEED2 IF 1 OL>F F0= IF DERR ELSE RBINPREP F/ PUSHR THEN ELSE UNDERR THEN ;
+: RNEG  NEED1 IF 1 OINT? IF IUNPREP DNEGATE PUSHI ELSE RUNPREP FNEGATE PUSHR THEN
+        ELSE UNDERR THEN ;
+: RINV  NEED1 IF 1 OL>F F0= IF DERR ELSE RUNPREP 1 S>F FSWAP F/ PUSHR THEN ELSE UNDERR THEN ;
+: RSQ   NEED1 IF 1 OINT? IF IUNPREP 2DUP D* PUSHI ELSE RUNPREP FDUP F* PUSHR THEN
+        ELSE UNDERR THEN ;
+: RABS  NEED1 IF 1 OINT? IF IUNPREP DABS PUSHI ELSE RUNPREP FABS PUSHR THEN
+        ELSE UNDERR THEN ;
+: RSQRT NEED1 IF 1 OL>F F0< IF DERR ELSE RUNPREP FSQRT PUSHR THEN ELSE UNDERR THEN ;
 : R^    NEED2 IF
-           2 R@F F0< IF DERR EXIT THEN
-           2 R@F F0= IF RBINPREP FDROP FDROP 0 S>F PUSHR EXIT THEN
+           2 OL>F F0< IF DERR EXIT THEN
+           2 OL>F F0= IF RBINPREP FDROP FDROP 0 S>F PUSHR EXIT THEN
            RBINPREP FPOW PUSHR
         ELSE UNDERR THEN ;
 
-\ ---- transcendental ----
+\ ---- integer / bitwise / base (operands taken as 32-bit; reals truncated) ----
+: cAND  NEED2 IF IBINPREP DAND PUSHI ELSE UNDERR THEN ;
+: cOR   NEED2 IF IBINPREP DOR  PUSHI ELSE UNDERR THEN ;
+: cXOR  NEED2 IF IBINPREP DXOR PUSHI ELSE UNDERR THEN ;
+: cNOT  NEED1 IF IUNPREP DNOT PUSHI ELSE UNDERR THEN ;
+: c->I  NEED1 IF 1 OINT? 0= IF RUNPREP F>SD PUSHI THEN ELSE UNDERR THEN ;
+: c->R  NEED1 IF 1 OINT?    IF IUNPREP D>F  PUSHR THEN ELSE UNDERR THEN ;
+: cBIN  2 CBASE ! ;   : cOCT  8 CBASE ! ;   : cDECB 10 CBASE ! ;   : cHEX 16 CBASE ! ;
+
+\ ---- transcendental (always real; integers are promoted) ----
 : RSIN  NEED1 IF RUNPREP >RAD FSIN PUSHR ELSE UNDERR THEN ;
 : RCOS  NEED1 IF RUNPREP >RAD FCOS PUSHR ELSE UNDERR THEN ;
 : RTAN  NEED1 IF RUNPREP >RAD FTAN PUSHR ELSE UNDERR THEN ;
@@ -185,9 +247,9 @@ VARIABLE DOTF
         ELSE UNDERR THEN ;
 : RACOS NEED1 IF RUNPREP FDUP FDUP F* FNEGATE 1 S>F F+ FSQRT F/ FATAN RAD>
                 QUARTER FSWAP F- PUSHR ELSE UNDERR THEN ;
-: RLN   NEED1 IF 1 R@F F<=0 IF DERR ELSE RUNPREP FLN PUSHR THEN ELSE UNDERR THEN ;
+: RLN   NEED1 IF 1 OL>F F<=0 IF DERR ELSE RUNPREP FLN PUSHR THEN ELSE UNDERR THEN ;
 : REXP  NEED1 IF RUNPREP FEXP PUSHR ELSE UNDERR THEN ;
-: RLOG  NEED1 IF 1 R@F F<=0 IF DERR ELSE RUNPREP FLN FLN10 F/ PUSHR THEN ELSE UNDERR THEN ;
+: RLOG  NEED1 IF 1 OL>F F<=0 IF DERR ELSE RUNPREP FLN FLN10 F/ PUSHR THEN ELSE UNDERR THEN ;
 : RALOG NEED1 IF RUNPREP FLN10 F* FEXP PUSHR ELSE UNDERR THEN ;
 : RPI   OROOM IF FPI PUSHR ELSE OVFERR THEN ;
 
@@ -210,7 +272,7 @@ VARIABLE DOTF
             OTMP 1 OLVL OCP        \ L1 <- tmp
          ELSE UNDERR THEN ;
 : HCLEAR 0 OSP ! ;
-: HDEPTH OROOM IF OSP @ S>F PUSHR ELSE OVFERR THEN ;
+: HDEPTH OROOM IF OSP @ S>D PUSHI ELSE OVFERR THEN ;
 
 \ ---- modes ----
 : cDEG  -1 ANGDEG ! ;
@@ -270,6 +332,17 @@ VARIABLE CMDLIST   0 CMDLIST !
 ' HROT  DEFCMD ROT
 ' HCLEAR DEFCMD CLEAR
 ' HDEPTH DEFCMD DEPTH
+' RABS  DEFCMD ABS
+' cAND  DEFCMD AND
+' cOR   DEFCMD OR
+' cXOR  DEFCMD XOR
+' cNOT  DEFCMD NOT
+' c->I  DEFCMD ->I
+' c->R  DEFCMD ->R
+' cBIN  DEFCMD BIN
+' cOCT  DEFCMD OCT
+' cDECB DEFCMD DEC
+' cHEX  DEFCMD HEX
 ' cDEG  DEFCMD DEG
 ' cRAD  DEFCMD RAD
 ' cSTD  DEFCMD STD
@@ -290,6 +363,32 @@ CREATE UBUF 34 ALLOT
 : UNKNOWN ( a u -- )
    [CHAR] ? UBUF C!
    DUP >R  UBUF 1+ SWAP CMOVE  R> 1+  UBUF SWAP  ERRMSG ;
+
+VARIABLE RLF   VARIABLE INEG
+: REALISH? ( a u -- f )                 \ contains '.', 'E' or 'e'  (decimal reals)
+   FALSE RLF !
+   0 ?DO  DUP I + C@
+        DUP [CHAR] . =  OVER [CHAR] E = OR  SWAP [CHAR] e = OR
+        IF TRUE RLF ! THEN
+   LOOP DROP  RLF @ ;
+: >CINT ( a u -- d -1 | 0 )             \ parse an integer in CBASE (opt. leading -)
+   OVER C@ [CHAR] - =  DUP INEG !
+   IF 1 /STRING THEN
+   DUP 0= IF 2DROP 0 EXIT THEN
+   0 0 2SWAP  BASE @ >R  CBASE @ BASE !  >NUMBER  R> BASE !
+   IF DROP 2DROP 0 EXIT THEN            \ leftover chars: not a valid integer
+   DROP  INEG @ IF DNEGATE THEN  -1 ;
+
+\ push a numeric token: a real if it looks like one (only in DEC mode), else an
+\ integer in the current base; otherwise report it as unknown.
+: NUMTOKEN ( a u -- )
+   CBASE @ 10 = IF
+      2DUP REALISH? IF
+         2DUP >FLOAT IF  2DROP PUSHR EXIT  THEN
+      THEN
+   THEN
+   >CINT IF PUSHI ELSE TKA @ TKU @ UNKNOWN THEN ;
+
 : EVAL$ ( a u -- )
    \ Look up commands FIRST: the BASIC number parser treats "+"/"-" as 0, so a
    \ number-first order would swallow those operators as the value zero.
@@ -297,8 +396,7 @@ CREATE UBUF 34 ALLOT
       TOKEN
       TKA @ TKU @ FIND-CMD ?DUP
       IF   EXECUTE
-      ELSE TKA @ TKU @ 2DUP >FLOAT
-           IF 2DROP PUSHR ELSE UNKNOWN THEN
+      ELSE TKA @ TKU @ NUMTOKEN
       THEN
    REPEAT 2DROP ;
 
