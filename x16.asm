@@ -901,6 +901,7 @@ img_setlfs_load:			; logical 1, device 8, secondary 1 (load to header addr)
 	tay
 	lda #<_scratch
 	jsr KSAVE
+	jsr CLRCHN			; restore keyboard-in/screen-out after the file writes
 	jmp next
 
 ; LOAD-IMAGE ( -- flag )   flag = -1 if the image loaded, 0 if F.DIC was missing
@@ -937,6 +938,8 @@ li_have:
 	lda #0
 	jsr KLOAD
 	jsr img_vars_load
+	jsr CLRCHN			; restore keyboard-in/screen-out (KLOAD leaves it broken
+					; for the next console read - the "OPEN bug")
 	lda #$ff			; success -> true
 	tax
 	jmp dpush_and_next

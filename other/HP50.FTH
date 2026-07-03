@@ -63,12 +63,15 @@ VARIABLE ML1  VARIABLE MH1  VARIABLE ML2  VARIABLE MH2
    FDUP F0< IF FNEGATE F>UD DNEGATE ELSE F>UD THEN ;
 
 \ ===========================================================================
-\ 2. THE OBJECT STACK   (8-byte cells: [tag][5-byte float][spare])
+\ 2. THE OBJECT STACK   (12-byte cells: [tag][re:5][im:5][spare])
 \ ===========================================================================
 16 CONSTANT MAXLVL
-8  CONSTANT OCELL
+12 CONSTANT OCELL
 0  CONSTANT T-REAL              \ real   : 5-byte float in bytes 1..5
 1  CONSTANT T-INT               \ integer: 32-bit (double) in bytes 1..4
+2  CONSTANT T-CPLX              \ complex: real part 1..5, imaginary part 6..10
+3  CONSTANT T-LIST              \ list   : 16-bit pointer (bytes 1..2) into LARENA
+4  CONSTANT T-MARK              \ internal: "{" open-list marker (no payload)
 
 CREATE OSTK   MAXLVL OCELL * ALLOT
 VARIABLE OSP   0 OSP !          \ number of items on the stack
@@ -78,8 +81,10 @@ CREATE OTMP   OCELL ALLOT
 : OLVL   ( level -- addr )  OSP @ SWAP -  OIDX@ ;        \ level 1 = top
 : OTAG   ( level -- tag )   OLVL C@ ;
 : OINT?  ( level -- f )     OTAG T-INT = ;
+: OCPLX? ( level -- f )     OTAG T-CPLX = ;
 : OCP    ( src dest -- )    OCELL CMOVE ;
-: R@F    ( level -- ) ( F: -- r )   OLVL 1+ F@ ;         \ fetch a level's float
+: R@F    ( level -- ) ( F: -- r )   OLVL 1+ F@ ;         \ fetch a level's float / re
+: R@IM   ( level -- ) ( F: -- r )   OLVL 6 + F@ ;        \ fetch a complex level's im
 : R@D    ( level -- d )     OLVL 1+ 2@ ;                 \ fetch a level's int
 : ODROP  ( -- )   OSP @ 1- 0 MAX OSP ! ;
 
@@ -113,6 +118,45 @@ CREATE ENAME 32 ALLOT   VARIABLE ELEN   VARIABLE ERRF   0 ERRF !
 : IUNPREP  ( -- d )                1 OL>I  ODROP ;
 : IBINPREP ( -- d2 d1 )            2 OL>I 1 OL>I  ODROP ODROP ;
 : BOTHINT  ( -- f )                1 OINT?  2 OINT?  AND ;
+: ANYCPLX  ( -- f )                1 OCPLX?  2 OCPLX?  OR ;
+
+\ ---- complex support: fetch a level as (re im), promoting real/int to (r,0) --
+: PUSHC ( F: re im -- )
+   OROOM 0= IF FDROP FDROP OVFERR EXIT THEN
+   OSP @ OIDX@   T-CPLX OVER C!            ( addr )   ( F: re im )
+   DUP 6 + F!   1+ F!                      \ im at +6, re at +1
+   1 OSP +! ;
+: OL>C ( level -- ) ( F: -- re im )
+   DUP OCPLX? IF  DUP R@F  R@IM
+   ELSE  OL>F 0 S>F  THEN ;
+\ complex operands staged in variables so the 4-float juggling stays readable
+FVARIABLE CAR  FVARIABLE CAI  FVARIABLE CBR  FVARIABLE CBI  FVARIABLE CDEN
+: CUNPREP  ( -- )   1 OL>C  CAI F! CAR F!  ODROP ;             \ level1 -> CA
+: CBINPREP ( -- )   2 OL>C CAI F! CAR F!  1 OL>C CBI F! CBR F!  ODROP ODROP ;
+
+\ ---- lists: a bump-allocated heap (arena).  A list block is [count:cell][elem:OCELL]* .
+\ The arena is freed only by CLEAR (no GC); "LIST FULL" if it overflows - then CLEAR.
+1024 CONSTANT LARENASZ
+CREATE LARENA LARENASZ ALLOT
+VARIABLE LHP    0 LHP !
+: LALLOC ( n -- addr | 0 )
+   LHP @  TUCK +  DUP LARENASZ > IF 2DROP 0 ELSE LHP !  LARENA + THEN ;
+: OLIST? ( level -- f )  OTAG T-LIST = ;
+: R@P    ( level -- ptr ) OLVL 1+ @ ;             \ a list level's block pointer
+: PUSHL ( ptr -- )
+   OROOM 0= IF DROP OVFERR EXIT THEN
+   OSP @ OIDX@  T-LIST OVER C!  1+ !  1 OSP +! ;
+: BOTHLIST ( -- f )  1 OLIST?  2 OLIST?  AND ;
+VARIABLE LC1  VARIABLE LC2  VARIABLE LCP1  VARIABLE LCP2  VARIABLE LCB
+: LCAT ( -- )                                  \ level2 ++ level1  ( + on two lists )
+   1 R@P LCP1 !  LCP1 @ @ LC1 !
+   2 R@P LCP2 !  LCP2 @ @ LC2 !
+   LC1 @ LC2 @ + OCELL * 2 + LALLOC ?DUP 0= IF S" LIST FULL" ERRMSG EXIT THEN
+   LCB !
+   LC1 @ LC2 @ + LCB @ !
+   LCP2 @ 2 +  LCB @ 2 +                    LC2 @ OCELL * CMOVE
+   LCP1 @ 2 +  LCB @ 2 + LC2 @ OCELL * +    LC1 @ OCELL * CMOVE
+   ODROP ODROP  LCB @ PUSHL ;
 
 \ ===========================================================================
 \ 3. NUMBER FORMATTING  (right-justified STD / FIX, ~9 significant digits)
@@ -129,6 +173,12 @@ CREATE NBUF 32 ALLOT   VARIABLE NP
 CREATE FRB  16 ALLOT
 : NBC ( c -- )   NBUF NP @ + C!  1 NP +! ;
 : NBS ( a u -- ) 0 ?DO DUP I + C@ NBC LOOP DROP ;
+CREATE CBUF 44 ALLOT   VARIABLE CP           \ complex "(re,im)" is built here
+: CBC ( c -- )   CBUF CP @ + C!  1 CP +! ;
+: CBS ( a u -- ) 0 ?DO DUP I + C@ CBC LOOP DROP ;
+CREATE LBUF 80 ALLOT   VARIABLE LP           \ list "{ ... }" is built here
+: LBC ( c -- )   LBUF LP @ + C!  1 LP +! ;
+: LBS ( a u -- ) 0 ?DO DUP I + C@ LBC LOOP DROP ;
 
 \ format r to NDEC decimals into NBUF; returns ( a u ).  Integer and fraction
 \ are digitized separately so  r*10^n  never overflows a 32-bit double.
@@ -173,9 +223,32 @@ VARIABLE DOTF
    THEN
    NBUF NP @ ;
 
-\ format the object at a level into a string ( real or integer )
+\ format a complex object AT AN ADDRESS as "(re,im)" into CBUF
+: CPLXA$ ( addr -- a u )
+   0 CP !  [CHAR] ( CBC
+   DUP 1+ F@ FSTR CBS  [CHAR] , CBC
+   6 + F@ FSTR CBS  [CHAR] ) CBC  CBUF CP @ ;
+
+\ format the object stored AT AN ADDRESS (tag at addr).  Nested lists show as {..}.
+: CELL$ ( addr -- a u )
+   DUP C@                                    ( addr tag )
+   DUP T-REAL = IF DROP 1+ F@ FSTR EXIT THEN
+   DUP T-INT  = IF DROP 1+ 2@ INT$ EXIT THEN
+   DUP T-CPLX = IF DROP CPLXA$ EXIT THEN
+   DUP T-MARK = IF 2DROP S" [" EXIT THEN
+   T-LIST = IF DROP S" [..]" EXIT THEN
+   DROP S" ?" ;
+
+\ format a whole list block "{ e0 e1 ... }" into LBUF
+: LIST$ ( ptr -- a u )
+   0 LP !  [CHAR] [ LBC  BL LBC
+   DUP @  SWAP 2 +  SWAP                     ( elem0addr count )
+   0 ?DO  DUP CELL$ LBS  BL LBC  OCELL +  LOOP
+   DROP  [CHAR] ] LBC  LBUF LP @ ;
+
+\ format the object at a stack level ( top-level lists shown in full )
 : OBJ$ ( level -- a u )
-   DUP OINT? IF  R@D INT$  ELSE  R@F FSTR  THEN ;
+   DUP OLIST? IF R@P LIST$ ELSE OLVL CELL$ THEN ;
 : RJ$  ( a u width -- )   OVER - SPACES TYPE ;
 : .LVL ( level width -- )   >R OBJ$ R> RJ$ ;
 
@@ -210,20 +283,57 @@ VARIABLE DOTF
 : QUARTER ( F: -- q ) ANGDEG @ IF 90 S>F ELSE FPI 2 S>F F/ THEN ;
 : F<=0 ( F: x -- flag )  FDUP F0< F0= OR ;
 
-\ ---- arithmetic (exact when both operands are integers, else real) ----
-: RADD  NEED2 IF BOTHINT IF IBINPREP D+ PUSHI ELSE RBINPREP F+ PUSHR THEN ELSE UNDERR THEN ;
-: RSUB  NEED2 IF BOTHINT IF IBINPREP D- PUSHI ELSE RBINPREP F- PUSHR THEN ELSE UNDERR THEN ;
-: RMUL  NEED2 IF BOTHINT IF IBINPREP D* PUSHI ELSE RBINPREP F* PUSHR THEN ELSE UNDERR THEN ;
-: RDIV  NEED2 IF 1 OL>F F0= IF DERR ELSE RBINPREP F/ PUSHR THEN ELSE UNDERR THEN ;
-: RNEG  NEED1 IF 1 OINT? IF IUNPREP DNEGATE PUSHI ELSE RUNPREP FNEGATE PUSHR THEN
-        ELSE UNDERR THEN ;
-: RINV  NEED1 IF 1 OL>F F0= IF DERR ELSE RUNPREP 1 S>F FSWAP F/ PUSHR THEN ELSE UNDERR THEN ;
-: RSQ   NEED1 IF 1 OINT? IF IUNPREP 2DUP D* PUSHI ELSE RUNPREP FDUP F* PUSHR THEN
-        ELSE UNDERR THEN ;
-: RABS  NEED1 IF 1 OINT? IF IUNPREP DABS PUSHI ELSE RUNPREP FABS PUSHR THEN
-        ELSE UNDERR THEN ;
-: RSQRT NEED1 IF 1 OL>F F0< IF DERR ELSE RUNPREP FSQRT PUSHR THEN ELSE UNDERR THEN ;
-: R^    NEED2 IF
+\ ---- complex arithmetic (CBINPREP/CUNPREP stage the operands in CA/CB) ------
+: CADD  CBINPREP  CAR F@ CBR F@ F+   CAI F@ CBI F@ F+   PUSHC ;
+: CSUB  CBINPREP  CAR F@ CBR F@ F-   CAI F@ CBI F@ F-   PUSHC ;
+: CMUL  CBINPREP
+   CAR F@ CBR F@ F*  CAI F@ CBI F@ F*  F-               \ re = ar*br - ai*bi
+   CAR F@ CBI F@ F*  CAI F@ CBR F@ F*  F+  PUSHC ;      \ im = ar*bi + ai*br
+: CDIV  CBINPREP
+   CBR F@ FDUP F*  CBI F@ FDUP F*  F+  CDEN F!          \ den = br^2 + bi^2
+   CAR F@ CBR F@ F*  CAI F@ CBI F@ F*  F+  CDEN F@ F/   \ re
+   CAI F@ CBR F@ F*  CAR F@ CBI F@ F*  F-  CDEN F@ F/   \ im
+   PUSHC ;
+: CNEG  CUNPREP  CAR F@ FNEGATE  CAI F@ FNEGATE  PUSHC ;
+: CCONJ CUNPREP  CAR F@          CAI F@ FNEGATE  PUSHC ;
+: CINV  CUNPREP
+   CAR F@ FDUP F*  CAI F@ FDUP F*  F+  CDEN F!          \ den = ar^2 + ai^2
+   CAR F@ CDEN F@ F/   CAI F@ FNEGATE CDEN F@ F/  PUSHC ;
+: CSQ   CUNPREP
+   CAR F@ FDUP F*  CAI F@ FDUP F*  F-                   \ re = ar^2 - ai^2
+   CAR F@ CAI F@ F*  2 S>F F*  PUSHC ;                  \ im = 2*ar*ai
+: CABS  CUNPREP  CAR F@ FDUP F*  CAI F@ FDUP F*  F+ FSQRT  PUSHR ;   \ magnitude -> real
+: CRE   CUNPREP  CAR F@ PUSHR ;
+: CIM   CUNPREP  CAI F@ PUSHR ;
+: CARG  CUNPREP                                          \ atan2(im,re) in the angle mode
+   CAR F@ F0= IF
+      CAI F@ F0< IF FPI 2 S>F F/ FNEGATE ELSE FPI 2 S>F F/ THEN
+   ELSE
+      CAI F@ CAR F@ F/ FATAN
+      CAR F@ F0< IF CAI F@ F0< IF FPI F- ELSE FPI F+ THEN THEN
+   THEN
+   RAD> PUSHR ;
+
+\ ---- arithmetic (complex if either is complex; else exact-int; else real) --
+: RADD  NEED2 IF BOTHLIST IF LCAT ELSE ANYCPLX IF CADD ELSE
+        BOTHINT IF IBINPREP D+ PUSHI ELSE RBINPREP F+ PUSHR THEN THEN THEN ELSE UNDERR THEN ;
+: RSUB  NEED2 IF ANYCPLX IF CSUB ELSE
+        BOTHINT IF IBINPREP D- PUSHI ELSE RBINPREP F- PUSHR THEN THEN ELSE UNDERR THEN ;
+: RMUL  NEED2 IF ANYCPLX IF CMUL ELSE
+        BOTHINT IF IBINPREP D* PUSHI ELSE RBINPREP F* PUSHR THEN THEN ELSE UNDERR THEN ;
+: RDIV  NEED2 IF ANYCPLX IF CDIV ELSE
+        1 OL>F F0= IF DERR ELSE RBINPREP F/ PUSHR THEN THEN ELSE UNDERR THEN ;
+: RNEG  NEED1 IF 1 OCPLX? IF CNEG ELSE 1 OINT? IF IUNPREP DNEGATE PUSHI
+        ELSE RUNPREP FNEGATE PUSHR THEN THEN ELSE UNDERR THEN ;
+: RINV  NEED1 IF 1 OCPLX? IF CINV ELSE 1 OL>F F0= IF DERR
+        ELSE RUNPREP 1 S>F FSWAP F/ PUSHR THEN THEN ELSE UNDERR THEN ;
+: RSQ   NEED1 IF 1 OCPLX? IF CSQ ELSE 1 OINT? IF IUNPREP 2DUP D* PUSHI
+        ELSE RUNPREP FDUP F* PUSHR THEN THEN ELSE UNDERR THEN ;
+: RABS  NEED1 IF 1 OCPLX? IF CABS ELSE 1 OINT? IF IUNPREP DABS PUSHI
+        ELSE RUNPREP FABS PUSHR THEN THEN ELSE UNDERR THEN ;
+: RSQRT NEED1 IF 1 OCPLX? IF DERR ELSE 1 OL>F F0< IF DERR
+        ELSE RUNPREP FSQRT PUSHR THEN THEN ELSE UNDERR THEN ;
+: R^    NEED2 IF ANYCPLX IF DERR EXIT THEN
            2 OL>F F0< IF DERR EXIT THEN
            2 OL>F F0= IF RBINPREP FDROP FDROP 0 S>F PUSHR EXIT THEN
            RBINPREP FPOW PUSHR
@@ -238,19 +348,29 @@ VARIABLE DOTF
 : c->R  NEED1 IF 1 OINT?    IF IUNPREP D>F  PUSHR THEN ELSE UNDERR THEN ;
 : cBIN  2 CBASE ! ;   : cOCT  8 CBASE ! ;   : cDECB 10 CBASE ! ;   : cHEX 16 CBASE ! ;
 
-\ ---- transcendental (always real; integers are promoted) ----
-: RSIN  NEED1 IF RUNPREP >RAD FSIN PUSHR ELSE UNDERR THEN ;
-: RCOS  NEED1 IF RUNPREP >RAD FCOS PUSHR ELSE UNDERR THEN ;
-: RTAN  NEED1 IF RUNPREP >RAD FTAN PUSHR ELSE UNDERR THEN ;
-: RATAN NEED1 IF RUNPREP FATAN RAD> PUSHR ELSE UNDERR THEN ;
-: RASIN NEED1 IF RUNPREP FDUP FDUP F* FNEGATE 1 S>F F+ FSQRT F/ FATAN RAD> PUSHR
-        ELSE UNDERR THEN ;
-: RACOS NEED1 IF RUNPREP FDUP FDUP F* FNEGATE 1 S>F F+ FSQRT F/ FATAN RAD>
-                QUARTER FSWAP F- PUSHR ELSE UNDERR THEN ;
-: RLN   NEED1 IF 1 OL>F F<=0 IF DERR ELSE RUNPREP FLN PUSHR THEN ELSE UNDERR THEN ;
-: REXP  NEED1 IF RUNPREP FEXP PUSHR ELSE UNDERR THEN ;
-: RLOG  NEED1 IF 1 OL>F F<=0 IF DERR ELSE RUNPREP FLN FLN10 F/ PUSHR THEN ELSE UNDERR THEN ;
-: RALOG NEED1 IF RUNPREP FLN10 F* FEXP PUSHR ELSE UNDERR THEN ;
+\ ---- transcendental (real only; integers promoted, complex rejected) -------
+: NEED1R ( -- f )  NEED1 IF 1 OCPLX? 0= ELSE FALSE THEN ;   \ 1 real/int operand?
+: RSIN  NEED1R IF RUNPREP >RAD FSIN PUSHR ELSE
+        NEED1 IF DERR ELSE UNDERR THEN THEN ;
+: RCOS  NEED1R IF RUNPREP >RAD FCOS PUSHR ELSE
+        NEED1 IF DERR ELSE UNDERR THEN THEN ;
+: RTAN  NEED1R IF RUNPREP >RAD FTAN PUSHR ELSE
+        NEED1 IF DERR ELSE UNDERR THEN THEN ;
+: RATAN NEED1R IF RUNPREP FATAN RAD> PUSHR ELSE
+        NEED1 IF DERR ELSE UNDERR THEN THEN ;
+: RASIN NEED1R IF RUNPREP FDUP FDUP F* FNEGATE 1 S>F F+ FSQRT F/ FATAN RAD> PUSHR ELSE
+        NEED1 IF DERR ELSE UNDERR THEN THEN ;
+: RACOS NEED1R IF RUNPREP FDUP FDUP F* FNEGATE 1 S>F F+ FSQRT F/ FATAN RAD>
+                QUARTER FSWAP F- PUSHR ELSE
+        NEED1 IF DERR ELSE UNDERR THEN THEN ;
+: RLN   NEED1R IF 1 OL>F F<=0 IF DERR ELSE RUNPREP FLN PUSHR THEN ELSE
+        NEED1 IF DERR ELSE UNDERR THEN THEN ;
+: REXP  NEED1R IF RUNPREP FEXP PUSHR ELSE
+        NEED1 IF DERR ELSE UNDERR THEN THEN ;
+: RLOG  NEED1R IF 1 OL>F F<=0 IF DERR ELSE RUNPREP FLN FLN10 F/ PUSHR THEN ELSE
+        NEED1 IF DERR ELSE UNDERR THEN THEN ;
+: RALOG NEED1R IF RUNPREP FLN10 F* FEXP PUSHR ELSE
+        NEED1 IF DERR ELSE UNDERR THEN THEN ;
 : RPI   OROOM IF FPI PUSHR ELSE OVFERR THEN ;
 
 \ ---- stack manipulation (generic cell moves, so future types work too) ----
@@ -271,7 +391,7 @@ VARIABLE DOTF
             1 OLVL 2 OLVL OCP      \ L2 <- L1
             OTMP 1 OLVL OCP        \ L1 <- tmp
          ELSE UNDERR THEN ;
-: HCLEAR 0 OSP ! ;
+: HCLEAR 0 OSP !  0 LHP ! ;                 \ CLEAR also frees the list arena
 : HDEPTH OROOM IF OSP @ S>D PUSHI ELSE OVFERR THEN ;
 
 \ ---- modes ----
@@ -281,6 +401,50 @@ VARIABLE DOTF
 : cFIX   NEED1 IF RUNPREP F>S 0 MAX 9 MIN DISPDEC !  1 DISPMODE ! ELSE UNDERR THEN ;
 VARIABLE QUITF
 : cOFF  -1 QUITF ! ;
+
+\ ---- complex commands (CONJ/RE/IM/ARG act on a complex; ->C / C-> build/split) --
+: cCONJ NEED1 IF 1 OCPLX? IF CCONJ ELSE THEN ELSE UNDERR THEN ;   \ conj of a real = itself
+: cRE   NEED1 IF 1 OCPLX? IF CRE  ELSE THEN ELSE UNDERR THEN ;    \ RE of a real = itself
+: cIM   NEED1 IF 1 OCPLX? IF CIM  ELSE ODROP 0 S>F PUSHR THEN ELSE UNDERR THEN ;  \ IM of real = 0
+: cARG  NEED1 IF 1 OCPLX? IF CARG ELSE
+        1 OL>F F0< ODROP IF FPI RAD> ELSE 0 S>F THEN PUSHR THEN ELSE UNDERR THEN ;
+: cR>C  NEED2 IF 2 OL>F 1 OL>F ODROP ODROP PUSHC ELSE UNDERR THEN ;
+: cC>R  NEED1 IF 1 OCPLX? IF 1 OL>C ODROP FSWAP PUSHR PUSHR ELSE DERR THEN
+        ELSE UNDERR THEN ;
+
+\ ---- list commands --------------------------------------------------------
+VARIABLE MKL   VARIABLE LCNT   VARIABLE LBLK
+VARIABLE GN    VARIABLE GCNT   VARIABLE GPTR   VARIABLE GSRC
+: FIND-MARK ( -- level | 0 )                   \ nearest "{" marker, 0 if none
+   0 MKL !
+   OSP @ 1+ 1 DO  MKL @ 0=  I OTAG T-MARK = AND IF I MKL ! THEN  LOOP  MKL @ ;
+: cLBRACE ( -- )                               \ {
+   OROOM 0= IF OVFERR EXIT THEN
+   OSP @ OIDX@  T-MARK SWAP C!  1 OSP +! ;
+: cRBRACE ( -- )                               \ }  collect items above "{" into a list
+   FIND-MARK ?DUP 0= IF S" NO MATCHING [" ERRMSG EXIT THEN
+   1- LCNT !                                   \ element count = levels above the marker
+   LCNT @ OCELL * 2 + LALLOC ?DUP 0= IF S" LIST FULL" ERRMSG EXIT THEN
+   LBLK !
+   LCNT @ LBLK @ !                             \ store count in the block
+   LCNT @ 0 ?DO
+      LCNT @ I - OLVL                          \ src = level (count - i)  (elem i, in order)
+      LBLK @ 2 + I OCELL * +                   \ dest
+      OCELL CMOVE
+   LOOP
+   LCNT @ 1+ NEGATE OSP +!                     \ drop the elements and the marker
+   LBLK @ PUSHL ;
+: cSIZE  NEED1 IF 1 OLIST? IF 1 R@P @ ODROP S>D PUSHI ELSE DERR THEN
+         ELSE UNDERR THEN ;
+: cGET   NEED2 IF 2 OLIST? IF
+            1 OL>I DROP GN !                   \ index (1-based; drop high cell)
+            2 R@P GPTR !   GPTR @ @ GCNT !
+            GN @ 1 <  GN @ GCNT @ >  OR IF DERR EXIT THEN
+            GPTR @ 2 + GN @ 1- OCELL * + GSRC !
+            ODROP ODROP
+            OROOM 0= IF OVFERR EXIT THEN
+            GSRC @ OSP @ OIDX@ OCELL CMOVE  1 OSP +!
+         ELSE DERR THEN ELSE UNDERR THEN ;
 
 \ ===========================================================================
 \ 6. COMMAND TABLE  (name -> xt, a simple linked list)
@@ -348,6 +512,16 @@ VARIABLE CMDLIST   0 CMDLIST !
 ' cSTD  DEFCMD STD
 ' cFIX  DEFCMD FIX
 ' cOFF  DEFCMD OFF
+' cCONJ DEFCMD CONJ
+' cRE   DEFCMD RE
+' cIM   DEFCMD IM
+' cARG  DEFCMD ARG
+' cR>C  DEFCMD R->C
+' cC>R  DEFCMD C->R
+' cLBRACE DEFCMD [
+' cRBRACE DEFCMD ]
+' cSIZE DEFCMD SIZE
+' cGET  DEFCMD GET
 
 \ ===========================================================================
 \ 7. THE PARSER / EVALUATOR
@@ -379,9 +553,28 @@ VARIABLE RLF   VARIABLE INEG
    IF DROP 2DROP 0 EXIT THEN            \ leftover chars: not a valid integer
    DROP  INEG @ IF DNEGATE THEN  -1 ;
 
-\ push a numeric token: a real if it looks like one (only in DEC mode), else an
-\ integer in the current base; otherwise report it as unknown.
+\ complex literal:  (re,im)   e.g.  (3,4)   (1.5,-2)
+VARIABLE CMX   VARIABLE IA   VARIABLE IU   VARIABLE CIDX
+: FINDCOMMA ( a u -- idx | -1 )
+   -1 CMX !
+   0 ?DO  DUP I + C@ [CHAR] , = IF CMX @ 0< IF I CMX ! THEN THEN  LOOP  DROP
+   CMX @ ;
+: PARSE-CPLX ( a u -- )                 \ token = "(re,im)"
+   2DUP + 1- C@ [CHAR] ) <> IF 2DROP TKA @ TKU @ UNKNOWN EXIT THEN
+   1 /STRING 1-                         ( ia iu -- strip parens )
+   OVER IA !  DUP IU !
+   IA @ IU @ FINDCOMMA                  ( ia iu c )
+   DUP 0< IF DROP 2DROP TKA @ TKU @ UNKNOWN EXIT THEN
+   CIDX !  2DROP
+   IA @ CIDX @ >FLOAT 0= IF TKA @ TKU @ UNKNOWN EXIT THEN            ( F: re )
+   IA @ CIDX @ + 1+   IU @ CIDX @ - 1-   >FLOAT 0= IF
+      FDROP TKA @ TKU @ UNKNOWN EXIT THEN                            ( F: re im )
+   PUSHC ;
+
+\ push a numeric token: complex "(re,im)", else a real if it looks like one (only
+\ in DEC mode), else an integer in the current base; otherwise unknown.
 : NUMTOKEN ( a u -- )
+   OVER C@ [CHAR] ( = IF PARSE-CPLX EXIT THEN
    CBASE @ 10 = IF
       2DUP REALISH? IF
          2DUP >FLOAT IF  2DROP PUSHR EXIT  THEN

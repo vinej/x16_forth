@@ -42,5 +42,36 @@ CR .( HP50 SELF-TEST - BITWISE / BASE) CR
 .( 255->HEX $ ) RUN" CLEAR DEC 255 HEX"    S" FFH" SCK
 .( 10->BIN  $ ) RUN" CLEAR DEC 10 BIN"     S" 1010B" SCK
 .( 64->OCT  $ ) RUN" CLEAR DEC 64 OCT"     S" 100O" SCK
+RUN" DEC"                                  \ base is a persistent mode - back to decimal
+
+CR .( HP50 SELF-TEST - COMPLEX) CR
+.( ABS       ) RUN" CLEAR (3,4) ABS"          5 S>F CK
+.( ADDRE     ) RUN" CLEAR (1,2) (3,4) + RE"   4 S>F CK
+.( ADDIM     ) RUN" CLEAR (1,2) (3,4) + IM"   6 S>F CK
+.( SUBIM     ) RUN" CLEAR (5,9) (1,2) - IM"   7 S>F CK
+.( MULRE     ) RUN" CLEAR (1,2) (3,4) * RE"   -5 S>F CK
+.( MULIM     ) RUN" CLEAR (1,2) (3,4) * IM"   10 S>F CK
+.( DIVRE     ) RUN" CLEAR (5,10) (1,2) / RE"  5 S>F CK
+.( DIVIM     ) RUN" CLEAR (5,10) (1,2) / IM"  0 S>F CK
+.( I*I RE    ) RUN" CLEAR (0,1) SQ RE"        -1 S>F CK
+.( CONJIM    ) RUN" CLEAR (3,4) CONJ IM"      -4 S>F CK
+.( INVRE     ) RUN" CLEAR (2,0) INV RE"       0.5E0 CK
+.( NEGIM     ) RUN" CLEAR (3,4) NEG IM"       -4 S>F CK
+.( RE        ) RUN" CLEAR (7,8) RE"           7 S>F CK
+.( IM        ) RUN" CLEAR (7,8) IM"           8 S>F CK
+.( R->C ABS  ) RUN" CLEAR 3 4 R->C ABS"       5 S>F CK
+.( ARG I DEG ) RUN" CLEAR DEG (0,1) ARG"      90 S>F CK
+.( C->R LVL1 ) RUN" CLEAR (7,8) C->R"         8 S>F CK
+.( DISPLAY $ ) RUN" CLEAR (3,4)"              S" (3,4)" SCK
+
+CR .( HP50 SELF-TEST - LISTS) CR
+.( SIZE 3    ) RUN" CLEAR [ 1 2 3 ] SIZE"        3 S>F CK
+.( SIZE 0    ) RUN" CLEAR [ ] SIZE"              0 S>F CK
+.( GET 2     ) RUN" CLEAR [ 10 20 30 ] 2 GET"    20 S>F CK
+.( GET 1     ) RUN" CLEAR [ 10 20 30 ] 1 GET"    10 S>F CK
+.( CONCAT SZ ) RUN" CLEAR [ 1 2 ] [ 3 4 5 ] + SIZE" 5 S>F CK
+.( CONCAT EL ) RUN" CLEAR [ 1 2 ] [ 3 4 5 ] + 4 GET" 4 S>F CK
+.( DISPLAY $ ) RUN" CLEAR [ 1 2 3 ]"             S" [ 1 2 3 ]" SCK
+.( MIXED $   ) RUN" CLEAR [ 1 3.5 (2,3) ]"       S" [ 1 3.5 (2,3) ]" SCK
 
 CR .( FAILURES: ) #FAIL @ . CR
