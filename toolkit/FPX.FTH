@@ -60,3 +60,14 @@ FVARIABLE F~TOL
       F~TOL F!
    THEN
    F- FABS  F~TOL F@  F< ;
+
+\ --- BASIC-style function names (merged from the former BASICMATH.FTH) --------
+\ Convenience aliases for the built-in FP words ( F: r -- f(r) ):
+\     2 S>F SQR F.        \ 1.41421356
+: SQR   FSQRT  ;     \ square root
+: SIN   FSIN   ;     \ sine (radians)
+: COS   FCOS   ;     \ cosine (radians)
+: TAN   FTAN   ;     \ tangent (radians)
+: ATN   FATAN  ;     \ arctangent
+: LOG   FLN    ;     \ natural logarithm (BASIC LOG = natural log)
+: EXP   FEXP   ;     \ e^r

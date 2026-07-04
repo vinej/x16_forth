@@ -533,9 +533,10 @@ BASIC text buffer and use BASIC's zero page, which conflicts with Forth.
 
 The BASIC string / number-conversion functions
 (`HEX$ BIN$ STR$ VAL ASC CHR$ LEN LEFT$ RIGHT$ MID$ RPT$`), using Forth's
-`c-addr u` string model, are also **built into the X16 build**. (These, the FP
-names, and `FVARIABLE`/`FCONSTANT` were formerly the `toolkit/*.FTH` files, which
-remain for the C64/F256 builds.)
+`c-addr u` string model, live in `toolkit/BASICSTR.FTH` (`INCLUDE BASICSTR.FTH`)
+— they are plain Forth over the pictured-numeric-output words, so they were moved
+out of the ROM core to make room for the filesystem words. `FVARIABLE`/`FCONSTANT`
+are built in; the BASIC math names are in `toolkit/BASICMATH.FTH`.
 
 ### Binary LOAD / SAVE
 Filenames are Forth strings `( c-addr u )`, e.g. `S" DATA.BIN"`. `dev` is the
@@ -606,7 +607,7 @@ A few examples and benchmarks are in `other`.
 
 **`HP50.FTH`** is an HP-50g-style RPN scientific calculator: a typed value stack, an HP-style numbered-level display, and a small object system. Types: reals; exact 32-bit integers with BIN/OCT/DEC/HEX bases and bitwise `AND OR XOR NOT`; complex numbers `(re,im)` (`+ - * / CONJ RE IM ARG ABS R->C C->R`); and lists `[ 1 2 3 ]` (`SIZE GET`, `+` concatenates) which double as vectors (`DOT V+ V- NORM CROSS`) and matrices (`DET TRN M*`). It also has named user variables (`STO RCL PURGE CLVAR`, and a bare name recalls) that persist across `CLEAR`. Plus the usual scientific functions (`SIN COS TAN ASIN ACOS ATAN LN EXP LOG ALOG ^ SQRT`, DEG/RAD, STD/FIX) and an RPN command parser - `INCLUDE HP50.FTH` then `HP` (`OFF` quits), with `HP50TEST.FTH` self-checking it (78 tests).
 
-**Compiled-image snapshot.** Because compiling a large library from source is slow (~30s, dominated by the per-word dictionary search), two native words snapshot the compiled dictionary for a ~1s reload. `S" NAME" SAVE-IMAGE` ( c-addr u -- ) writes the dictionary bytes, the user token-table slice, and the dictionary-state pointers to three device-8 files named `NAME.DIC`/`NAME.TOK`/`NAME.VAR`; `S" NAME" LOAD-IMAGE` ( c-addr u -- flag ) restores them (it is native so it can safely replace the dictionary). They are generic (work for any compiled `.FTH`); the image is tied to the exact `forthx16.prg` build.
+**Compiled-image snapshot.** Because compiling a large library from source is slow (~30s, dominated by the per-word dictionary search), two native words snapshot the compiled dictionary for a ~1s reload. `S" NAME" SAVE-IMAGE` ( c-addr u -- ) writes the dictionary bytes, the user token-table slice, and the dictionary-state pointers to three device-8 files named `NAME.DIC`/`NAME.TOK`/`NAME.VAR`; `S" NAME" LOAD-IMAGE` ( c-addr u -- flag ) restores them (it is native so it can safely replace the dictionary). They are generic (work for any compiled `.FTH`) and work in both the PRG and the bank-9 ROM build. One image can bundle **several** libraries at once - `INCLUDE` them all, finish with `ONLY FORTH DEFINITIONS DECIMAL`, then one `SAVE-IMAGE`; make `S" NAME" LOAD-IMAGE DROP` the last line of `AUTORUN.FTH` to auto-load the whole toolkit at boot. The image is tied to the exact interpreter build (rebuild it if you rebuild the `.prg`/`rom.bin`). See the user guide ("Bundling several libraries into one image") for the full rules.
 
 ## Known Issues
 

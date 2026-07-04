@@ -1,6 +1,18 @@
 # `EDIT` — return-to-Forth console glitch (open issue)
 
-Status: **open / unresolved** as of 2026-07-01.
+Status: **crash FIXED** (ROM build, 2026-07-04); **console glitch open /
+unresolved** and accepted as a known limitation for now — use the workaround
+below. `EDIT` itself launches, edits and saves reliably.
+
+**ROM-build crash fixed 2026-07-04** (separate, worse bug — do not confuse with
+the console glitch below): in the bank-9 ROM, quitting EDIT *crashed to the
+monitor* because (1) EDIT did `jsr $FF81` (CINT) directly, which in bank 9 is
+Forth's own ROM, and (2) `edit_zpsave` was a code `!fill` = in ROM = read-only,
+so the `$22-$7F` save was a no-op and the restore loaded zeros into the VM zero
+page. Fixed: `jsr $FF81` → `+kcall $FF81`; `edit_zpsave` → a RAM hmbuffer. After
+this the ROM build no longer crashes but shows the same console glitch as the PRG
+build — now surfacing as **`?STACK`** (the corrupted first read parses to garbage
+that underflows) rather than a swallowed RETURN. Root cause below is unchanged.
 
 `EDIT ( c-addr u -- )` launches the standalone X16 editor (x16edit, ROM bank
 `$0D`) via `jsrfar $C006`, exactly like BASIC's `EDIT`. Creating / editing /
@@ -60,10 +72,22 @@ was fixed and has NOT recurred.
   `RDTIM`/`GETIN` with bank 10 selected *crashed* to the boot screen — those
   KERNAL routines need bank 0).
 - ~0.8–1.2 s settle delay (pure busy loop + keyboard drain).
+- **(2026-07-04) Minimal cleanup mirroring BASIC** — BASIC's own `EDIT`
+  (`bannex/main.s` `x16edit`) does the editor call and then just `rts`, nothing
+  after it, and returns cleanly. So the extra re-init was removed to match it —
+  no change to the glitch (so the re-init wasn't the cause, but it also wasn't
+  the cure).
+- **(2026-07-04) `CLALL` ($FFE7)** — close all KERNAL logical files + reset I/O
+  (a new idea, not tried before). This **fixed the file side** (programmatic
+  `INCLUDED` after EDIT now works) but the **keyboard `RETURN` is still
+  swallowed** on the first line. So the residual bug is specifically the KERNAL
+  screen-editor *line input* state, not the file table.
 
-Current `EDIT` cleanup (in `x16.asm`) = bank 0 → `CINT` → `CLRCHN` → clear
-`ndx`/`shflag`/`dk_shift`/`dk_scan`. It does not cure the symptoms but launches
-and saves reliably.
+**Current (kept) `EDIT` cleanup (in `x16.asm`), 2026-07-04:** restore Forth's zp
+from the RAM save → select RAM bank 0 → `+kcall $FFE7` (CLALL). It launches,
+edits, saves, no longer crashes, and file `INCLUDED` works; only the first
+keyboard line after exit still needs re-entry (see workaround). This is the
+accepted version for now.
 
 Note: ACME builds with `--cpu 6502`, so `STZ`/`PHY`/`PLY` become silent no-ops —
 use `LDA #0`/`STA` etc. in any new code here.

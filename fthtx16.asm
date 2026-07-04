@@ -392,6 +392,9 @@ IRQ_DSTACK_TOP = irq_dstack + 64 - 2
 +hmbuffer ~syscall_stub, 8
 ; CATCH/THROW: the current exception frame (0 = none). See EXCEPTION wordset.
 +hmbuffer ~exc_handler, 2
+; EDIT saves Forth's zero page ($22-$7F, 94 bytes) here across x16edit. Must be
+; RAM: in the bank-9 ROM the code section is read-only, so this cannot be inline.
++hmbuffer ~edit_zpsave, $5e
 
 !if X16ROM {
 ; --- KERNAL bridge (v3 run-from-ROM) --------------------------------------

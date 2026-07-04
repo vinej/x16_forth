@@ -1492,7 +1492,7 @@ mouse_get    = $FF6B
 +header ~joy, ~joy_n, "JOY"
 	+code
 	lda _dtop			; joystick number
-	jsr joystick_get	; A=byte0, X=byte1, Y=$00 present / $FF absent
+	+kcall joystick_get	; A=byte0, X=byte1, Y=$00 present / $FF absent (ROM-safe)
 	cpy #0
 	bne joy_absent
 	eor #$ff			; invert -> active high (low result byte)
@@ -1515,7 +1515,7 @@ joy_absent:
 	sec
 	jsr SCREENMODE			; screen_mode query -> X = columns, Y = rows
 	pla
-	jsr mouse_config	; A = mode, X = cols, Y = rows
+	+kcall mouse_config	; A = mode, X = cols, Y = rows (ROM-safe)
 	+dpop
 	jmp next
 
@@ -1523,7 +1523,7 @@ joy_absent:
 +header ~mx, ~mx_n, "MX"
 	+code
 	ldx #2				; mouse_get buffer at $02..$05
-	jsr mouse_get
+	+kcall mouse_get
 	lda $02
 	ldx $03
 	jmp dpush_and_next
@@ -1532,7 +1532,7 @@ joy_absent:
 +header ~my, ~my_n, "MY"
 	+code
 	ldx #2
-	jsr mouse_get
+	+kcall mouse_get
 	lda $04
 	ldx $05
 	jmp dpush_and_next
@@ -1541,7 +1541,7 @@ joy_absent:
 +header ~mb, ~mb_n, "MB"
 	+code
 	ldx #2
-	jsr mouse_get		; A = buttons
+	+kcall mouse_get		; A = buttons
 	ldx #0
 	jmp dpush_and_next
 
@@ -1549,7 +1549,7 @@ joy_absent:
 +header ~mwheel, ~mwheel_n, "MWHEEL"
 	+code
 	ldx #2
-	jsr mouse_get		; X = wheel delta
+	+kcall mouse_get		; X = wheel delta
 	txa
 	ldx #0
 	cmp #$80
@@ -1798,26 +1798,18 @@ edit_restore:
 	inx
 	cpx #$5e
 	bne edit_restore
-	; Fully re-initialize the console after x16edit, since it leaves both the
-	; screen-editor state and the I/O channels in a way that breaks Forth's first
-	; operation afterward (first RETURN swallowed; immediate file OPEN fails).
-	; CINT rebuilds the whole screen editor (screen, cursor, line-link table,
-	; mode flags, dimensions); CLRCHN restores default keyboard-in / screen-out;
-	; then flush the KERNAL keyboard buffer and clear stuck modifier/dead-key state.
+	; Reselect RAM bank 0 (the editor leaves the bank register at 10; Forth's later
+	; KERNAL calls - RDTIM etc. - need 0). Then CLALL: close all KERNAL logical
+	; files and reset the default I/O channels. x16edit does file I/O and can leave
+	; a logical file open / the channels redirected, which breaks Forth's next
+	; console read (?STACK) and file OPEN/INCLUDED. (BASIC's own EDIT does nothing
+	; after the editor, but its main loop and READY path effectively reset I/O.)
 	lda #0
-	sta $00				; reselect RAM bank 0 (editor leaves the bank register at 10)
-	jsr $FF81			; CINT / SCINIT: full screen-editor re-initialization
-	jsr CLRCHN			; restore default I/O channels (editor left them redirected)
-	lda #0
-	sta $A80A			; ndx      = 0 : flush the KERNAL keyboard buffer
-	sta $A80C			; shflag   = 0 : clear stuck Shift/Ctrl/Alt modifier state
-	sta $A881			; dk_shift = 0
-	sta $A882			; dk_scan  = 0 : clear pending dead-key
+	sta $00
+	+kcall $FFE7			; CLALL - close all files + restore default I/O (ROM-safe)
 	+dpop
 	+dpop
 	jmp next
-edit_zpsave:
-	!fill $5e, 0
 
 ; ==============================================================================
 ; Memory banking / system
@@ -1942,7 +1934,7 @@ ms_done:
 	lda #0
 	ldx #SMC_I2C_ADDR
 	ldy #2				; SMC register 2 = reset
-	jsr i2c_write_byte
+	+kcall i2c_write_byte
 	jmp next
 
 ; POWEROFF ( -- )   power off via the SMC
@@ -1951,15 +1943,27 @@ ms_done:
 	lda #0
 	ldx #SMC_I2C_ADDR
 	ldy #1				; SMC register 1 = power off
-	jsr i2c_write_byte
+	+kcall i2c_write_byte
 	jmp next
 
 ; REBOOT ( -- )   soft reboot through the reset vector
 +header ~reboot, ~reboot_n, "REBOOT"
 	+code
-	lda #0
-	sta $01				; ROM bank 0 (KERNAL)
-	jmp ($fffc)			; reset vector
+	; Reset via the ROM-bank-0 reset vector. The bank switch + jump must run from
+	; RAM: in the bank-9 ROM this word's own code is at $C000+, so selecting ROM
+	; bank 0 would unmap it mid-instruction (-> crash to monitor). Copy a 7-byte
+	; stub (LDA #0 / STA $01 / JMP ($FFFC)) into RAM and jump to it.
+	ldx #6
+reboot_copy:
+	lda reboot_stub,x
+	sta syscall_stub,x
+	dex
+	bpl reboot_copy
+	jmp syscall_stub
+reboot_stub:
+	!byte $A9,$00		; LDA #0
+	!byte $85,$01		; STA $01   (ROM bank 0 = KERNAL)
+	!byte $6C,$FC,$FF	; JMP ($FFFC)  (reset vector, now bank 0's)
 
 ; KEYMAP ( c-addr u -- )   set the keyboard layout by name, e.g. S" en-us" KEYMAP
 +header ~xkeymap, ~xkeymap_n, "KEYMAP"
@@ -1983,7 +1987,7 @@ km_done:
 	ldx #<_fnamebuf
 	ldy #>_fnamebuf
 	clc					; carry clear = set the keymap
-	jsr keymap
+	+kcall keymap
 	jmp next
 
 ; ==============================================================================
@@ -3005,6 +3009,149 @@ collide_set:
 	+forth
 	+token closefile, exit
 
+; CD ( c-addr u -- )   change directory: send "CD:<name>" to the device-8 DOS
+; command channel (logical file 15, secondary 15).  S" DR1" CD  enters DR1;
+; S" .." CD  goes up;  S" /" CD  goes to the root.  (name up to ~16 chars)
++header ~cd, ~cd_n, "CD"
+	+code
+	lda #'C'
+	sta imgnam
+	lda #'D'
+	sta imgnam+1
+	lda #':'
+	sta imgnam+2
+	ldy #2			; NOS = c-addr -> source pointer
+	lda (_dstack),y
+	sta _scratch
+	ldy #3
+	lda (_dstack),y
+	sta _scratch+1
+	ldy #0
+cd_copy:
+	cpy _dtop		; u bytes
+	beq cd_setnam
+	lda (_scratch),y
+	cmp #'a'		; uppercase a-z (FAT32 names are upper case), leave the rest
+	bcc cd_put
+	cmp #'z'+1
+	bcs cd_put
+	and #$df		; 'a'..'z' -> 'A'..'Z'
+cd_put:
+	sta imgnam+3,y
+	iny
+	cpy #17			; clamp to the 20-byte imgnam ("CD:" + 17)
+	bne cd_copy
+cd_setnam:
+	tya			; A = copied length
+	clc
+	adc #3			; + "CD:"
+	ldx #<imgnam
+	ldy #>imgnam
+	jsr SETNAM
+	lda #15			; logical file 15, device 8, secondary 15 = command channel
+	ldx #8
+	ldy #15
+	jsr SETLFS
+	jsr OPEN		; opening the command executes the DOS CD
+	lda #15
+	jsr CLOSE
+	jsr CLRCHN
+	+dpop
+	+dpop
+	jmp next
+
+; DIR ( -- )   list the current directory (reads the "$" pseudo-file on device 8
+; and prints each entry line: filename + type; block counts are omitted).
++header ~dir, ~dir_n, "DIR"
+	+code
+	lda #'$'		; name = "$" - built in RAM (imgnam); the bridged KERNAL runs
+	sta imgnam		; with bank 0 mapped and cannot read a ROM $Cxxx literal
+	lda #1
+	ldx #<imgnam
+	ldy #>imgnam
+	jsr SETNAM
+	lda #2			; logical file 2, device 8, secondary 0 (read)
+	ldx #8
+	ldy #0
+	jsr SETLFS
+	jsr OPEN
+	ldx #2
+	jsr CHKIN		; take input from file 2
+	bcs dir_done		; channel not open (e.g. no "$" support) -> bail, no hang
+	jsr CHRIN		; skip the 2-byte load address
+	jsr CHRIN
+dir_line:
+	jsr CHRIN		; link low
+	sta _scratch
+	jsr CHRIN		; link high
+	ora _scratch
+	beq dir_done		; link = 0 -> end of directory
+	jsr CHRIN		; block count low
+	sta _rscratch
+	jsr CHRIN		; block count high
+	sta _rscratch+1
+	jsr dir_pnum		; print it (the DOS padded the text to align after it)
+dir_text:
+	jsr CHRIN
+	beq dir_eol		; 0 -> end of this entry's text
+	jsr CHROUT
+	jmp dir_text
+dir_eol:
+	lda #13
+	jsr CHROUT		; newline
+	lda #$92
+	jsr CHROUT		; RVS OFF - else the header line's $12 bleeds into every row
+	jsr READST
+	beq dir_line		; status 0 -> another entry; else EOF/error
+dir_done:
+	jsr CLRCHN
+	lda #2
+	jsr CLOSE
+	jmp next
+
+; print _rscratch (16-bit unsigned) as decimal, no leading zeros (destroys it)
+dir_pnum:
+	lda #0
+	sta _scratch_2		; 0 = still suppressing leading zeros
+	ldx #0
+dpn_pow:
+	ldy #'0'-1
+dpn_sub:
+	iny
+	lda _rscratch
+	sec
+	sbc dpn_tab,x
+	sta _rscratch
+	lda _rscratch+1
+	sbc dpn_tab+4,x
+	sta _rscratch+1
+	bcs dpn_sub
+	lda _rscratch		; overshot by one -> add the power back
+	adc dpn_tab,x
+	sta _rscratch
+	lda _rscratch+1
+	adc dpn_tab+4,x
+	sta _rscratch+1
+	cpy #'0'
+	bne dpn_pr		; non-zero digit -> print
+	lda _scratch_2
+	beq dpn_nx		; leading zero -> skip
+dpn_pr:
+	tya
+	jsr CHROUT
+	lda #1
+	sta _scratch_2
+dpn_nx:
+	inx
+	cpx #4
+	bne dpn_pow
+	lda _rscratch		; final units digit (always printed)
+	ora #'0'
+	jmp CHROUT
+dpn_tab:
+	!byte <10000, <1000, <100, <10
+	!byte >10000, >1000, >100, >10
+
 ; LINPUT ( c-addr +n -- +n2 )   read a line from the keyboard
 +header ~linput, ~linput_n, "LINPUT"
 	+forth
@@ -3014,91 +3161,10 @@ collide_set:
 ; out of the core to save ROM space - they only duplicated FSQRT/FSIN/FCOS/FTAN/
 ; FATAN/FLN/FEXP. Load them on demand with  INCLUDE BASICMATH.FTH  (toolkit/).
 
-; --- X16STR.FTH : BASIC string / number-conversion words -------------------
-
-; HEX$ ( u -- c-addr u )   unsigned number as hex digits
-+header ~hexstr, ~hexstr_n, "HEX$"
-	+forth
-	+token base, peek, tor, hex, zero, bhash, hashs
-	+token hashb, rfrom, base, poke, exit
-
-; BIN$ ( u -- c-addr u )   unsigned number as binary digits
-+header ~binstr, ~binstr_n, "BIN$"
-	+forth
-	+token base, peek, tor
-	+literal 2
-	+token base, poke, zero, bhash, hashs, hashb
-	+token rfrom, base, poke, exit
-
-; STR$ ( n -- c-addr u )   signed number as a string (current base)
-+header ~strstr, ~strstr_n, "STR$"
-	+forth
-	+token dup, abs, zero, bhash, hashs, rot, sign
-	+token hashb, exit
-
-; VAL ( c-addr u -- n )   string to number (unsigned, current base)
-+header ~valstr, ~valstr_n, "VAL"
-	+forth
-	+token zero, zero, twoswap, tonumber, twodrop, drop, exit
-
-; ASC ( c-addr u -- code )   code of the first character
-+header ~ascstr, ~ascstr_n, "ASC"
-	+forth
-	+token drop, cpeek, exit
-
-; CHR$ ( code -- c-addr 1 )   one-character string (in PAD)
-+header ~chrstr, ~chrstr_n, "CHR$"
-	+forth
-	+literal _pad
-	+token cpoke
-	+literal _pad
-	+token one, exit
-
-; LEN ( c-addr u -- u )   string length
-+header ~lenstr, ~lenstr_n, "LEN"
-	+forth
-	+token nip, exit
-
-; LEFT$ ( c-addr u n -- c-addr n2 )   first n characters (n2 = MIN(u,n))
-+header ~leftstr, ~leftstr_n, "LEFT$"
-	+forth
-	+token twodup, greater		; inline MIN
-	+qbranch_fwd leftstr_1
-	+token swap
-leftstr_1:
-	+token drop, exit
-
-; RIGHT$ ( c-addr u n -- c-addr2 n2 )   last n characters
-+header ~rightstr, ~rightstr_n, "RIGHT$"
-	+forth
-	+token over
-	+token twodup, greater		; inline MIN
-	+qbranch_fwd rightstr_1
-	+token swap
-rightstr_1:
-	+token drop
-	+token tor, rat, sub, add, rfrom, exit
-
-; MID$ ( c-addr u start len -- c-addr2 len2 )   substring, start is 1-based
-+header ~midstr, ~midstr_n, "MID$"
-	+forth
-	+token tor, oneminus
-	+token rot, over, add, rot, rot, sub	; inline /STRING
-	+token rfrom
-	+token twodup, greater		; inline MIN
-	+qbranch_fwd midstr_1
-	+token swap
-midstr_1:
-	+token drop, exit
-
-; RPT$ ( char n -- c-addr u )   char repeated n times (in PAD)
-+header ~rptstr, ~rptstr_n, "RPT$"
-	+forth
-	+token tor
-	+literal _pad
-	+token rat, rot, fill
-	+literal _pad
-	+token rfrom, exit
+; The BASIC string / number-conversion words (HEX$ BIN$ STR$ VAL ASC CHR$ LEN
+; LEFT$ RIGHT$ MID$ RPT$) were moved out of the core to make room for CD/DIR etc.
+; They are all pure-Forth (built on <# #S #> >NUMBER /STRING FILL MIN ...), so
+; they live in toolkit/BASICSTR.FTH now - load with  INCLUDE BASICSTR.FTH .
 
 ; --- X16FP.FTH : Forth-2012 floating-point defining words ------------------
 

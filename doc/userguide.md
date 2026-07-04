@@ -765,11 +765,70 @@ INCLUDE HP50.FTH   S" HP50" SAVE-IMAGE      \ once: the slow compile, then snaps
 S" HP50" LOAD-IMAGE DROP    HP              \ every boot after: ~1 s, ready to use
 ```
 
-Notes: the image is tied to the exact `forthx16.prg` build (it stores absolute
-addresses and token numbers) — if you rebuild the interpreter, regenerate the
-image. Call `LOAD-IMAGE` from the keyboard or as the **last** line of
-`AUTORUN.FTH` (it replaces the dictionary, so nothing compiled can run after it
-in the same file). PRG/C64 builds only.
+Notes: the image is tied to the exact interpreter build (it stores absolute
+addresses and token numbers) — if you rebuild `forthx16.prg` **or** the bank-9
+`forthx16rom.bin`, regenerate the image. Call `LOAD-IMAGE` from the keyboard or
+as the **last** line of `AUTORUN.FTH`. Works in both the PRG build and the bank-9
+ROM build.
+
+### Bundling several libraries into one image
+
+One image can hold **many** `.FTH` files at once: load them all, then take a
+single snapshot. On the next boot `LOAD-IMAGE` brings back every word from every
+library in about a second, instead of recompiling each file.
+
+The build is just "include everything, tidy up, save". Do it interactively, or
+put it in a temporary `AUTORUN.FTH` and boot once:
+
+```
+S" FPX.FTH"      INCLUDED      \ each library, in dependency order
+S" BASICSTR.FTH" INCLUDED
+S" PCMAUDIO.FTH" INCLUDED
+S" ASSEMBLER.FTH" INCLUDED
+ONLY FORTH DEFINITIONS         \ reset the search order (see rules)
+DECIMAL                        \ reset BASE
+S" TK" SAVE-IMAGE              \ -> TK.DIC  TK.TOK  TK.VAR
+```
+
+Then the real, permanent `AUTORUN.FTH` is one line:
+
+```
+S" TK" LOAD-IMAGE DROP
+```
+
+#### Rules for a multi-file image
+
+1. **Everything gets baked in.** The snapshot captures the *whole* compiled
+   dictionary at that moment — every word from every file you have `INCLUDED`,
+   as one combined image. There is no per-file selection; curate by choosing
+   which files to include before saving.
+2. **Only Forth-level definitions are saved.** The image is dictionary bytes +
+   token table + a few pointers — **not** machine code. Native (assembly) words
+   already live in the ROM/PRG; you cannot add new native code through an image,
+   and moving built-in words "into an image" does not free ROM.
+3. **Load order matters.** Include a library *after* anything it depends on. If
+   two files define the same word, the **last one loaded wins** — order them
+   deliberately.
+4. **Reset the search order before saving.** `SAVE-IMAGE` records the current
+   search order, and some libraries change it (e.g. `ASSEMBLER.FTH` adds an
+   `ASSEMBLER` wordlist and ends on `ONLY`). If you save while the order is
+   non-standard, the restored image boots with a broken vocabulary. End the
+   build with **`ONLY FORTH DEFINITIONS`** (and `DECIMAL`, in case a file left
+   `HEX`).
+5. **All the source files must be on device 8 at build time.** `INCLUDED` reads
+   from the SD card (or, in the emulator without `-sdcard`, the host folder).
+   The finished `TK.DIC/TK.TOK/TK.VAR` **and** `AUTORUN.FTH` must be there too
+   for the fast boot to work. (Once the image exists, the `.FTH` sources are no
+   longer needed at boot — the words come from the image.)
+6. **Base name ≤ 16 characters;** it produces exactly three files
+   `<name>.DIC` / `.TOK` / `.VAR`.
+7. **Ship the image files.** A `LOAD-IMAGE` whose `<name>.DIC` is missing returns
+   `FALSE`, and a failed file open at boot can disturb the next console/file
+   operation — so make sure the three files are present, and keep `LOAD-IMAGE`
+   the last meaningful action in `AUTORUN.FTH`.
+8. **Rebuild the image whenever you rebuild the interpreter** (new `.prg` or
+   `rom.bin`) — token numbers and addresses change, and an old image will not
+   match.
 
 ## X16 input devices
 
@@ -842,6 +901,12 @@ them with `INCLUDE BASICMATH.FTH` (or just use `FSQRT`/`FSIN`/… directly):
 - **`ATN`** ( F: r -- atan ) — arctangent (= `FATAN`).
 - **`LOG`** ( F: r -- ln ) — natural logarithm (= `FLN`).
 - **`EXP`** ( F: r -- e^r ) — exponential (= `FEXP`).
+
+The BASIC **string / number-conversion** words below were also moved out of the
+core (to make room for `CD`/`DIR`) into `toolkit/BASICSTR.FTH` — they are plain
+Forth over `<# #S #>`, `>NUMBER`, `/STRING`, `FILL`, `MIN`. Load them with
+`INCLUDE BASICSTR.FTH`:
+
 - **`HEX$`** ( u -- c-addr u ) — number as hexadecimal digits. `255 HEX$ TYPE` → `FF`
 - **`BIN$`** ( u -- c-addr u ) — number as binary digits.
 - **`STR$`** ( n -- c-addr u ) — signed number as a string (current base).
@@ -867,7 +932,12 @@ them with `INCLUDE BASICMATH.FTH` (or just use `FSQRT`/`FSIN`/… directly):
 ## X16 system control
 
 - **`MONITOR`** ( -- ) — enter the built-in machine-language monitor (exit with `X`).
-- **`EDIT`** ( -- ) — enter the built-in X16 text editor; returns to Forth on exit.
+- **`EDIT`** ( c-addr u -- ) — open the named file in the built-in X16 text editor
+  (`u`=0 for a new buffer); edit, save (Ctrl-S), quit (Ctrl-Q). Known limitation:
+  the first keyboard line typed right after quitting the editor may be glitched
+  (a swallowed RETURN / `?STACK`) — just re-enter it, or use the reset+reload
+  loop: `S" P.FTH" EDIT`, then reset Forth and `S" P.FTH" INCLUDED`. Programmatic
+  `INCLUDED` after `EDIT` works. See `doc/EDIT-known-issue.md`.
 - **`SETBANK`** ( bank -- ) — select the RAM bank visible at `$A000-$BFFF`.
 - **`B@`** ( bank off -- byte ) — read a byte from banked RAM (`off` = 0..8191 into `$A000`).
 - **`B!`** ( byte bank off -- ) — store a byte into banked RAM.
