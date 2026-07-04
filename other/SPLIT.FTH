@@ -61,7 +61,11 @@ $0389 CONSTANT ED-NLINESM1        \   nlines - 1
 
 \ --- drawing ----------------------------------------------------------------
 : BPSET ( x y color -- )  >R BSEEK R> V! ;
-: BHLINE ( x y len color -- )  >R >R BSEEK R> R> SWAP 0 ?DO DUP V! LOOP DROP ;
+\ BHLINE streams the row through the native VFILL (a tight sta VERA_DATA0 loop
+\ with hardware auto-increment, carrying across the 17th VRAM address bit) rather
+\ than a per-pixel V! loop -- this is what makes every filled shape below (RECT/
+\ FBOX and OVAL/FELL/FCIRCLE/DISC, which all reduce to BHLINE) fast.
+: BHLINE ( x y len color -- )  >R >R BSEEK R> R> SWAP VFILL ;
 
 VARIABLE bf-x   VARIABLE bf-w   VARIABLE bf-c
 : BFILL ( x y w h color -- )          \ filled rectangle
@@ -127,15 +131,17 @@ VARIABLE gx1  VARIABLE gy1  VARIABLE gx2  VARIABLE gy2
 
 1 S>F FATAN 2 S>F F* FCONSTANT PIHALF                   \ pi/2
 
-\ Filled ellipse (OVAL): scan every row, half-width = rx*sqrt(1-(dy/ry)^2).
+\ Filled ellipse (OVAL): scan every row, half-width = rx*sqrt(ry^2-dy^2)/ry, all
+\ integer (the built-in native ISQRT). Each row is drawn with the fast BHLINE
+\ (native VFILL), so no floating point and no per-pixel loop are involved.
 VARIABLE ov-cx VARIABLE ov-cy VARIABLE ov-rx VARIABLE ov-ry VARIABLE ov-c
 : OVAL ( x1 y1 x2 y2 color -- )
    >R >XYWH R> ov-c !
    1- 2/ ov-ry !  1- 2/ ov-rx !
    ov-ry @ + ov-cy !  ov-rx @ + ov-cx !
    ov-ry @ 1+  ov-ry @ NEGATE  ?DO
-      I S>F  ov-ry @ 1 MAX S>F  F/  FDUP F*  1 S>F FSWAP F-  FSQRT
-      ov-rx @ S>F F*  F>S                 ( hw )
+      ov-ry @ DUP *  I I *  -  ISQRT                      \ s = isqrt(ry^2-dy^2)
+      ov-rx @ *  ov-ry @ ?DUP IF / ELSE DROP ov-rx @ THEN  ( hw )
       DUP 2* 1+  SWAP  ov-cx @ SWAP -  ov-cy @ I +  ROT  ov-c @ BHLINE
    LOOP ;
 
@@ -159,13 +165,13 @@ VARIABLE ri-cx VARIABLE ri-cy VARIABLE ri-rx VARIABLE ri-ry VARIABLE ri-c VARIAB
       RI-4
    LOOP ;
 
-\ GTEXT: draw a string into the bitmap using the 8x8 ROM charset at VRAM $1F000
-\ (indexed by screen code). Assumes the mixed-case set (after 14 EMIT).
+\ GTEXT: draw a string into the bitmap using the 8x8 ROM charset at VRAM $1F000.
+\ ForthX16 boots in ISO mode, where the font is indexed by the raw byte value
+\ (ASCII), so the glyph index is just the character itself.
 VARIABLE gt-x  VARIABLE gt-y  VARIABLE gt-c  VARIABLE gt-x0
 CREATE gt-rows 8 ALLOT
-: >SCR ( c -- sc )                          \ PETSCII/ASCII -> screen code
-   DUP $61 $7B WITHIN IF  $60 -  EXIT THEN   \ a-z -> $01..$1A
-   DUP $20 $60 WITHIN IF          EXIT THEN   \ $20..$5F (incl. A-Z) -> same
+: >SCR ( c -- sc )                          \ ISO charset: glyph index = raw byte
+   DUP $20 $7F WITHIN IF          EXIT THEN   \ printable ASCII -> same index
    DROP $20 ;                                 \ else space
 : GLYPH ( sc -- )  8 * $F000 +  1 SWAP VADDR ;   \ VERA -> glyph (bank 1)
 : GTEXT ( x y color c-addr u -- )

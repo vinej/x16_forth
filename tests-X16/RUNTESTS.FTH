@@ -8,8 +8,9 @@
 \ - Disabled unsupported component tests
 \ - Changed all filenames to conform the filesystem requirements
 
-\ Forcing lower case on Commander X16/C64
-14 emit
+\ ForthX16 now boots in ISO mode (PC-style ASCII, true upper+lower case).
+\ Re-assert it here in case this file is run under a different console state.
+15 emit
 
 CR .( Running ANS Forth and Forth 2012 test programs, version 0.13.4) CR
 

@@ -1235,16 +1235,157 @@ g_convps:
 	jsr GRAPH_draw_rect
 	jmp next
 
-; RECT ( x1 y1 x2 y2 color -- )   filled rectangle
+; RECT ( x1 y1 x2 y2 color -- )   filled rectangle.
+; Fast path: the 320x240 @ 256c bitmap (after GINIT) is a flat 320-byte-pitch,
+; 8bpp buffer at VRAM $0:0000, so a fill is just, per row, "set the VERA address
+; to y*320+x and stream the colour byte width times" with hardware auto-increment
+; (which carries through the 17th VRAM address bit). This is dramatically faster
+; than the KERNAL GRAPH_draw_rect per-pixel fill. Coordinates are normalised and
+; clipped to the 320x240 screen (colour is the low byte = an 8bpp index).
 +header ~rect, ~rect_n, "RECT"
 	+code
-	jsr g_args4
-	jsr g_convps
-	lda #0
+	jsr pop_dstack		; colour
+	sta r14L
+	jsr pop_dstack		; y2 -> r3
+	sta r3L
+	stx r3H
+	jsr pop_dstack		; x2 -> r2
+	sta r2L
+	stx r2H
+	jsr pop_dstack		; y1 -> r1
+	sta r1L
+	stx r1H
+	jsr pop_dstack		; x1 -> r0
+	sta r0L
+	stx r0H
+	jsr g_convps		; r0=x r1=y r2=width r3=height
+	; --- clip X / width to [0,320) ---
+	lda r0L			; x >= 320 ($140) ?  -> nothing visible
+	cmp #$40
+	lda r0H
+	sbc #$01
+	bcc rect_xok
+	jmp rect_skip
+rect_xok:
+	clc			; right = x + width
+	lda r0L
+	adc r2L
+	sta _scratch
+	lda r0H
+	adc r2H
+	sta _scratch+1
+	sec			; right > 320 ?  -> width = 320 - x
+	lda #$40
+	sbc _scratch
+	lda #$01
+	sbc _scratch+1
+	bcs rect_xrok
+	sec
+	lda #$40
+	sbc r0L
+	sta r2L
+	lda #$01
+	sbc r0H
+	sta r2H
+rect_xrok:
+	; --- clip Y / height to [0,240) ---
+	lda r1L			; y >= 240 ($F0) ?
+	cmp #$f0
+	lda r1H
+	sbc #$00
+	bcc rect_yok
+	jmp rect_skip
+rect_yok:
+	clc			; bottom = y + height
+	lda r1L
+	adc r3L
+	sta _scratch
+	lda r1H
+	adc r3H
+	sta _scratch+1
+	sec			; bottom > 240 ?  -> height = 240 - y
+	lda #$f0
+	sbc _scratch
+	lda #$00
+	sbc _scratch+1
+	bcs rect_yrok
+	sec
+	lda #$f0
+	sbc r1L
+	sta r3L
+	lda #$00
+	sbc r1H
+	sta r3H
+rect_yrok:
+	; --- offset o (r4:r5, 17-bit) = y*320 + x   (y = r1L, now < 240) ---
+	lda r1L
 	sta r4L
+	lda #0
 	sta r4H
-	sec					; filled
-	jsr GRAPH_draw_rect
+	ldx #6			; r4 = y << 6  (y*64)
+rect_m64:
+	asl r4L
+	rol r4H
+	dex
+	bne rect_m64
+	clc			; o = y*64 + x
+	lda r4L
+	adc r0L
+	sta r4L
+	lda r4H
+	adc r0H
+	sta r4H
+	lda #0
+	sta _scratch_2
+	clc			; o += y*256  (add y to o1, carry to o2)
+	lda r4H
+	adc r1L
+	sta r4H
+	lda _scratch_2
+	adc #0
+	sta _scratch_2
+	; --- fill height rows ---
+rect_row:
+	lda r4L
+	sta VERA_ADDR_L
+	lda r4H
+	sta VERA_ADDR_M
+	lda _scratch_2
+	and #1			; 17th address bit -> bank
+	ora #$10		; auto-increment 1
+	sta VERA_ADDR_H
+	lda r14L		; colour (kept in A across the inner loop)
+	ldy r2H			; width = 256*Y + X
+	ldx r2L
+	cpx #0
+	beq rect_pages
+rect_rem:
+	sta VERA_DATA0
+	dex
+	bne rect_rem
+rect_pages:
+	cpy #0
+	beq rect_next
+rect_page:
+	sta VERA_DATA0
+	dex
+	bne rect_page
+	dey
+	bne rect_pages
+rect_next:
+	clc			; o += 320
+	lda r4L
+	adc #$40
+	sta r4L
+	lda r4H
+	adc #$01
+	sta r4H
+	lda _scratch_2
+	adc #0
+	sta _scratch_2
+	dec r3L			; height-- (<= 240, so the byte counter suffices)
+	bne rect_row
+rect_skip:
 	jmp next
 
 ; RING ( x1 y1 x2 y2 color -- )   ellipse outline
@@ -2235,16 +2376,68 @@ flt_t:
 	tax
 	jmp dpush_and_next
 
-; ISQRT ( n -- m )   integer square root via the ROM FP unit
+; ISQRT ( u -- m )   integer floor square root of an unsigned 16-bit value.
+; Native binary digit-by-digit algorithm (no floating point): keeps c (result),
+; d (a power of four), and x (the running remainder). ~10x faster than the old
+; FP path and frees the FP stack, which matters when it is called per scanline
+; (e.g. SPLIT.FTH's filled OVAL/DISC/FCIRCLE/FELL).
+;   c=0; d=$4000; while d: t=c+d; if x>=t {x-=t; c=c>>1+d} else {c>>=1}; d>>=2
 +header ~isqrt, ~isqrt_n, "ISQRT"
 	+code
+	lda _dtop			; x = n
+	sta _scratch
 	lda _dtop+1
-	ldy _dtop
-	+basiccall FP_givayf
-	+basiccall FP_sqr
-	+basiccall FP_getadr
-	sta _dtop+1
-	sty _dtop
+	sta _scratch+1
+	lda #0
+	sta _scratch_2			; c = 0
+	sta _scratch_2+1
+	sta _scratch_1			; d = $4000
+	lda #$40
+	sta _scratch_1+1
+isqrt_lp:
+	lda _scratch_1			; while d != 0
+	ora _scratch_1+1
+	beq isqrt_dn
+	clc				; t = c + d
+	lda _scratch_2
+	adc _scratch_1
+	sta _rscratch
+	lda _scratch_2+1
+	adc _scratch_1+1
+	sta _rscratch+1
+	sec				; x - t  (borrow => x < t)
+	lda _scratch
+	sbc _rscratch
+	tay				; keep low diff
+	lda _scratch+1
+	sbc _rscratch+1
+	bcc isqrt_less
+	sty _scratch			; x >= t : x -= t
+	sta _scratch+1
+	lsr _scratch_2+1		; c = (c >> 1) + d
+	ror _scratch_2
+	clc
+	lda _scratch_2
+	adc _scratch_1
+	sta _scratch_2
+	lda _scratch_2+1
+	adc _scratch_1+1
+	sta _scratch_2+1
+	jmp isqrt_dsh
+isqrt_less:
+	lsr _scratch_2+1		; c = c >> 1
+	ror _scratch_2
+isqrt_dsh:
+	lsr _scratch_1+1		; d >>= 2
+	ror _scratch_1
+	lsr _scratch_1+1
+	ror _scratch_1
+	jmp isqrt_lp
+isqrt_dn:
+	lda _scratch_2
+	ldx _scratch_2+1
+	sta _dtop
+	stx _dtop+1
 	jmp next
 
 ; ============================================================================
@@ -2527,22 +2720,27 @@ frame_isr_tmpl:
 ; native loop - far faster than a Forth V! loop for clearing bitmaps/tilemaps.
 +header ~vfill, ~vfill_n, "VFILL"
 	+code
-	+ldax _dtop			; count -> _rscratch
-	+stax _rscratch
 	ldy #2
-	lda (_dstack),y			; value (low byte) -> X
-	tax
-vfill_lp:
-	lda _rscratch
-	ora _rscratch+1
+	lda (_dstack),y			; value (low byte) -> A (kept across the loop)
+	pha
+	ldx _dtop			; count lo -> X (remainder)
+	ldy _dtop+1			; count hi -> Y (number of 256-byte pages)
+	pla				; A = value
+	cpx #0				; tight fill: X remainder bytes, then Y pages
+	beq vfill_pages
+vfill_rem:
+	sta VERA_DATA0
+	dex
+	bne vfill_rem
+vfill_pages:
+	cpy #0
 	beq vfill_dn
-	stx VERA_DATA0
-	lda _rscratch
-	bne vfill_nb
-	dec _rscratch+1
-vfill_nb:
-	dec _rscratch
-	jmp vfill_lp
+vfill_page:
+	sta VERA_DATA0
+	dex				; X = 0 here -> wraps, 256 stores per page
+	bne vfill_page
+	dey
+	bne vfill_pages
 vfill_dn:
 	+dpop				; drop count
 	+dpop				; drop value
@@ -2935,3 +3133,506 @@ fbit_done:
 	+dpop
 	+dpop
 	jmp next
+
+; ==============================================================================
+; Extended X16 access (added to reach the last reference-guide gaps).
+; Phases 1-7: clock, palette, PCM, layers, VERA FX, generic KERNAL call, keys.
+; All native. KERNAL routines not in the RAM bridge are reached with +kcall
+; (jsrfar into bank 0), so every word works in both the PRG and bank-9 ROM build.
+; ==============================================================================
+
+; ---- Phase 1: clock / date / time -------------------------------------------
+; The system clock is seeded from the battery-backed RTC at boot and advanced by
+; the jiffy IRQ. clock_get/set_date_time (r0..r3) handle the BCD conversion.
+
+; TICKS ( -- ud )   the 24-bit jiffy counter (1/60 s) as an unsigned double.
++header ~ticks, ~ticks_n, "TICKS"
+	+code
+	jsr RDTIM		; A = LSB, X = mid, Y = MSB
+	sty _scratch		; keep MSB across the push
+	jsr push_dstack		; low cell = mid:LSB
+	lda _scratch		; high cell = MSB
+	ldx #0
+	jmp dpush_and_next
+
+; TIME@ ( -- hour min sec )
++header ~timefetch, ~timefetch_n, "TIME@"
+	+code
+	+kcall CLOCK_GET
+	lda R1H			; hours
+	ldx #0
+	jsr push_dstack
+	lda R2L			; minutes
+	ldx #0
+	jsr push_dstack
+	lda R2H			; seconds
+	ldx #0
+	jmp dpush_and_next
+
+; DATE@ ( -- year month day )   year is the full 4-digit year (1900 + RTC value)
++header ~datefetch, ~datefetch_n, "DATE@"
+	+code
+	+kcall CLOCK_GET
+	lda R0L			; year - 1900
+	clc
+	adc #$6c		; + 1900 ($076C)
+	sta _scratch
+	lda #$07
+	adc #0
+	sta _scratch+1
+	lda _scratch
+	ldx _scratch+1
+	jsr push_dstack		; year
+	lda R0H			; month
+	ldx #0
+	jsr push_dstack
+	lda R1L			; day
+	ldx #0
+	jmp dpush_and_next
+
+; SETTIME ( year month day hour min sec -- )   set the clock (weekday = 1)
++header ~settime, ~settime_n, "SETTIME"
+	+code
+	lda _dtop		; sec
+	sta R2H
+	ldy #2			; min
+	lda (_dstack),y
+	sta R2L
+	ldy #4			; hour
+	lda (_dstack),y
+	sta R1H
+	ldy #6			; day
+	lda (_dstack),y
+	sta R1L
+	ldy #8			; month
+	lda (_dstack),y
+	sta R0H
+	ldy #10			; year (low), subtract 1900
+	lda (_dstack),y
+	sec
+	sbc #$6c
+	sta R0L
+	lda #0
+	sta R3L			; jiffies = 0
+	lda #1
+	sta R3H			; weekday = 1
+	+kcall CLOCK_SET
+	+dpop
+	+dpop
+	+dpop
+	+dpop
+	+dpop
+	+dpop
+	jmp next
+
+; ---- Phase 2: palette -------------------------------------------------------
+; The 256-entry palette lives at VRAM $1:FA00, 2 bytes/entry little-endian:
+;   byte 0 = green<<4 | blue,  byte 1 = 0000 red.  So a 12-bit $0RGB value's low
+;   byte is written first and its high nibble second.
+
+; PAL! ( rgb index -- )   set palette entry (index 0-255) to a 12-bit $RGB colour
++header ~palstore, ~palstore_n, "PAL!"
+	+code
+	lda _dtop		; index
+	asl			; index*2, carry = bit 8
+	sta VERA_ADDR_L
+	lda #$fa
+	adc #0			; $FA00 high byte + carry
+	sta VERA_ADDR_M
+	lda #$11		; bank 1, auto-increment 1
+	sta VERA_ADDR_H
+	ldy #2
+	lda (_dstack),y		; rgb low (green<<4 | blue)
+	sta VERA_DATA0
+	iny
+	lda (_dstack),y		; rgb high
+	and #$0f		; red nibble only
+	sta VERA_DATA0
+	+dpop			; drop index
+	+dpop			; drop rgb
+	jmp next
+
+; ---- Phase 3: PCM audio -----------------------------------------------------
+; VERA PCM FIFO. AUDIO_CTRL packs volume(0-3) / 16-bit(5) / stereo(4) and, on
+; write, bit 7 resets the FIFO. Feed 8/16-bit signed sample bytes to PCM!.
+
+; PCMCTRL ( n -- )   write AUDIO_CTRL (volume 0-15, format bits, bit7 = FIFO reset)
++header ~pcmctrl, ~pcmctrl_n, "PCMCTRL"
+	+code
+	lda _dtop
+	sta VERA_AUDIO_CTRL
+	+dpop
+	jmp next
+
+; PCMRATE ( n -- )   write AUDIO_RATE (0 = stop .. 128 = 48 kHz)
++header ~pcmrate, ~pcmrate_n, "PCMRATE"
+	+code
+	lda _dtop
+	sta VERA_AUDIO_RATE
+	+dpop
+	jmp next
+
+; PCM! ( byte -- )   push one sample byte into the FIFO (ignored if full)
++header ~pcmstore, ~pcmstore_n, "PCM!"
+	+code
+	lda _dtop
+	sta VERA_AUDIO_DATA
+	+dpop
+	jmp next
+
+; PCMFULL? ( -- flag )   true when the FIFO cannot accept more data
++header ~pcmfull, ~pcmfull_n, "PCMFULL?"
+	+code
+	lda VERA_AUDIO_CTRL
+	and #$80
+	beq pcmfull_no
+	lda #$ff
+	tax
+	jmp dpush_and_next
+pcmfull_no:
+	lda #0
+	tax
+	jmp dpush_and_next
+
+; PCM-WRITE ( addr count -- )   blast count bytes from RAM into the FIFO. Meant
+; for priming an (empty) 4 KB FIFO; it does not throttle, so excess bytes past a
+; full FIFO are dropped by VERA - poll PCMFULL? for a paced feeder.
++header ~pcmwrite, ~pcmwrite_n, "PCM-WRITE"
+	+code
+	ldy #2
+	lda (_dstack),y
+	sta _scratch		; source addr
+	iny
+	lda (_dstack),y
+	sta _scratch+1
+	lda _dtop		; count
+	sta _wscratch
+	lda _dtop+1
+	sta _wscratch+1
+	ldy #0
+pcmw_loop:
+	lda _wscratch
+	ora _wscratch+1
+	beq pcmw_done
+	lda (_scratch),y
+	sta VERA_AUDIO_DATA
+	inc _scratch
+	bne pcmw_c1
+	inc _scratch+1
+pcmw_c1:
+	lda _wscratch
+	bne pcmw_c2
+	dec _wscratch+1
+pcmw_c2:
+	dec _wscratch
+	jmp pcmw_loop
+pcmw_done:
+	+dpop			; drop count
+	+dpop			; drop addr
+	jmp next
+
+; ---- Phase 4: VERA layer configuration --------------------------------------
+; Enable/disable the two display layers and relocate their map / tile bases and
+; config byte. MAPBASE/TILEBASE take a (bank addr) VRAM address like VADDR.
+
+; LAYER-ON ( layer -- )   enable layer 0 or 1
++header ~layer_on, ~layer_on_n, "LAYER-ON"
+	+code
+	lda VERA_CTRL
+	and #$81		; DCSEL = 0 (keep reset + ADDRSEL)
+	sta VERA_CTRL
+	lda _dtop
+	beq layon0
+	lda #$20		; layer 1 enable
+	jmp layon_go
+layon0:
+	lda #$10		; layer 0 enable
+layon_go:
+	ora VERA_DC_VIDEO
+	sta VERA_DC_VIDEO
+	+dpop
+	jmp next
+
+; LAYER-OFF ( layer -- )   disable layer 0 or 1
++header ~layer_off, ~layer_off_n, "LAYER-OFF"
+	+code
+	lda VERA_CTRL
+	and #$81
+	sta VERA_CTRL
+	lda _dtop
+	beq layoff0
+	lda #$20
+	jmp layoff_go
+layoff0:
+	lda #$10
+layoff_go:
+	eor #$ff
+	and VERA_DC_VIDEO
+	sta VERA_DC_VIDEO
+	+dpop
+	jmp next
+
+; MAPBASE ( layer bank addr -- )   set the tile-map base (aligned to 512 bytes)
++header ~mapbase, ~mapbase_n, "MAPBASE"
+	+code
+	lda _dtop+1		; addr high byte
+	lsr			; -> bits 15:9 in bits 6:0 (= addr>>9)
+	sta _scratch
+	ldy #2
+	lda (_dstack),y		; bank (0/1) -> bit 7
+	lsr
+	lda _scratch
+	bcc mapb_nb
+	ora #$80
+mapb_nb:
+	sta _scratch
+	ldy #4
+	lda (_dstack),y		; layer
+	beq mapb_l0
+	lda _scratch
+	sta VERA_L1_MAPBASE
+	jmp mapb_done
+mapb_l0:
+	lda _scratch
+	sta VERA_L0_MAPBASE
+mapb_done:
+	+dpop
+	+dpop
+	+dpop
+	jmp next
+
+; TILEBASE ( layer bank addr -- )   set the tile-data base (aligned to 2 KB),
+; preserving the register's low 2 bits (tile width/height).
++header ~tilebase, ~tilebase_n, "TILEBASE"
+	+code
+	lda _dtop+1
+	lsr
+	sta _scratch
+	ldy #2
+	lda (_dstack),y
+	lsr
+	lda _scratch
+	bcc tileb_nb
+	ora #$80
+tileb_nb:
+	and #$fc		; bits 16:11 -> register bits 7:2
+	sta _scratch
+	ldy #4
+	lda (_dstack),y		; layer
+	beq tileb_l0
+	lda VERA_L1_TILEBASE
+	and #$03
+	ora _scratch
+	sta VERA_L1_TILEBASE
+	jmp tileb_done
+tileb_l0:
+	lda VERA_L0_TILEBASE
+	and #$03
+	ora _scratch
+	sta VERA_L0_TILEBASE
+tileb_done:
+	+dpop
+	+dpop
+	+dpop
+	jmp next
+
+; LAYER-MODE ( layer cfg -- )   write Lx_CONFIG (map size, T256C, bitmap, depth)
++header ~layer_mode, ~layer_mode_n, "LAYER-MODE"
+	+code
+	lda _dtop		; cfg
+	pha
+	ldy #2
+	lda (_dstack),y		; layer
+	beq laym_l0
+	pla
+	sta VERA_L1_CONFIG
+	jmp laym_done
+laym_l0:
+	pla
+	sta VERA_L0_CONFIG
+laym_done:
+	+dpop
+	+dpop
+	jmp next
+
+; ---- Phase 5: VERA FX -------------------------------------------------------
+
+; DCSEL ( n -- )   select the DCSEL register bank (0-63) so FX registers at
+; $9F29-$9F2C can be reached with ordinary C!/C@.
++header ~dcsel, ~dcsel_n, "DCSEL"
+	+code
+	lda _dtop
+	asl
+	and #$7e		; DCSEL occupies CTRL bits 1-6
+	sta _scratch
+	lda VERA_CTRL
+	and #$81		; keep reset + ADDRSEL
+	ora _scratch
+	sta VERA_CTRL
+	+dpop
+	jmp next
+
+; FX-MULT ( a b -- lo hi )   signed 16x16 -> 32-bit product using VERA's hardware
+; multiplier. Returns the 32-bit result as ( low-cell high-cell ). Saves and
+; restores VERA CTRL/ADDR0 and uses scratch VRAM at $1:F800.
++header ~fxmult, ~fxmult_n, "FX-MULT"
+	+code
+	lda VERA_CTRL		; save clobbered VERA state on the CPU stack
+	pha
+	lda VERA_ADDR_L
+	pha
+	lda VERA_ADDR_M
+	pha
+	lda VERA_ADDR_H
+	pha
+	lda #$0c		; DCSEL = 6 : load the 32-bit cache
+	sta VERA_CTRL
+	ldy #2
+	lda (_dstack),y		; a low  -> multiplicand
+	sta $9f29
+	iny
+	lda (_dstack),y		; a high
+	sta $9f2a
+	lda _dtop		; b low  -> multiplier
+	sta $9f2b
+	lda _dtop+1		; b high
+	sta $9f2c
+	lda #$04		; DCSEL = 2
+	sta VERA_CTRL
+	lda #$10		; FX_MULT: Multiplier Enable
+	sta $9f2c
+	lda #$40		; FX_CTRL: Cache Write Enable
+	sta $9f29
+	lda #0
+	sta VERA_ADDR_L		; ADDR0 = $1:F800, no increment
+	lda #$f8
+	sta VERA_ADDR_M
+	lda #$01
+	sta VERA_ADDR_H
+	lda #0
+	sta VERA_DATA0		; trigger the multiply + 32-bit VRAM write
+	lda #$11		; increment 1 to read the 4 result bytes back
+	sta VERA_ADDR_H
+	lda VERA_DATA0
+	sta _scratch		; result byte 0
+	lda VERA_DATA0
+	sta _scratch+1		; byte 1
+	lda VERA_DATA0
+	sta _scratch_1		; byte 2
+	lda VERA_DATA0
+	sta _scratch_1+1	; byte 3
+	lda #$04		; disable FX
+	sta VERA_CTRL
+	lda #0
+	sta $9f29
+	lda #0
+	sta $9f2c
+	pla			; restore VERA state
+	sta VERA_ADDR_H
+	pla
+	sta VERA_ADDR_M
+	pla
+	sta VERA_ADDR_L
+	pla
+	sta VERA_CTRL
+	+dpop			; drop b; a becomes _dtop
+	lda _scratch		; low result cell overwrites a
+	sta _dtop
+	lda _scratch+1
+	sta _dtop+1
+	lda _scratch_1		; high result cell on top
+	ldx _scratch_1+1
+	jmp dpush_and_next
+
+; ---- Phase 6: generic KERNAL call -------------------------------------------
+
+; SYSCALL ( a x y addr -- a' x' y' )   call the routine at addr in KERNAL bank 0
+; with A/X/Y loaded, returning the callee's A/X/Y. Unlocks the whole KERNAL API
+; (GRAPH_*, console_*, screen_set_charset, MEMTOP, ...) from Forth. ROM-safe: it
+; routes through jsrfar via a small RAM trampoline.
++header ~syscall, ~syscall_n, "SYSCALL"
+	+code
+	lda #$20		; build:  JSR JSRFAR
+	sta syscall_stub
+	lda #<JSRFAR
+	sta syscall_stub+1
+	lda #>JSRFAR
+	sta syscall_stub+2
+	lda _dtop		; .word target
+	sta syscall_stub+3
+	lda _dtop+1
+	sta syscall_stub+4
+	lda #0
+	sta syscall_stub+5	; .byte 0  (KERNAL bank)
+	lda #$60		; RTS
+	sta syscall_stub+6
+	ldy #6			; marshal A/X/Y from the stack
+	lda (_dstack),y		; a-arg
+	pha
+	ldy #4
+	lda (_dstack),y		; x-arg
+	pha
+	ldy #2
+	lda (_dstack),y		; y-arg
+	tay
+	pla
+	tax			; x-arg
+	pla			; a-arg
+	jsr syscall_stub	; A/X/Y in, A/X/Y (and carry) out
+	pha			; stash returns on the CPU stack
+	txa
+	pha
+	tya
+	pha
+	+dpop			; drop addr; stack now = a x y (y on top)
+	pla			; y'
+	sta _dtop
+	lda #0
+	sta _dtop+1
+	pla			; x'
+	ldy #2
+	sta (_dstack),y
+	iny
+	lda #0
+	sta (_dstack),y
+	pla			; a'
+	ldy #4
+	sta (_dstack),y
+	iny
+	lda #0
+	sta (_dstack),y
+	jmp next
+
+; CHARSET ( n -- )   activate a built-in 8x8 charset (1=ISO 2=PET-upper/graph
+; 3=PET-upper/lower .. 12=Katakana; see Appendix I). screen_set_charset.
++header ~charset, ~charset_n, "CHARSET"
+	+code
+	lda _dtop
+	+kcall SETCHARSET
+	+dpop
+	jmp next
+
+; ---- Phase 7: keyboard -------------------------------------------------------
+
+; KEY? ( -- flag )   true if a key is waiting (peeks the queue, non-destructive)
++header ~keyq, ~keyq_n, "KEY?"
+	+code
+	+kcall KBDPEEK		; A = char, X = queue length
+	cpx #0
+	beq keyq_no
+	lda #$ff
+	tax
+	jmp dpush_and_next
+keyq_no:
+	lda #0
+	tax
+	jmp dpush_and_next
+
+; GETKEY ( -- char )   block until a key is pressed, then return its PETSCII code
++header ~getkey, ~getkey_n, "GETKEY"
+	+code
+getkey_wait:
+	jsr GETIN		; non-blocking; 0 = nothing yet
+	beq getkey_wait
+	ldx #0
+	jmp dpush_and_next

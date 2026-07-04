@@ -13,8 +13,9 @@
 \   RUN" 45 SIN"    RUN" 2 10 ^"    RUN" PI 2 /"    RUN" 100 LN"
 \ Modes:  DEG RAD  |  STD  |  n FIX      Stack: DUP DROP SWAP OVER ROT CLEAR DEPTH
 \
-\ Needs only the built-in floating-point words.  Uses the X16's default
-\ UPPERCASE character set (do not `14 EMIT` first, or PETSCII inverts case).
+\ Needs only the built-in floating-point words.  Its display text is all
+\ UPPERCASE, which renders correctly in ForthX16's default ISO charset (and in
+\ the old upper/graphics set); do not switch to `14 EMIT` upper/lower PETSCII.
 \ Reals carry ~9 significant digits (BASIC ROM floats); no CAS / symbolics.
 \ ===========================================================================
 

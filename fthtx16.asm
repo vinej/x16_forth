@@ -384,6 +384,10 @@ IRQ_DSTACK_TOP = irq_dstack + 64 - 2
 ; mapped and cannot read them there, so SAVE-IMAGE/LOAD-IMAGE copy the name into this
 ; RAM buffer (readable in any bank) before SETNAM.
 +hmbuffer ~imgnam, 8
+; SYSCALL builds a tiny "jsr JSRFAR / .word target / .byte 0 / rts" trampoline here
+; at run time so it can call an arbitrary KERNAL routine (dynamic target) in bank 0
+; from the bank-9 Forth ROM. In RAM so it is executable and (in ROM) modifiable.
++hmbuffer ~syscall_stub, 8
 
 !if X16ROM {
 ; --- KERNAL bridge (v3 run-from-ROM) --------------------------------------
@@ -5635,6 +5639,13 @@ order_done:
 +header ~forth_system, ~forth_system_n
 	+forth
 forth_system_c:
+; Switch the console to ISO mode ($0F) at cold start so ForthX16 is always in a
+; consistent PC-style ASCII charset (true upper+lower case, real backslash; no
+; PETSCII case inversion). Word lookup masks case, so any case is accepted.
+!if X16 {
+	+literal 15
+	+token emit
+}
 	+literal banner_text
 	+token count, type, cr
 	+token decimal, false, state, poke, xsst

@@ -71,6 +71,46 @@ ym_write            = $C08A
 	!byte BANK_AUDIO
 }
 
+; Call a KERNAL routine in ROM bank 0. Works in both the PRG build (JSRFAR =
+; real $FF6E) and the ROM build (JSRFAR = brg_jsrfar), so KERNAL entry points
+; not covered by the hard-wired RAM bridge (clock, charset, MEMTOP, kbdbuf, the
+; GRAPH_/console API, ...) can still be reached from the bank-9 Forth ROM.
+; A/X/Y and carry pass through both ways (jsrfar convention).
+!macro kcall .addr {
+	jsr JSRFAR
+	!word .addr
+	!byte 0
+}
+
+; KERNAL entry points reached via +kcall (bank 0). These are used only as jsrfar
+; operands, never jsr'd directly, so the literal address is always correct.
+CLOCK_GET  = $FF50		; clock_get_date_time  -> r0..r3
+CLOCK_SET  = $FF4D		; clock_set_date_time  <- r0..r3
+SETCHARSET = $FF62		; screen_set_charset (A = set number)
+K_MEMTOP   = $FF99		; MEMTOP (C set -> A = RAM bank count)
+KBDPEEK    = $FEBD		; kbdbuf_peek (A = next char, X = queue length)
+
+; KERNAL 16-bit ABI registers r0..r3 (zero page). Forth's own zero page starts
+; at $22, so r0..r15 ($02..$21) are free for us to marshal KERNAL arguments.
+R0L = $02
+R0H = $03
+R1L = $04
+R1H = $05
+R2L = $06
+R2H = $07
+R3L = $08
+R3H = $09
+
+; VERA layer-0 registers and the PCM audio port (layer-1 config/scroll and the
+; ADDR/DATA/CTRL ports are already defined above / in x16.asm).
+VERA_L0_CONFIG   = $9F2D
+VERA_L0_MAPBASE  = $9F2E
+VERA_L0_TILEBASE = $9F2F
+VERA_L1_TILEBASE = $9F36
+VERA_AUDIO_CTRL  = $9F3B
+VERA_AUDIO_RATE  = $9F3C
+VERA_AUDIO_DATA  = $9F3D
+
 ; ==============================================================================
 ; VERA low-level access primitives
 ; ==============================================================================

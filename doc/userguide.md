@@ -189,9 +189,12 @@ let you build your own compiling words and data structures.
 
 ## 1.10 Using the system on the X16
 
-- **Charset:** the X16 boots in the upper-case/graphics character set, where
-  lower-case letters show as graphics. Type `14 EMIT` to switch to the
-  mixed-case set (the test scripts do this first).
+- **Charset:** ForthX16 puts the console into **ISO mode** at cold start (it
+  emits `$0F`), so text is normal PC-style ASCII — true upper- *and* lower-case,
+  and a real backslash `\`. No PETSCII case inversion, and word lookup ignores
+  case so you can type words in any case. If something switched the console
+  away, `15 EMIT` re-enables ISO; `14 EMIT` = PETSCII upper/lower, `142 EMIT` =
+  PETSCII upper/graphics. (Under `CHARSET`, ISO is charset 1.)
 - **Loading files:** put `.FTH`/`.FR` files on the SD card (or host FS in the
   emulator) and use `S" NAME.FTH" INCLUDED`. On boot, `AUTORUN.FTH` (if present)
   is loaded automatically.
@@ -683,7 +686,7 @@ Bitmap drawing in 320×240×256 mode.
 - **`PSET`** ( x y color -- ) — set one pixel. `160 120 5 PSET`
 - **`LINE`** ( x1 y1 x2 y2 color -- ) — draw a line.
 - **`FRAME`** ( x1 y1 x2 y2 color -- ) — rectangle outline.
-- **`RECT`** ( x1 y1 x2 y2 color -- ) — filled rectangle.
+- **`RECT`** ( x1 y1 x2 y2 color -- ) — filled rectangle. Fills VRAM directly with hardware auto-increment (clipped to the 320×240 screen), so it is far faster than the KERNAL per-pixel fill — good for clearing regions or double-buffered redraws each frame.
 - **`RING`** ( x1 y1 x2 y2 color -- ) — ellipse outline (inside the bounding box).
 - **`OVAL`** ( x1 y1 x2 y2 color -- ) — filled ellipse.
 - **`GTEXT`** ( x y color c-addr u -- ) — draw a string into the bitmap. `10 10 1 S" HI" GTEXT`
@@ -799,7 +802,7 @@ also leave the data stack unchanged.
 - **`F0=`** ( F: r -- ) ( -- flag ) — true if r = 0.
 - **`F0<`** ( F: r -- ) ( -- flag ) — true if r < 0.
 - **`F<`** ( F: r1 r2 -- ) ( -- flag ) — true if r1 < r2.
-- **`ISQRT`** ( n -- m ) — integer square root (uses the ROM FP unit). `144 ISQRT .` → `12`
+- **`ISQRT`** ( u -- m ) — integer floor square root of an unsigned value, native (no floating point, so it does not disturb the FP stack and is fast enough to call per scanline). `144 ISQRT .` → `12`
 
 ## BASIC-alias and string toolkit
 
@@ -850,6 +853,45 @@ the corresponding FP word's body under a BASIC name.
 - **`POWEROFF`** ( -- ) — power the machine off via the SMC.
 - **`REBOOT`** ( -- ) — soft reboot through the reset vector.
 - **`KEYMAP`** ( c-addr u -- ) — set the keyboard layout by name. `S" en-us" KEYMAP`
+
+## X16 extended access (clock, palette, PCM, layers, VERA FX, KERNAL)
+
+Native words closing the last gaps to the reference guide. All work in both the
+PRG and the ROM-bank build.
+
+Clock (battery RTC / system clock):
+- **`TICKS`** ( -- ud ) — the 24-bit jiffy counter (1/60 s) as an unsigned double. `TICKS UD.`
+- **`TIME@`** ( -- hour min sec ) — read the wall-clock time.
+- **`DATE@`** ( -- year month day ) — read the date (`year` is the full 4-digit year).
+- **`SETTIME`** ( year month day hour min sec -- ) — set the clock. `2025 7 3 14 30 45 SETTIME`
+
+Palette:
+- **`PAL!`** ( rgb index -- ) — set palette entry `index` (0-255) to a 12-bit `$RGB` colour. `$0F00 1 PAL!` (entry 1 = red).
+
+PCM audio (VERA FIFO):
+- **`PCMCTRL`** ( n -- ) — write AUDIO_CTRL: volume 0-15, bit4 stereo, bit5 16-bit, bit7 (write) resets the FIFO.
+- **`PCMRATE`** ( n -- ) — sample rate (0 = stop … 128 = 48 kHz).
+- **`PCM!`** ( byte -- ) — push one sample byte into the FIFO (ignored when full).
+- **`PCMFULL?`** ( -- flag ) — true when the FIFO cannot accept more data.
+- **`PCM-WRITE`** ( addr count -- ) — blast `count` bytes from RAM into the FIFO (for priming an empty ≤4 KB FIFO; does not throttle).
+
+VERA layers:
+- **`LAYER-ON`** / **`LAYER-OFF`** ( layer -- ) — enable/disable display layer 0 or 1.
+- **`MAPBASE`** ( layer bank addr -- ) — set a layer's tile-map base (VRAM `bank:addr`, 512-byte aligned).
+- **`TILEBASE`** ( layer bank addr -- ) — set a layer's tile-data base (2 KB aligned; preserves tile size bits).
+- **`LAYER-MODE`** ( layer cfg -- ) — write a layer's config byte (map size, T256C, bitmap mode, colour depth).
+
+VERA FX:
+- **`DCSEL`** ( n -- ) — select the DCSEL register bank (0-63) so FX registers at `$9F29-$9F2C` can be reached with `C!`/`C@`.
+- **`FX-MULT`** ( a b -- lo hi ) — signed 16×16→32-bit product via VERA's hardware multiplier; result is `( low-cell high-cell )`. `1000 1000 FX-MULT SWAP . .` → `16960 15` (= 1,000,000).
+
+KERNAL bridge:
+- **`SYSCALL`** ( a x y addr -- a' x' y' ) — call the routine at `addr` in KERNAL bank 0 with `.A/.X/.Y` loaded, returning the callee's `.A/.X/.Y`. Reaches the whole KERNAL API (`GRAPH_*`, `console_*`, `MEMTOP`, …). `65 0 0 $FFD2 SYSCALL` prints "A" (CHROUT).
+- **`CHARSET`** ( n -- ) — activate a built-in 8×8 charset (1 = ISO, 2 = PET upper/graphics, 3 = PET upper/lower, … 12 = Katakana; see Appendix I of the reference guide).
+
+Keyboard:
+- **`KEY?`** ( -- flag ) — true if a key is waiting (non-destructive queue peek).
+- **`GETKEY`** ( -- char ) — block until a key is pressed, then return its PETSCII code.
 
 ---
 
@@ -978,13 +1020,16 @@ than two corners.)
 - **Resolution while split:** VERA's scale is global, so both layers share one
   resolution; `SPLITON` uses `SCREEN 3` (40×30 text ⇒ 320×240), which is why the
   console is 40 columns while the split is active. `SPLITOFF` restores 80×60.
-- **`RING`/`OVAL`/`CIRCLE`/`FCIRCLE`** use the floating-point unit (to avoid 16-bit
-  overflow in the radius maths) and therefore disturb the FP stack.
+- **Filled shapes are fast.** Every fill (`RECT`/`FBOX`, and `OVAL`/`FELL`/
+  `FCIRCLE`/`DISC`) draws each row with the native `VFILL` (a tight VERA
+  auto-increment loop) instead of a per-pixel `V!` loop, and the ellipse/circle
+  half-width uses the native integer `ISQRT` — no floating point per scanline. So
+  large filled circles/ellipses are roughly an order of magnitude faster than
+  before and fine for animation.
+- **`RING`/`CIRCLE`** (outlines only) still use the floating-point unit for the
+  point sweep and therefore disturb the FP stack.
 - **`GTEXT`/`SAY`** render the 8×8 ROM font and assume the mixed-case character set
   (the state after `14 EMIT`, which the test/boot scripts set).
-- These words are Forth definitions, so they are slower than the ROM GRAPH
-  routines. That is fine interactively; for heavy full-screen animation the
-  built-in GRAPH words (before loading `SPLIT.FTH`) are faster.
 - The library **redefines** `PSET LINE FRAME RECT RING OVAL GTEXT GCLS`; the
   original ROM versions only worked in full-screen graphics mode 128.
 
