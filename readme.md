@@ -1,14 +1,14 @@
 # ForthX16
 ## Intro
-The Forth developement of version 1.5 was done by Vasyl Tsvirkunov on his github here: https://github.com/VasylTsv/ForthX16
+Development up to version 1.5 was done by Vasyl Tsvirkunov, on his GitHub here: https://github.com/VasylTsv/ForthX16
 
-Version 2.0 on my github https://github.com/vinej/x16_forth was developed by Claude Opus 4.8 and Claude Fable. Fable found out the latest bug that Open cannot resolve. My participation was to help testing and debugging. Claude did all the code. Version 2.0 has the same features of X16 Basic 2.0 and all the features of X16 can be used. I only tested the new version with X16 and into a mister core : https://github.com/vinej/x16_mister
+Version 2.0, on my GitHub at https://github.com/vinej/x16_forth, was developed by Claude Opus 4.8 and Claude Fable. Fable found the last bug that Opus could not resolve. My contribution was to help with testing and debugging — Claude wrote all the code. Version 2.0 has the same features as X16 BASIC 2.0, and all the features of the X16 can be used. I have only tested the new version on the X16 and on a MiSTer core: https://github.com/vinej/x16_mister
 
-I am not the developer for this case, only the analyst/tester who helped Claude to implement all features.
+I am not the developer in this case, only the analyst/tester who helped Claude implement all the features.
 
-Forth TX16 or ForthX16 is an enhanced port of my older project [Forth Model T](https://github.com/VasylTsv/ForthModelT) for [Commander X16](https://www.commanderx16.com/) and other 6502-based platforms. It is a completely functional Forth 2012 standard implementation. Unlike Forth Model T which used direct threaded model, Forth TX16 is using token threaded model. This was mostly done to minimize the size - one of the goals of the project was to fit the entire interpreter on 8K C64 cartridge.
+Forth TX16 (or ForthX16) is an enhanced port of the older project [Forth Model T](https://github.com/VasylTsv/ForthModelT) for the [Commander X16](https://www.commanderx16.com/) and other 6502-based platforms. It is a completely functional implementation of the Forth 2012 standard. Unlike Forth Model T, which used a direct-threaded model, Forth TX16 uses a token-threaded model. This was mostly done to minimize size — one of the goals of the project was to fit the entire interpreter on an 8K C64 cartridge.
 
-The other, or rather the main goal of the project was to create an interpreter as compliant to Forth 2012 standard as possible.
+The other — or rather the main — goal of the project was to create an interpreter as compliant with the Forth 2012 standard as possible.
 
 **New to Forth or this system?** See [doc/userguide.md](doc/userguide.md) for a tutorial and a full reference of every built-in word (with an alphabetical index).
 ## Supported Platforms
