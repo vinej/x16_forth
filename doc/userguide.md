@@ -229,25 +229,25 @@ Every word built into TX16, grouped by topic. Each entry gives the **stack effec
 
 Click a word to jump to its category section (words are also findable with your editor's search). Floating-point items operate on the FP stack.
 
-**Symbols / digits** — [`!`](#memory), [`#`](#numeric-output), [`#>`](#numeric-output), [`#S`](#numeric-output), [`#TIB`](#interpreter-and-input-source), [`'`](#compiling-and-dictionary), [`(`](#interpreter-and-input-source), [`*`](#arithmetic), [`*.`](#game-support), [`*/`](#arithmetic), [`*/MOD`](#arithmetic), [`+`](#arithmetic), [`+!`](#memory), [`+FIELD`](#structures), [`+LOOP`](#control-flow), [`+PLACE`](#characters-and-strings), [`,`](#memory), [`,"`](#compiling-and-dictionary), [`-`](#arithmetic), [`-1`](#constants-and-literals), [`.`](#numeric-output), [`."`](#characters-and-strings), [`.(`](#terminal-io), [`.R`](#numeric-output), [`.S`](#stack-manipulation), [`/`](#arithmetic), [`/MOD`](#arithmetic), [`/STRING`](#characters-and-strings), [`0`](#constants-and-literals), [`0<`](#comparison-and-logic), [`0<>`](#comparison-and-logic), [`0=`](#comparison-and-logic), [`0>`](#comparison-and-logic), [`1`](#constants-and-literals), [`1+`](#arithmetic), [`1-`](#arithmetic), [`2`](#constants-and-literals), [`2!`](#memory), [`2*`](#arithmetic), [`2+`](#arithmetic), [`2-`](#arithmetic), [`2/`](#arithmetic), [`2>R`](#return-stack-and-loop-index), [`2@`](#memory), [`2CONSTANT`](#defining-words), [`2DROP`](#stack-manipulation), [`2DUP`](#stack-manipulation), [`2LITERAL`](#compiling-and-dictionary), [`2OVER`](#stack-manipulation), [`2R>`](#return-stack-and-loop-index), [`2R@`](#return-stack-and-loop-index), [`2ROT`](#stack-manipulation), [`2SWAP`](#stack-manipulation), [`2VALUE`](#defining-words), [`2VARIABLE`](#defining-words), [`:`](#defining-words), [`:NONAME`](#defining-words), [`;`](#defining-words), [`<`](#comparison-and-logic), [`<#`](#numeric-output), [`<>`](#comparison-and-logic), [`=`](#comparison-and-logic), [`>`](#comparison-and-logic), [`>BODY`](#compiling-and-dictionary), [`>FLOAT`](#floating-point), [`>IN`](#interpreter-and-input-source), [`>NUMBER`](#number-and-text-parsing), [`>R`](#return-stack-and-loop-index), [`?`](#numeric-output), [`?COMP`](#compiling-and-dictionary), [`?DO`](#control-flow), [`?DUP`](#stack-manipulation), [`?STACK`](#compiling-and-dictionary), [`@`](#memory), [`[`](#compiling-and-dictionary), [`[']`](#compiling-and-dictionary), [`[CHAR]`](#characters-and-strings), [`[COMPILE]`](#compiling-and-dictionary), [`\`](#interpreter-and-input-source), [`]`](#compiling-and-dictionary)
+**Symbols / digits** — [`!`](#memory), [`#`](#numeric-output), [`#>`](#numeric-output), [`#S`](#numeric-output), [`#TIB`](#interpreter-and-input-source), [`'`](#compiling-and-dictionary), [`(`](#interpreter-and-input-source), [`*`](#arithmetic), [`*.`](#game-support), [`*/`](#arithmetic), [`*/MOD`](#arithmetic), [`+`](#arithmetic), [`+!`](#memory), [`+FIELD`](#structures), [`+LOOP`](#control-flow), [`+PLACE`](#characters-and-strings), [`,`](#memory), [`,"`](#compiling-and-dictionary), [`-`](#arithmetic), [`-1`](#constants-and-literals), [`-ROT`](#stack-manipulation), [`.`](#numeric-output), [`."`](#characters-and-strings), [`.(`](#terminal-io), [`.R`](#numeric-output), [`.S`](#stack-manipulation), [`/`](#arithmetic), [`/MOD`](#arithmetic), [`/STRING`](#characters-and-strings), [`0`](#constants-and-literals), [`0<`](#comparison-and-logic), [`0<>`](#comparison-and-logic), [`0=`](#comparison-and-logic), [`0>`](#comparison-and-logic), [`1`](#constants-and-literals), [`1+`](#arithmetic), [`1-`](#arithmetic), [`2`](#constants-and-literals), [`2!`](#memory), [`2*`](#arithmetic), [`2+`](#arithmetic), [`2-`](#arithmetic), [`2/`](#arithmetic), [`2>R`](#return-stack-and-loop-index), [`2@`](#memory), [`2CONSTANT`](#defining-words), [`2DROP`](#stack-manipulation), [`2DUP`](#stack-manipulation), [`2LITERAL`](#compiling-and-dictionary), [`2OVER`](#stack-manipulation), [`2R>`](#return-stack-and-loop-index), [`2R@`](#return-stack-and-loop-index), [`2ROT`](#stack-manipulation), [`2SWAP`](#stack-manipulation), [`2VALUE`](#defining-words), [`2VARIABLE`](#defining-words), [`:`](#defining-words), [`:NONAME`](#defining-words), [`;`](#defining-words), [`<`](#comparison-and-logic), [`<#`](#numeric-output), [`<>`](#comparison-and-logic), [`=`](#comparison-and-logic), [`>`](#comparison-and-logic), [`>BODY`](#compiling-and-dictionary), [`>FLOAT`](#floating-point), [`>IN`](#interpreter-and-input-source), [`>NUMBER`](#number-and-text-parsing), [`>R`](#return-stack-and-loop-index), [`?`](#numeric-output), [`?COMP`](#compiling-and-dictionary), [`?DO`](#control-flow), [`?DUP`](#stack-manipulation), [`?STACK`](#compiling-and-dictionary), [`@`](#memory), [`[`](#compiling-and-dictionary), [`[']`](#compiling-and-dictionary), [`[CHAR]`](#characters-and-strings), [`[COMPILE]`](#compiling-and-dictionary), [`\`](#interpreter-and-input-source), [`]`](#compiling-and-dictionary)
 
 **A** — [`ABORT`](#control-flow), [`ABORT"`](#control-flow), [`ABS`](#arithmetic), [`ACCEPT`](#terminal-io), [`ACTION-OF`](#defining-words), [`AGAIN`](#control-flow), [`AHEAD`](#control-flow), [`ALIGN`](#memory), [`ALIGNED`](#memory), [`ALLOT`](#memory), [`ALSO`](#wordlists-and-search-order), [`AND`](#bitwise), [`ASC`](#basic-alias-and-string-toolkit), [`ATN`](#basic-alias-and-string-toolkit)
 
 **B** — [`B!`](#x16-system-control), [`B@`](#x16-system-control), [`BASE`](#numeric-output), [`BEGIN`](#control-flow), [`BEGIN-STRUCTURE`](#structures), [`BIN`](#files), [`BIN$`](#basic-alias-and-string-toolkit), [`BL`](#constants-and-literals), [`BLANK`](#memory), [`BLOAD`](#x16-load-and-save), [`BORDER`](#x16-video-screen-and-cursor), [`BUFFER:`](#defining-words), [`BVERIFY`](#x16-load-and-save), [`BVLOAD`](#x16-load-and-save), [`BYE`](#system-and-environment)
 
-**C** — [`C!`](#memory), [`C"`](#characters-and-strings), [`C,`](#memory), [`C64`](#system-and-environment), [`C@`](#memory), [`CASE`](#control-flow), [`CATNIB`](#bit-and-byte-toolkit), [`CBIT`](#bit-and-byte-toolkit), [`CELL+`](#memory), [`CELLS`](#memory), [`CFIELD:`](#structures), [`CHAR`](#characters-and-strings), [`CHAR+`](#memory), [`CHARS`](#memory), [`CHR$`](#basic-alias-and-string-toolkit), [`CLOSE`](#basic-alias-and-string-toolkit), [`CLOSE-FILE`](#files), [`CLOSE-SOURCE`](#interpreter-and-input-source), [`CLS`](#x16-video-screen-and-cursor), [`CMOVE`](#memory), [`CMOVE>`](#memory), [`COLLIDE?`](#game-support), [`COLOR`](#x16-video-screen-and-cursor), [`COMPARE`](#characters-and-strings), [`COMPILE`](#compiling-and-dictionary), [`COMPILE,`](#compiling-and-dictionary), [`CONSTANT`](#defining-words), [`COS`](#basic-alias-and-string-toolkit), [`COUNT`](#characters-and-strings), [`CR`](#terminal-io), [`CREATE`](#defining-words), [`CREATE-FILE`](#files), [`CURSOR`](#x16-video-screen-and-cursor)
+**C** — [`C!`](#memory), [`C"`](#characters-and-strings), [`C,`](#memory), [`C64`](#system-and-environment), [`C@`](#memory), [`CASE`](#control-flow), [`CATCH`](#control-flow), [`CATNIB`](#bit-and-byte-toolkit), [`CBIT`](#bit-and-byte-toolkit), [`CELL+`](#memory), [`CELLS`](#memory), [`CFIELD:`](#structures), [`CHAR`](#characters-and-strings), [`CHAR+`](#memory), [`CHARS`](#memory), [`CHR$`](#basic-alias-and-string-toolkit), [`CLOSE`](#basic-alias-and-string-toolkit), [`CLOSE-FILE`](#files), [`CLOSE-SOURCE`](#interpreter-and-input-source), [`CLS`](#x16-video-screen-and-cursor), [`CMOVE`](#memory), [`CMOVE>`](#memory), [`COLLIDE?`](#game-support), [`COLOR`](#x16-video-screen-and-cursor), [`COMPARE`](#characters-and-strings), [`COMPILE`](#compiling-and-dictionary), [`COMPILE,`](#compiling-and-dictionary), [`CONSTANT`](#defining-words), [`COS`](#basic-alias-and-string-toolkit), [`COUNT`](#characters-and-strings), [`CR`](#terminal-io), [`CREATE`](#defining-words), [`CREATE-FILE`](#files), [`CURSOR`](#x16-video-screen-and-cursor)
 
 **D** — [`D+`](#double-cell-math), [`D-`](#double-cell-math), [`D.`](#numeric-output), [`D.R`](#numeric-output), [`D0<`](#double-cell-math), [`D0=`](#double-cell-math), [`D2*`](#double-cell-math), [`D2/`](#double-cell-math), [`D<`](#double-cell-math), [`D=`](#double-cell-math), [`D>S`](#double-cell-math), [`DABS`](#double-cell-math), [`DECIMAL`](#numeric-output), [`DEFER`](#defining-words), [`DEFER!`](#defining-words), [`DEFER@`](#defining-words), [`DEFINITIONS`](#wordlists-and-search-order), [`DELETE-FILE`](#files), [`DEPTH`](#stack-manipulation), [`DMAX`](#double-cell-math), [`DMIN`](#double-cell-math), [`DNEGATE`](#double-cell-math), [`DO`](#control-flow), [`DOES>`](#defining-words), [`DROP`](#stack-manipulation), [`DU<`](#double-cell-math), [`DUP`](#stack-manipulation)
 
 **E** — [`EDIT`](#x16-system-control), [`ELSE`](#control-flow), [`EMIT`](#terminal-io), [`END-STRUCTURE`](#structures), [`ENDCASE`](#control-flow), [`ENDOF`](#control-flow), [`ENVIRONMENT?`](#system-and-environment), [`ERASE`](#memory), [`EVALUATE`](#interpreter-and-input-source), [`EXECUTE`](#control-flow), [`EXIT`](#control-flow), [`EXP`](#basic-alias-and-string-toolkit)
 
-**F** — [`F!`](#floating-point), [`F*`](#floating-point), [`F+`](#floating-point), [`F-`](#floating-point), [`F.`](#floating-point), [`F/`](#floating-point), [`F0<`](#floating-point), [`F0=`](#floating-point), [`F256`](#system-and-environment), [`F<`](#floating-point), [`F>S`](#floating-point), [`F@`](#floating-point), [`FALSE`](#constants-and-literals), [`FATAN`](#floating-point), [`FBIT`](#bit-and-byte-toolkit), [`FCONSTANT`](#basic-alias-and-string-toolkit), [`FCOS`](#floating-point), [`FDROP`](#floating-point), [`FDUP`](#floating-point), [`FEXP`](#floating-point), [`FIELD:`](#structures), [`FILE-POSITION`](#files), [`FILE-SIZE`](#files), [`FILE-STATUS`](#files), [`FILL`](#memory), [`FIND`](#number-and-text-parsing), [`FLN`](#floating-point), [`FLUSH-FILE`](#files), [`FM/MOD`](#arithmetic), [`FMCHORD`](#x16-audio), [`FMDRUM`](#x16-audio), [`FMFREQ`](#x16-audio), [`FMINIT`](#x16-audio), [`FMINST`](#x16-audio), [`FMNOTE`](#x16-audio), [`FMPAN`](#x16-audio), [`FMPLAY`](#x16-audio), [`FMPOKE`](#x16-audio), [`FMVIB`](#x16-audio), [`FMVOL`](#x16-audio), [`FNEGATE`](#floating-point), [`FORGET`](#compiling-and-dictionary), [`FORTH`](#wordlists-and-search-order), [`FORTH-WORDLIST`](#wordlists-and-search-order), [`FOVER`](#floating-point), [`FRAME`](#x16-graphics), [`FRAMES`](#game-support), [`FSIN`](#floating-point), [`FSQRT`](#floating-point), [`FSWAP`](#floating-point), [`FTAN`](#floating-point), [`FVARIABLE`](#basic-alias-and-string-toolkit)
+**F** — [`F!`](#floating-point), [`F*`](#floating-point), [`F**`](#floating-point), [`F+`](#floating-point), [`F-`](#floating-point), [`F.`](#floating-point), [`F/`](#floating-point), [`F0<`](#floating-point), [`F0=`](#floating-point), [`F256`](#system-and-environment), [`F<`](#floating-point), [`F>S`](#floating-point), [`F@`](#floating-point), [`FABS`](#floating-point), [`FALSE`](#constants-and-literals), [`FATAN`](#floating-point), [`FBIT`](#bit-and-byte-toolkit), [`FCONSTANT`](#basic-alias-and-string-toolkit), [`FCOS`](#floating-point), [`FDROP`](#floating-point), [`FDUP`](#floating-point), [`FEXP`](#floating-point), [`FIELD:`](#structures), [`FILE-POSITION`](#files), [`FILE-SIZE`](#files), [`FILE-STATUS`](#files), [`FILL`](#memory), [`FIND`](#number-and-text-parsing), [`FLN`](#floating-point), [`FLUSH-FILE`](#files), [`FM/MOD`](#arithmetic), [`FMAX`](#floating-point), [`FMIN`](#floating-point), [`FMCHORD`](#x16-audio), [`FMDRUM`](#x16-audio), [`FMFREQ`](#x16-audio), [`FMINIT`](#x16-audio), [`FMINST`](#x16-audio), [`FMNOTE`](#x16-audio), [`FMPAN`](#x16-audio), [`FMPLAY`](#x16-audio), [`FMPOKE`](#x16-audio), [`FMVIB`](#x16-audio), [`FMVOL`](#x16-audio), [`FNEGATE`](#floating-point), [`FORGET`](#compiling-and-dictionary), [`FORTH`](#wordlists-and-search-order), [`FORTH-WORDLIST`](#wordlists-and-search-order), [`FOVER`](#floating-point), [`FPOW`](#floating-point), [`FRAME`](#x16-graphics), [`FRAMES`](#game-support), [`FSIN`](#floating-point), [`FSQRT`](#floating-point), [`FSWAP`](#floating-point), [`FTAN`](#floating-point), [`FVARIABLE`](#basic-alias-and-string-toolkit), [`F~`](#floating-point)
 
-**G** — [`GCLS`](#x16-graphics), [`GET-CURRENT`](#wordlists-and-search-order), [`GET-ORDER`](#wordlists-and-search-order), [`GETSPR`](#x16-sprites), [`GINIT`](#x16-graphics), [`GTEXT`](#x16-graphics)
+**G** — [`GCLS`](#x16-graphics), [`GET-CURRENT`](#wordlists-and-search-order), [`GET-ORDER`](#wordlists-and-search-order), [`GINIT`](#x16-graphics), [`GTEXT`](#x16-graphics)
 
-**H** — [`HERE`](#memory), [`HEX`](#numeric-output), [`HEX$`](#basic-alias-and-string-toolkit), [`HOLD`](#numeric-output), [`HOLDS`](#numeric-output)
+**H** — [`HANDLER`](#control-flow), [`HERE`](#memory), [`HEX`](#numeric-output), [`HEX$`](#basic-alias-and-string-toolkit), [`HOLD`](#numeric-output), [`HOLDS`](#numeric-output)
 
-**I** — [`I`](#return-stack-and-loop-index), [`I2CPEEK`](#x16-system-control), [`I2CPOKE`](#x16-system-control), [`IF`](#control-flow), [`IMMEDIATE`](#compiling-and-dictionary), [`INCLUDE`](#files), [`INCLUDE-FILE`](#files), [`INCLUDED`](#files), [`INVERT`](#bitwise), [`IRQ`](#system-and-environment), [`IS`](#defining-words), [`ISQRT`](#floating-point)
+**I** — [`I`](#return-stack-and-loop-index), [`IF`](#control-flow), [`IMMEDIATE`](#compiling-and-dictionary), [`INCLUDE`](#files), [`INCLUDE-FILE`](#files), [`INCLUDED`](#files), [`INVERT`](#bitwise), [`IRQ`](#system-and-environment), [`IS`](#defining-words), [`ISQRT`](#floating-point)
 
 **J** — [`J`](#return-stack-and-loop-index), [`JOY`](#x16-input-devices)
 
@@ -255,7 +255,7 @@ Click a word to jump to its category section (words are also findable with your 
 
 **L** — [`LEAVE`](#control-flow), [`LEFT$`](#basic-alias-and-string-toolkit), [`LEN`](#basic-alias-and-string-toolkit), [`LINE`](#x16-graphics), [`LINPUT`](#basic-alias-and-string-toolkit), [`LITERAL`](#compiling-and-dictionary), [`LOAD`](#x16-load-and-save), [`LOCATE`](#x16-video-screen-and-cursor), [`LOG`](#basic-alias-and-string-toolkit), [`LOOP`](#control-flow), [`LSHIFT`](#bitwise)
 
-**M** — [`M*`](#arithmetic), [`M*/`](#arithmetic), [`M+`](#double-cell-math), [`MARKER`](#compiling-and-dictionary), [`MAX`](#arithmetic), [`MB`](#x16-input-devices), [`MID$`](#basic-alias-and-string-toolkit), [`MIN`](#arithmetic), [`MOD`](#arithmetic), [`MONITOR`](#x16-system-control), [`MOUSE`](#x16-input-devices), [`MOVE`](#memory), [`MOVSPR`](#x16-sprites), [`MWHEEL`](#x16-input-devices), [`MX`](#x16-input-devices), [`MY`](#x16-input-devices)
+**M** — [`M*`](#arithmetic), [`M*/`](#arithmetic), [`M+`](#double-cell-math), [`MARKER`](#compiling-and-dictionary), [`MAX`](#arithmetic), [`MB`](#x16-input-devices), [`MID$`](#basic-alias-and-string-toolkit), [`MIN`](#arithmetic), [`MOD`](#arithmetic), [`MONITOR`](#x16-system-control), [`MOUSE`](#x16-input-devices), [`MOVE`](#memory), [`MS`](#x16-system-control), [`MWHEEL`](#x16-input-devices), [`MX`](#x16-input-devices), [`MY`](#x16-input-devices)
 
 **N** — [`NEGATE`](#arithmetic), [`NIP`](#stack-manipulation)
 
@@ -265,11 +265,11 @@ Click a word to jump to its category section (words are also findable with your 
 
 **Q** — [`QUIT`](#control-flow)
 
-**R** — [`R/O`](#files), [`R/W`](#files), [`R>`](#return-stack-and-loop-index), [`R@`](#return-stack-and-loop-index), [`RANDOM`](#system-and-environment), [`RDROP`](#return-stack-and-loop-index), [`READ-FILE`](#files), [`READ-LINE`](#files), [`REBOOT`](#x16-system-control), [`RECT`](#x16-graphics), [`RECURSE`](#control-flow), [`REFILL`](#interpreter-and-input-source), [`RENAME-FILE`](#files), [`REPEAT`](#control-flow), [`REPOSITION-FILE`](#files), [`REQUIRE`](#files), [`REQUIRED`](#files), [`RESET`](#x16-system-control), [`RESIZE-FILE`](#files), [`RESTORE-INPUT`](#interpreter-and-input-source), [`RIGHT$`](#basic-alias-and-string-toolkit), [`RING`](#x16-graphics), [`RND`](#system-and-environment), [`ROLL`](#stack-manipulation), [`ROT`](#stack-manipulation), [`RPT$`](#basic-alias-and-string-toolkit), [`RSHIFT`](#bitwise)
+**R** — [`R/O`](#files), [`RP@`](#control-flow), [`R/W`](#files), [`R>`](#return-stack-and-loop-index), [`R@`](#return-stack-and-loop-index), [`RANDOM`](#system-and-environment), [`RDROP`](#return-stack-and-loop-index), [`READ-FILE`](#files), [`READ-LINE`](#files), [`REBOOT`](#x16-system-control), [`RECT`](#x16-graphics), [`RECURSE`](#control-flow), [`REFILL`](#interpreter-and-input-source), [`RENAME-FILE`](#files), [`REPEAT`](#control-flow), [`REPOSITION-FILE`](#files), [`REQUIRE`](#files), [`REQUIRED`](#files), [`RESET`](#x16-system-control), [`RESIZE-FILE`](#files), [`RESTORE-INPUT`](#interpreter-and-input-source), [`RIGHT$`](#basic-alias-and-string-toolkit), [`RING`](#x16-graphics), [`RND`](#system-and-environment), [`ROLL`](#stack-manipulation), [`ROT`](#stack-manipulation), [`RPT$`](#basic-alias-and-string-toolkit), [`RSHIFT`](#bitwise)
 
-**S** — [`S"`](#characters-and-strings), [`S>D`](#double-cell-math), [`S>F`](#floating-point), [`SAVE`](#x16-load-and-save), [`SAVE-INPUT`](#interpreter-and-input-source), [`SBIT`](#bit-and-byte-toolkit), [`SCREEN`](#x16-video-screen-and-cursor), [`SCROLLX`](#x16-video-screen-and-cursor), [`SCROLLY`](#x16-video-screen-and-cursor), [`SEARCH-WORDLIST`](#wordlists-and-search-order), [`SET-CURRENT`](#wordlists-and-search-order), [`SET-ORDER`](#wordlists-and-search-order), [`SETBANK`](#x16-system-control), [`SGN`](#arithmetic), [`SIGN`](#numeric-output), [`SIN`](#basic-alias-and-string-toolkit), [`SLEEP`](#x16-system-control), [`SLITERAL`](#compiling-and-dictionary), [`SM/REM`](#arithmetic), [`SOURCE`](#interpreter-and-input-source), [`SOURCE-ID`](#interpreter-and-input-source), [`SPACE`](#terminal-io), [`SPACES`](#terminal-io), [`SPLIT`](#bit-and-byte-toolkit), [`SPRITE`](#x16-sprites), [`SPRITE-IMAGE`](#x16-sprites), [`SPRITE-POS`](#x16-sprites), [`SPRITE-SIZE`](#x16-sprites), [`SPRITE-Z`](#x16-sprites), [`SPRITES-OFF`](#x16-sprites), [`SPRITES-ON`](#x16-sprites), [`SPRLOAD`](#x16-load-and-save), [`SPRMEM`](#x16-sprites), [`SPRSAVE`](#x16-load-and-save), [`SQR`](#basic-alias-and-string-toolkit), [`STATE`](#interpreter-and-input-source), [`STR$`](#basic-alias-and-string-toolkit), [`SWAP`](#stack-manipulation), [`S\"`](#characters-and-strings)
+**S** — [`S"`](#characters-and-strings), [`S>D`](#double-cell-math), [`S>F`](#floating-point), [`SAVE`](#x16-load-and-save), [`SAVE-INPUT`](#interpreter-and-input-source), [`SBIT`](#bit-and-byte-toolkit), [`SCREEN`](#x16-video-screen-and-cursor), [`SCROLLX`](#x16-video-screen-and-cursor), [`SCROLLY`](#x16-video-screen-and-cursor), [`SEARCH-WORDLIST`](#wordlists-and-search-order), [`SET-CURRENT`](#wordlists-and-search-order), [`SET-ORDER`](#wordlists-and-search-order), [`SETBANK`](#x16-system-control), [`SGN`](#arithmetic), [`SIGN`](#numeric-output), [`SIN`](#basic-alias-and-string-toolkit), [`SLEEP`](#x16-system-control), [`SLITERAL`](#compiling-and-dictionary), [`SM/REM`](#arithmetic), [`SOURCE`](#interpreter-and-input-source), [`SOURCE-ID`](#interpreter-and-input-source), [`SP@`](#control-flow), [`SPACE`](#terminal-io), [`SPACES`](#terminal-io), [`SPLIT`](#bit-and-byte-toolkit), [`SPRITE`](#x16-sprites), [`SPRITE-GET`](#x16-sprites), [`SPRITE-IMAGE`](#x16-sprites), [`SPRITE-MEM`](#x16-sprites), [`SPRITE-MOV`](#x16-sprites), [`SPRITE-POS`](#x16-sprites), [`SPRITE-SIZE`](#x16-sprites), [`SPRITE-Z`](#x16-sprites), [`SPRITES-OFF`](#x16-sprites), [`SPRITES-ON`](#x16-sprites), [`SPRLOAD`](#x16-load-and-save), [`SPRSAVE`](#x16-load-and-save), [`SQR`](#basic-alias-and-string-toolkit), [`STATE`](#interpreter-and-input-source), [`STR$`](#basic-alias-and-string-toolkit), [`SWAP`](#stack-manipulation), [`S\"`](#characters-and-strings)
 
-**T** — [`TAN`](#basic-alias-and-string-toolkit), [`TATTR`](#x16-video-screen-and-cursor), [`TDATA`](#x16-video-screen-and-cursor), [`THEN`](#control-flow), [`TIB`](#interpreter-and-input-source), [`TILE`](#x16-video-screen-and-cursor), [`TILELOAD`](#x16-load-and-save), [`TILESAVE`](#x16-load-and-save), [`TMAPLOAD`](#x16-load-and-save), [`TMAPSAVE`](#x16-load-and-save), [`TO`](#defining-words), [`TRUE`](#constants-and-literals), [`TUCK`](#stack-manipulation), [`TYPE`](#characters-and-strings)
+**T** — [`TAN`](#basic-alias-and-string-toolkit), [`TATTR`](#x16-video-screen-and-cursor), [`TDATA`](#x16-video-screen-and-cursor), [`THEN`](#control-flow), [`THROW`](#control-flow), [`TIB`](#interpreter-and-input-source), [`TILE`](#x16-video-screen-and-cursor), [`TILELOAD`](#x16-load-and-save), [`TILESAVE`](#x16-load-and-save), [`TMAPLOAD`](#x16-load-and-save), [`TMAPSAVE`](#x16-load-and-save), [`TO`](#defining-words), [`TRUE`](#constants-and-literals), [`TUCK`](#stack-manipulation), [`TYPE`](#characters-and-strings)
 
 **U** — [`U.`](#numeric-output), [`U.R`](#numeric-output), [`U<`](#comparison-and-logic), [`U>`](#comparison-and-logic), [`UD*`](#arithmetic), [`UD/MOD`](#arithmetic), [`UM*`](#arithmetic), [`UM/MOD`](#arithmetic), [`UNLOOP`](#control-flow), [`UNTIL`](#control-flow), [`UNUSED`](#memory), [`USR`](#system-and-environment)
 
@@ -291,6 +291,7 @@ Click a word to jump to its category section (words are also findable with your 
 - **`NIP`** ( a b -- b ) — drop the second item. `1 2 NIP` → `2`
 - **`TUCK`** ( a b -- b a b ) — copy the top under the second. `1 2 TUCK` → `2 1 2`
 - **`ROT`** ( a b c -- b c a ) — rotate the third item to the top. `1 2 3 ROT` → `2 3 1`
+- **`-ROT`** ( a b c -- c a b ) — rotate the top item down to third. `1 2 3 -ROT` → `3 1 2`
 - **`PICK`** ( xu..x0 u -- xu..x0 xu ) — copy the u-th item (0 = top). `9 8 7 2 PICK` → `9 8 7 9`
 - **`ROLL`** ( xu..x0 u -- .. x0 xu ) — move the u-th item to the top. `1 2 3 2 ROLL` → `2 3 1`
 - **`DEPTH`** ( -- n ) — number of items on the data stack. `1 2 DEPTH` → `1 2 2`
@@ -554,6 +555,10 @@ These are IMMEDIATE and used inside `:` definitions.
 - **`QUIT`** ( -- ) — empty the return stack and re-enter the interpreter (no message).
 - **`ABORT`** ( -- ) — clear both stacks and return to the interpreter.
 - **`ABORT"`** ( flag "ccc\"" -- ) — if flag is true, print the message and `ABORT`. `x 0= ABORT" zero!"`
+- **`CATCH`** ( i*x xt -- j*x 0 | i*x n ) — run `xt`; return `0` if it completes, or the code `n` passed to `THROW`, with the stacks restored. The recoverable alternative to `ABORT`. `' RISKY CATCH IF ." failed" THEN`
+- **`THROW`** ( k*x n -- k*x | i*x n ) — if `n` is non-zero, unwind to the nearest `CATCH` and return `n` from it; `0 THROW` does nothing. An uncaught `THROW` performs `ABORT`.
+- **`SP@`** ( -- addr ), **`RP@`** ( -- addr ) — fetch the data / return stack pointer (used by `CATCH`).
+- **`HANDLER`** ( -- addr ) — variable holding the current exception frame (0 = none).
 
 ## Return stack and loop index
 
@@ -670,11 +675,11 @@ access set the address once with `VADDR` then stream with `V!`/`V@`.
 - **`SPRITES-OFF`** ( -- ) — disable the sprite layer.
 - **`SPRITE-IMAGE`** ( graphaddr sprite -- ) — point a sprite's image at VRAM `graphaddr` (4bpp, 32-aligned).
 - **`SPRITE-POS`** ( x y sprite -- ) — set a sprite's 12-bit position.
-- **`GETSPR`** ( sprite -- x y ) — read a sprite's position (inverse of `SPRITE-POS`).
+- **`SPRITE-GET`** ( sprite -- x y ) — read a sprite's position (inverse of `SPRITE-POS`).
 - **`SPRITE-SIZE`** ( width height sprite -- ) — size codes 0-3 = 8/16/32/64 pixels.
 - **`SPRITE-Z`** ( z sprite -- ) — Z-depth 0=off, 1=behind, 2=between, 3=front.
-- **`MOVSPR`** ( num x y -- ) — set position (BASIC `MOVSPR num,x,y`).
-- **`SPRMEM`** ( num bank addr -- ) — point a sprite's image at VRAM `bank:addr` (BASIC `SPRMEM num,bank,addr`).
+- **`SPRITE-MOV`** ( num x y -- ) — set position (= BASIC `MOVSPR num,x,y`).
+- **`SPRITE-MEM`** ( num bank addr -- ) — point a sprite's image at VRAM `bank:addr` (= BASIC `SPRMEM num,bank,addr`).
 - **`SPRITE`** ( num zdepth -- ) — set Z-depth and enable the sprite layer (BASIC `SPRITE num,zdepth`).
 
 ## X16 graphics
@@ -743,18 +748,21 @@ the per-word dictionary search, ~30 s for a few hundred definitions). These two
 words snapshot the **compiled** dictionary so it reloads in about a second. They
 are generic — they work for any compiled code, not a specific program.
 
-- **`SAVE-IMAGE`** ( -- ) — write the current compiled dictionary to three files
-  on device 8: `F.DIC` (dictionary bytes), `F.TOK` (the user portion of the
-  token table), `F.VAR` (the dictionary-state pointers: `HERE`, the wordlist
-  heads, the high token). Run it once, after loading your library.
-- **`LOAD-IMAGE`** ( -- flag ) — reload those files and restore the dictionary,
-  making every saved word available immediately. `flag` is `TRUE` if the image
-  loaded, `FALSE` if `F.DIC` was not found.
+- **`SAVE-IMAGE`** ( c-addr u -- ) — write the current compiled dictionary to
+  three files on device 8, named from the base string you give: `<name>.DIC`
+  (dictionary bytes), `<name>.TOK` (the user portion of the token table),
+  `<name>.VAR` (the dictionary-state pointers: `HERE`, the wordlist heads, the
+  high token). Run it once, after loading your library. The base name is capped
+  at 16 characters.
+- **`LOAD-IMAGE`** ( c-addr u -- flag ) — reload the three files for that base
+  name and restore the dictionary, making every saved word available
+  immediately. `flag` is `TRUE` if the image loaded, `FALSE` if `<name>.DIC` was
+  not found.
 
 ```
-INCLUDE HP50.FTH   SAVE-IMAGE      \ once: the slow compile, then snapshot
+INCLUDE HP50.FTH   S" HP50" SAVE-IMAGE      \ once: the slow compile, then snapshot
 ( reboot )
-LOAD-IMAGE DROP    HP              \ every boot after: ~1 s, ready to use
+S" HP50" LOAD-IMAGE DROP    HP              \ every boot after: ~1 s, ready to use
 ```
 
 Notes: the image is tied to the exact `forthx16.prg` build (it stores absolute
@@ -790,6 +798,19 @@ also leave the data stack unchanged.
 - **`F/`** ( F: r1 r2 -- r1/r2 ) — divide.
 - **`FSQRT`** ( F: r -- sqrt ) — square root.
 - **`FNEGATE`** ( F: r -- -r ) — negate.
+- **`FABS`** ( F: r -- |r| ) — absolute value.
+- **`FPOW`** ( F: x y -- x^y ) — raise to a power, via `exp(y*ln x)` (needs x > 0). `2 S>F 10 S>F FPOW F.` → `1024`
+- **`F**`** ( F: x y -- x^y ) — the standard name for `FPOW`.
+- **`FMAX`** ( F: r1 r2 -- r ), **`FMIN`** ( F: r1 r2 -- r ) — larger / smaller of two floats.
+- **`F~`** ( F: r1 r2 r3 -- ) ( -- flag ) — approximate compare (`r3>0` absolute, `=0` exact, `<0` relative). *In `toolkit/FPX.FTH` — `INCLUDE FPX.FTH`.*
+
+More Forth-2012 FLOATING/FLOATING-EXT words live in **`toolkit/FPX.FTH`** (`INCLUDE FPX.FTH`), built on the primitives above:
+- Constants: **`FPI`** (π), **`FPI2`** (π/2), **`FLN10`** (ln 10).
+- Memory/size: **`FLOAT+`** ( a -- a+5 ), **`FLOATS`** ( n -- 5n ), **`FALIGN`**/**`FALIGNED`** (no-ops here).
+- Shuffles: **`FROT`** ( r1 r2 r3 -- r2 r3 r1 ), **`FSINCOS`** ( r -- sin cos ).
+- Log/exp: **`FLOG`** (log₁₀), **`FALOG`** (10^r), **`FLNP1`** (ln 1+r), **`FEXPM1`** (e^r−1).
+- Hyperbolic: **`FSINH`**, **`FCOSH`**, **`FTANH`**.
+- Inverse trig: **`FASIN`**, **`FACOS`** (undefined at |r|=1), **`FATAN2`** ( y x -- angle ) full-quadrant.
 - **`FDROP`** ( F: r -- ) — drop the top float.
 - **`FDUP`** ( F: r -- r r ) — duplicate.
 - **`FSWAP`** ( F: r1 r2 -- r2 r1 ) — swap.
@@ -812,11 +833,15 @@ the corresponding FP word's body under a BASIC name.
 - **`OPEN`** ( c-addr u fam -- fileid ior ) — open a file (like `OPEN-FILE`).
 - **`CLOSE`** ( fileid -- ior ) — close a file.
 - **`LINPUT`** ( c-addr +n -- +n2 ) — read a line from the keyboard into a buffer.
+The BASIC math names below are **not** in the core — they only duplicated the
+`F*` words, so they were moved to `toolkit/BASICMATH.FTH` to save ROM space. Load
+them with `INCLUDE BASICMATH.FTH` (or just use `FSQRT`/`FSIN`/… directly):
+
 - **`SQR`** ( F: r -- sqrt ) — square root (BASIC name for `FSQRT`).
-- **`SIN`** ( F: r -- sin ), **`COS`** ( F: r -- cos ), **`TAN`** ( F: r -- tan ) — trig.
-- **`ATN`** ( F: r -- atan ) — arctangent.
-- **`LOG`** ( F: r -- ln ) — natural logarithm.
-- **`EXP`** ( F: r -- e^r ) — exponential.
+- **`SIN`** ( F: r -- sin ), **`COS`** ( F: r -- cos ), **`TAN`** ( F: r -- tan ) — trig (= `FSIN`/`FCOS`/`FTAN`).
+- **`ATN`** ( F: r -- atan ) — arctangent (= `FATAN`).
+- **`LOG`** ( F: r -- ln ) — natural logarithm (= `FLN`).
+- **`EXP`** ( F: r -- e^r ) — exponential (= `FEXP`).
 - **`HEX$`** ( u -- c-addr u ) — number as hexadecimal digits. `255 HEX$ TYPE` → `FF`
 - **`BIN$`** ( u -- c-addr u ) — number as binary digits.
 - **`STR$`** ( n -- c-addr u ) — signed number as a string (current base).
@@ -846,9 +871,8 @@ the corresponding FP word's body under a BASIC name.
 - **`SETBANK`** ( bank -- ) — select the RAM bank visible at `$A000-$BFFF`.
 - **`B@`** ( bank off -- byte ) — read a byte from banked RAM (`off` = 0..8191 into `$A000`).
 - **`B!`** ( byte bank off -- ) — store a byte into banked RAM.
-- **`I2CPOKE`** ( device register value -- ) — write a byte to an I²C register.
-- **`I2CPEEK`** ( device register -- value ) — read a byte from an I²C register.
 - **`SLEEP`** ( jiffies -- ) — wait `jiffies` 1/60-second ticks. `60 SLEEP` waits ~1 s.
+- **`MS`** ( u -- ) — wait ~`u` milliseconds (calibrated 8 MHz busy loop; approximate but ≥ `u` ms). `1000 MS` ≈ 1 s.
 - **`RESET`** ( -- ) — hardware reset via the SMC.
 - **`POWEROFF`** ( -- ) — power the machine off via the SMC.
 - **`REBOOT`** ( -- ) — soft reboot through the reset vector.
@@ -868,12 +892,13 @@ Clock (battery RTC / system clock):
 Palette:
 - **`PAL!`** ( rgb index -- ) — set palette entry `index` (0-255) to a 12-bit `$RGB` colour. `$0F00 1 PAL!` (entry 1 = red).
 
-PCM audio (VERA FIFO):
-- **`PCMCTRL`** ( n -- ) — write AUDIO_CTRL: volume 0-15, bit4 stereo, bit5 16-bit, bit7 (write) resets the FIFO.
-- **`PCMRATE`** ( n -- ) — sample rate (0 = stop … 128 = 48 kHz).
-- **`PCM!`** ( byte -- ) — push one sample byte into the FIFO (ignored when full).
-- **`PCMFULL?`** ( -- flag ) — true when the FIFO cannot accept more data.
-- **`PCM-WRITE`** ( addr count -- ) — blast `count` bytes from RAM into the FIFO (for priming an empty ≤4 KB FIFO; does not throttle).
+PCM audio (VERA FIFO). The one-shot register words live in `toolkit/PCMAUDIO.FTH`
+(`INCLUDE PCMAUDIO.FTH`); only the streaming `PCM-WRITE` is built in:
+- **`PCMCTRL`** ( n -- ) — *(toolkit)* write AUDIO_CTRL: volume 0-15, bit4 stereo, bit5 16-bit, bit7 (write) resets the FIFO.
+- **`PCMRATE`** ( n -- ) — *(toolkit)* sample rate (0 = stop … 128 = 48 kHz).
+- **`PCM!`** ( byte -- ) — *(toolkit)* push one sample byte into the FIFO (ignored when full).
+- **`PCMFULL?`** ( -- flag ) — *(toolkit)* true when the FIFO cannot accept more data.
+- **`PCM-WRITE`** ( addr count -- ) — blast `count` bytes from RAM into the FIFO (for priming an empty ≤4 KB FIFO; does not throttle). Native.
 
 VERA layers:
 - **`LAYER-ON`** / **`LAYER-OFF`** ( layer -- ) — enable/disable display layer 0 or 1.
@@ -1164,9 +1189,9 @@ stack, and a small interpreter written in Forth. It is not the real 50g (no CAS
 RPN scientific/programmer calculator.
 
 ```
-INCLUDE HP50.FTH   SAVE-IMAGE      \ once (slow compile, then snapshot)
-LOAD-IMAGE DROP                    \ every boot after (fast)  - or just INCLUDE HP50.FTH
-HP                                 \ start the calculator
+INCLUDE HP50.FTH   S" HP50" SAVE-IMAGE   \ once (slow compile, then snapshot)
+S" HP50" LOAD-IMAGE DROP                 \ every boot after (fast) - or just INCLUDE HP50.FTH
+HP                                       \ start the calculator
 ```
 
 At the `>` prompt you enter numbers and commands RPN-style — numbers push onto a

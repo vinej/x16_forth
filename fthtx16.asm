@@ -379,15 +379,19 @@ IRQ_DSTACK_TOP = irq_dstack + 64 - 2
 ; SAVE-IMAGE/LOAD-IMAGE turnkey: 64-byte buffer holding the saved dictionary-state
 ; zero-page block (see x16.asm).
 +hmbuffer ~IMGBUF, 64
-; RAM copy of the image filenames (F.DIC/F.TOK/F.VAR). The names are code literals,
-; which live in ROM in the bank-9 / cart builds; the bridged KERNAL runs with bank 0
-; mapped and cannot read them there, so SAVE-IMAGE/LOAD-IMAGE copy the name into this
-; RAM buffer (readable in any bank) before SETNAM.
-+hmbuffer ~imgnam, 8
+; RAM copy of the image filename, built as <basename> + ".DIC"/".TOK"/".VAR".
+; SAVE-IMAGE/LOAD-IMAGE take the base name on the stack ( c-addr u -- ), copy it
+; here, append the suffix, then SETNAM. The buffer lives in RAM (readable in any
+; bank) because the bridged KERNAL runs with bank 0 mapped. 16-char base + 4-char
+; suffix = 20 (the KERNAL/CBM filename limit is 16, but the extra headroom is free).
++hmbuffer ~imgnam, 20
++hmbuffer ~imgbaselen, 1		; length of the copied base name
 ; SYSCALL builds a tiny "jsr JSRFAR / .word target / .byte 0 / rts" trampoline here
 ; at run time so it can call an arbitrary KERNAL routine (dynamic target) in bank 0
 ; from the bank-9 Forth ROM. In RAM so it is executable and (in ROM) modifiable.
 +hmbuffer ~syscall_stub, 8
+; CATCH/THROW: the current exception frame (0 = none). See EXCEPTION wordset.
++hmbuffer ~exc_handler, 2
 
 !if X16ROM {
 ; --- KERNAL bridge (v3 run-from-ROM) --------------------------------------
@@ -783,6 +787,10 @@ STACKLIMIT = DSIZE/2 - 2*SSAFE
 } else if F256 {
 	jsr f256buffersinit
 }
+
+	lda #0			; CATCH/THROW: no exception frame installed yet
+	sta exc_handler
+	sta exc_handler+1
 
 !if X16 {
 	lda #<FSTACK_TOP	; initialize the floating-point stack pointer
@@ -1461,6 +1469,74 @@ cfatoxt_found:		; Unless the system is broken, something has to be found and C i
 ; Execute the word by address on the stack
 +header ~execute, ~execute_n, "EXECUTE"
 	+code invoke
+
+; --- Exception handling: Forth 2012 EXCEPTION wordset ----------------------
+; CATCH ( i*x xt -- j*x 0 | i*x n ) runs xt; returns 0 on normal completion, or
+; the code n given to THROW, having restored the data & return stacks. THROW
+; ( k*x n -- k*x | i*x n ) with n=0 is a no-op; otherwise it unwinds to the most
+; recent CATCH. An uncaught THROW (no handler) performs ABORT. Classic Ragsdale
+; implementation: the frame (prev-handler, saved SP) sits on the return stack and
+; exc_handler points at it. SP@/RP@ read the stack pointers (TOS is cached in
+; _dtop, so the memory pointers _dstack/_rstack are what save/restore).
++header ~spat, ~spat_n, "SP@"
+	+code
+	+ldax _dstack
+	jmp dpush_and_next
+
++header ~rpat, ~rpat_n, "RP@"
+	+code
+	+ldax _rstack
+	jmp dpush_and_next
+
++header ~handler, ~handler_n, "HANDLER"
+	+code
+	lda #<exc_handler
+	ldx #>exc_handler
+	jmp dpush_and_next
+
++header ~catch, ~catch_n, "CATCH"
+	+forth
+	+token spat, tor, handler, peek, tor, rpat, handler, poke
+	+token execute
+	+token rfrom, handler, poke, rfrom, drop, zero, exit
+
++header ~throw, ~throw_n, "THROW"
+	+code
+	lda _dtop			; n = 0 ?  -> drop and continue
+	ora _dtop+1
+	bne throw_do
+	+dpop
+	jmp next
+throw_do:
+	lda _dtop			; stash n on the CPU stack
+	pha
+	lda _dtop+1
+	pha
+	lda exc_handler			; no handler installed -> uncaught -> ABORT
+	ora exc_handler+1
+	bne throw_have
+	pla
+	pla
+	jmp abort_c
+throw_have:
+	lda exc_handler			; restore return stack to the CATCH frame
+	sta _rstack
+	lda exc_handler+1
+	sta _rstack+1
+	jsr pop_rstack			; R> handler ! : previous handler
+	sta exc_handler
+	stx exc_handler+1
+	jsr pop_rstack			; R> : saved SP -> _dstack
+	sta _dstack
+	stx _dstack+1
+	jsr pop_dstack			; drop to the i*x below xt (TOS <- top of i*x)
+	pla				; n back off the CPU stack
+	tax
+	pla
+	jsr push_dstack			; push n as the result
+	+rpop				; return to CATCH's caller with ( i*x n )
+	+stax _ri
+	jmp next
 
 ; Reset data stack and perform QUIT.
 +header ~abort, ~abort_n, "ABORT"
@@ -2156,6 +2232,11 @@ less_result:
 +header ~rot, ~rot_n, "ROT"
 	+forth
 	+token tor, swap, rfrom, swap, exit
+
+; -ROT ( a b c -- c a b )   rotate the top three the other way
++header ~nrot, ~nrot_n, "-ROT"
+	+forth
+	+token rot, rot, exit
 
 ;
 ;	code pick

@@ -1,6 +1,6 @@
 \ FORTHX16 - MEMORY / BANKING / SYSTEM SELF-TEST
-\ Tests SETBANK, I2CPEEK, SLEEP, KEYMAP. (I2CPOKE and RESET/REBOOT/POWEROFF are
-\ not exercised here - they change hardware state or reset the machine.)
+\ Tests SETBANK, SLEEP, KEYMAP. (RESET/REBOOT/POWEROFF are not exercised here -
+\ they change hardware state or reset the machine.)
 \ REQUIRES THE X16 BUILD. RUN WITH:  INCLUDE X16MEM.FTH
 
 DECIMAL
@@ -18,10 +18,6 @@ VARIABLE #FAIL
    5 SETBANK
    ." SETBANK " 0 C@ 5 CHECK
    0 SETBANK
-
-   \ I2CPEEK the SMC (device $42) register 0 - just confirm it runs
-   66 0 I2CPEEK DROP
-   ." I2CPEEK " 111 111 CHECK
 
    \ SLEEP a few jiffies and return
    3 SLEEP

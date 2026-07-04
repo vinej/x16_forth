@@ -40,8 +40,8 @@ confirmed against the ROM when implemented.
 
 ## Sprites
 - [x] `SPRITE num zdepth` — set Z-depth (0=off 1-3) and enable the sprite layer
-- [x] `MOVSPR num x y` — set sprite position
-- [x] `SPRMEM num bank addr` — set sprite image address (4bpp, 17-bit VRAM addr)
+- [x] `SPRITE-MOV num x y` — set sprite position (= BASIC MOVSPR)
+- [x] `SPRITE-MEM num bank addr` — set sprite image address, 4bpp/17-bit VRAM (= BASIC SPRMEM)
 - (Also available as Forth-style words: `SPRITE-IMAGE SPRITE-POS SPRITE-SIZE
   SPRITE-Z SPRITES-ON SPRITES-OFF`. The optional BASIC `SPRITE` args
   paloffset/flips/size map to `SPRITE-SIZE` etc.)
@@ -94,9 +94,11 @@ confirmed against the ROM when implemented.
 ## Memory / banking / system
 - [~] `POKE` / `PEEK` — Forth already has `C! C@ ! @`
 - [x] `SETBANK ( bank -- )` — select the RAM bank at $A000-$BFFF (ROM bank not exposed)
-- [x] `I2CPOKE ( device register value -- )` — write an I2C register (SMC, RTC…)
-- [x] `I2CPEEK ( device register -- value )` — read an I2C register
+- [ ] `I2CPOKE`/`I2CPEEK` — removed from the core to save ROM (rarely used; the
+      KERNAL I2C entries aren't reachable from the bank-9 ROM anyway). Add a
+      `SYSCALL`-based version to a toolkit if needed.
 - [x] `SLEEP ( jiffies -- )` — wait n/60 seconds
+- [x] `MS ( u -- )` — wait ~u milliseconds (calibrated busy loop)
 - [x] `RESET ( -- )` — system reset (via SMC)
 - [x] `REBOOT ( -- )` — soft reboot (reset vector)
 - [x] `POWEROFF ( -- )` — power off (via SMC)
@@ -126,7 +128,7 @@ a dedicated float stack:
 - [x] `>FLOAT` and interpreter float literals (`3.14`, `1E3`, `-2.5E-2` in interpret mode)
 - [x] `F.` — print a float ; `ISQRT ( n -- m )` — integer square root
 - [x] `FVARIABLE FCONSTANT` (toolkit/X16FP.FTH)
-- [x] BASIC names `SQR SIN COS TAN ATN LOG EXP` (toolkit/X16BASIC.FTH)
+- [x] BASIC names `SQR SIN COS TAN ATN LOG EXP` — aliases of the `F*` words; load `INCLUDE BASICMATH.FTH` (toolkit)
 - [ ] optional polish: `FS. FE.`, float literals inside `:` definitions, signed `F>S`
 
 ## String / number-conversion functions   (in toolkit/X16STR.FTH — INCLUDE it)

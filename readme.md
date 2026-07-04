@@ -96,7 +96,11 @@ DMIN		DNEGATE		M*/			M+
 All Double-Number and Extension words are completely supported and compliant.
 
 ### Exception words
-Not supported and not planned. This set is optional, but the implementation may be too heavy for 16-bit core.
+`CATCH` ( i*x xt -- j*x 0 | i*x n ) and `THROW` ( k*x n -- k*x | i*x n ) are
+supported: `CATCH` runs an xt and returns 0 or the thrown code with the stacks
+restored; `THROW` unwinds to the nearest `CATCH` (0 is a no-op, an uncaught throw
+does `ABORT`). Also `SP@ RP@ HANDLER` (the primitives they build on). The
+`ABORT`/`ABORT"`-with-codes niceties are not added, but roll-your-own is trivial.
 
 ### Facility words
 No words from the main Facility set are currently supported.
@@ -374,16 +378,14 @@ SPRITES-ON   ( -- )                enable the sprite layer
 SPRITES-OFF  ( -- )                disable the sprite layer
 SPRITE-IMAGE ( graphaddr sprite -- ) set 4bpp image address (32-aligned VRAM address)
 SPRITE-POS   ( x y sprite -- )     set position
-GETSPR       ( sprite -- x y )     read a sprite's position (inverse of SPRITE-POS)
+SPRITE-GET   ( sprite -- x y )     read a sprite's position (inverse of SPRITE-POS)
 SPRITE-SIZE  ( width height sprite -- ) size codes 0-3 = 8/16/32/64 pixels
 SPRITE-Z     ( z sprite -- )       Z-depth 0=off 1=behind 2=between 3=front
+SPRITE-MOV   ( num x y -- )        set sprite position (= BASIC MOVSPR)
+SPRITE-MEM   ( num bank addr -- )  set sprite image address, 4bpp (= BASIC SPRMEM)
 ```
-BASIC-compatible sprite commands are also provided:
-```
-SPRITE ( num zdepth -- )    set Z-depth (0=off 1-3) and enable the sprite layer
-MOVSPR ( num x y -- )       set sprite position
-SPRMEM ( num bank addr -- ) set sprite image address (4bpp)
-```
+Plus `SPRITE ( num zdepth -- )` — set Z-depth (0=off 1-3) and enable the sprite
+layer (= BASIC SPRITE).
 
 ### Audio
 PSG voices (0-15). `PSGFREQ/PSGVOL/PSGWAV` write VERA's PSG registers directly;
@@ -465,19 +467,27 @@ S>F  ( n -- ) ( F: -- r )     integer to float
 F>S  ( -- n ) ( F: r -- )     float to integer (non-negative)
 F+ F- F* F/  ( F: a b -- c )  arithmetic
 FDUP FDROP FSWAP FOVER FNEGATE   float-stack operations
-FSQRT FSIN FCOS FTAN FATAN FLN FEXP   ( F: r -- f(r) )
+FSQRT FSIN FCOS FTAN FATAN FLN FEXP FABS   ( F: r -- f(r) )
+FPOW  F**  ( F: x y -- x^y )   power via exp(y*ln x), x>0
+FMAX FMIN  ( F: r1 r2 -- r )   larger / smaller of two floats
 F@ F!  ( f-addr -- )          fetch / store a float (5 bytes) in memory
 F< F0< F0=                    comparisons ( -- flag )
 >FLOAT ( c-addr u -- flag )   parse a string as a float (pushes it if valid)
 F.   ( F: r -- )              print a float
 ISQRT ( n -- m )              integer square root
 ```
+More FLOATING / FLOATING-EXT words are in `toolkit/FPX.FTH` (`INCLUDE FPX.FTH`),
+composed from the primitives above: constants `FPI FPI2 FLN10`; sizing
+`FLOAT+ FLOATS FALIGN FALIGNED`; `FROT FSINCOS`; `FLOG FALOG FLNP1 FEXPM1`;
+hyperbolic `FSINH FCOSH FTANH`; inverse trig `FASIN FACOS FATAN2`; and
+`F~` (approximate compare).
 Float **literals** can be typed directly at the interpreter, e.g. `3.14`, `1E3`,
 `-2.5E-2` — they are recognized and pushed to the float stack. (Inside a `:`
 definition use `S" ..." >FLOAT` or an `FCONSTANT`.)
-The FP defining words `FVARIABLE` and `FCONSTANT` and the BASIC names
-`SQR SIN COS TAN ATN LOG EXP` are **built into the X16 build** (no INCLUDE needed;
-they were formerly `toolkit/X16FP.FTH` / `toolkit/X16BASIC.FTH`).
+The FP defining words `FVARIABLE` and `FCONSTANT` are built into the X16 build.
+The BASIC math names `SQR SIN COS TAN ATN LOG EXP` are just aliases of the `F*`
+words, so to save ROM space they live in `toolkit/BASICMATH.FTH` — `INCLUDE
+BASICMATH.FTH` to get them, or use `FSQRT`/`FSIN`/… directly.
 Example: `2 S>F FSQRT F.` prints `1.41421356`.
 
 ### System / dev
@@ -491,9 +501,8 @@ EDIT     ( c-addr u -- )  edit a file in the X16 full-screen editor (u=0 = new)
 SETBANK  ( bank -- )   select the RAM bank visible at $A000-$BFFF
 B@       ( bank off -- byte )   read a byte from banked RAM (off 0..8191)
 B!       ( byte bank off -- )   store a byte into banked RAM (off 0..8191)
-I2CPOKE  ( device register value -- )  write an I2C register (SMC, RTC…)
-I2CPEEK  ( device register -- value )  read an I2C register
 SLEEP    ( jiffies -- )  wait 'jiffies' 1/60-second ticks
+MS       ( u -- )        wait ~u milliseconds (calibrated 8 MHz busy loop)
 KEYMAP   ( c-addr u -- )  set the keyboard layout, e.g. S" en-us" KEYMAP
 RESET    ( -- )        hardware reset (via the SMC)
 REBOOT   ( -- )        soft reboot through the reset vector
@@ -583,7 +592,21 @@ A modified copy of Forth test suite is in `tests` - copy files from there to the
 
 A practically stock copy of Forth test suite is in `tests-F256` as that platform uses ASCII and does not need character hacks.
 
-A few examples and benchmarks are in `other` - `BENCH.FTH` and `ERASTO.FTH` are old benchmarking programs calculating primes, practically unchanged (`BENCH` had a few `ENDIF`s replaced by `THEN`s). `RC4TEST.FTH` is a sample from the [Wikipedia](https://en.wikipedia.org/wiki/Forth_(programming_language)) page, unmodified. `GAME.FTH` is a small proof-of-concept 2D game ("catch the dots") showing the game-support primitives together - hardware sprites, `VSYNC` pacing, `COLLIDE?` collision, `VFILL` (building sprite images), `JOY` input and `RND`: `INCLUDE GAME.FTH` then `PLAY` (arrow keys to move, Start to quit), or `SELFTEST` for a non-interactive frame. `GAMEYM.FTH` is the same game with its audio switched from the VERA PSG to the YM2151 FM synth - only section 4 differs, using `FMINIT`/`FMINST`/`FMNOTE`/`FMVOL` (a demonstration of the FM words and of swapping a sound backend). `SPLIT.FTH` is a split-screen helper library for the X16: it puts a 320x240 bitmap on VERA layer 0 and confines the text console to a window on layer 1 (composited on top), giving a graphics-top / text-bottom screen with no raster interrupt - `INCLUDE SPLIT.FTH` then `SPLIT-DEMO`; `SPLITON`/`SPLITOFF` enter/leave it (`SPLIT-ROWS` sets the text-window height). It also provides the full bitmap-graphics vocabulary as direct-to-VERA words that work in BOTH the split and normal `GINIT` full-screen mode (both use the same $0000 bitmap): `GCLS PSET LINE FRAME RECT RING OVAL GTEXT`, radius circles `CIRCLE`/`FCIRCLE` (same names/signatures as the KERNAL GRAPH words, which they redefine), plus low-level `BPSET BHLINE BVLINE BLINE BFILL BRECT BCLS`. A persistent-pen API avoids repeating the colour: `n GCOLOR` then `PLOT DRAW BOX FBOX ELL FELL CIRC DISC SAY`. `MORTGAGE.FTH` is a Canadian mortgage calculator: it uses the semi-annual-compounding rule (`i = (1+j/2)^(1/6)-1`) and the floating-point words to compute the monthly payment and print a full capital/interest amortization grid - `INCLUDE MORTGAGE.FTH` then `300000. 25 550 MTG` ($300k, 25 yr, 5.50%; principal takes a trailing dot so it can exceed 16 bits, rate is x100), then `SCHEDULE` for the month-by-month table or `YEARLY` for a yearly one. It doubles as a worked example of building a power function from `FLN`/`FEXP` and printing money to the cent past `F>S`'s 65535 limit via a 32-bit double and pictured numeric output. `HP50.FTH` is an HP-50g-style RPN scientific calculator: a typed value stack, an HP-style numbered-level display, and a small object system. Types: reals; exact 32-bit integers with BIN/OCT/DEC/HEX bases and bitwise `AND OR XOR NOT`; complex numbers `(re,im)` (`+ - * / CONJ RE IM ARG ABS R->C C->R`); and lists `[ 1 2 3 ]` (`SIZE GET`, `+` concatenates) which double as vectors (`DOT V+ V- NORM CROSS`) and matrices (`DET TRN M*`). It also has named user variables (`STO RCL PURGE CLVAR`, and a bare name recalls) that persist across `CLEAR`. Plus the usual scientific functions (`SIN COS TAN ASIN ACOS ATAN LN EXP LOG ALOG ^ SQRT`, DEG/RAD, STD/FIX) and an RPN command parser - `INCLUDE HP50.FTH` then `HP` (`OFF` quits), with `HP50TEST.FTH` self-checking it (78 tests). Because compiling a large library from source is slow (~30s, dominated by the per-word dictionary search), two native words snapshot the compiled dictionary for a ~1s reload: `SAVE-IMAGE` writes the dictionary bytes, the user token-table slice, and the dictionary-state pointers to three device-8 files; `LOAD-IMAGE` ( -- flag ) restores them (it is native so it can safely replace the dictionary). They are generic (work for any compiled `.FTH`); the image is tied to the exact `forthx16.prg` build.
+A few examples and benchmarks are in `other`.
+
+**Benchmarks & samples.** `BENCH.FTH` and `ERASTO.FTH` are old benchmarking programs calculating primes, practically unchanged (`BENCH` had a few `ENDIF`s replaced by `THEN`s). `RC4TEST.FTH` is a sample from the [Wikipedia](https://en.wikipedia.org/wiki/Forth_(programming_language)) page, unmodified.
+
+**`GAME.FTH`** is a small proof-of-concept 2D game ("catch the dots") showing the game-support primitives together - hardware sprites, `VSYNC` pacing, `COLLIDE?` collision, `VFILL` (building sprite images), `JOY` input and `RND`: `INCLUDE GAME.FTH` then `PLAY` (arrow keys to move, Start to quit), or `SELFTEST` for a non-interactive frame.
+
+**`GAMEYM.FTH`** is the same game with its audio switched from the VERA PSG to the YM2151 FM synth - only section 4 differs, using `FMINIT`/`FMINST`/`FMNOTE`/`FMVOL` (a demonstration of the FM words and of swapping a sound backend).
+
+**`SPLIT.FTH`** is a split-screen helper library for the X16: it puts a 320x240 bitmap on VERA layer 0 and confines the text console to a window on layer 1 (composited on top), giving a graphics-top / text-bottom screen with no raster interrupt - `INCLUDE SPLIT.FTH` then `SPLIT-DEMO`; `SPLITON`/`SPLITOFF` enter/leave it (`SPLIT-ROWS` sets the text-window height). It also provides the full bitmap-graphics vocabulary as direct-to-VERA words that work in BOTH the split and normal `GINIT` full-screen mode (both use the same $0000 bitmap): `GCLS PSET LINE FRAME RECT RING OVAL GTEXT`, radius circles `CIRCLE`/`FCIRCLE` (same names/signatures as the KERNAL GRAPH words, which they redefine), plus low-level `BPSET BHLINE BVLINE BLINE BFILL BRECT BCLS`. A persistent-pen API avoids repeating the colour: `n GCOLOR` then `PLOT DRAW BOX FBOX ELL FELL CIRC DISC SAY`.
+
+**`MORTGAGE.FTH`** is a Canadian mortgage calculator: it uses the semi-annual-compounding rule (`i = (1+j/2)^(1/6)-1`) and the floating-point words to compute the monthly payment and print a full capital/interest amortization grid - `INCLUDE MORTGAGE.FTH` then `300000. 25 550 MTG` ($300k, 25 yr, 5.50%; principal takes a trailing dot so it can exceed 16 bits, rate is x100), then `SCHEDULE` for the month-by-month table or `YEARLY` for a yearly one. It doubles as a worked example of building a power function from `FLN`/`FEXP` and printing money to the cent past `F>S`'s 65535 limit via a 32-bit double and pictured numeric output.
+
+**`HP50.FTH`** is an HP-50g-style RPN scientific calculator: a typed value stack, an HP-style numbered-level display, and a small object system. Types: reals; exact 32-bit integers with BIN/OCT/DEC/HEX bases and bitwise `AND OR XOR NOT`; complex numbers `(re,im)` (`+ - * / CONJ RE IM ARG ABS R->C C->R`); and lists `[ 1 2 3 ]` (`SIZE GET`, `+` concatenates) which double as vectors (`DOT V+ V- NORM CROSS`) and matrices (`DET TRN M*`). It also has named user variables (`STO RCL PURGE CLVAR`, and a bare name recalls) that persist across `CLEAR`. Plus the usual scientific functions (`SIN COS TAN ASIN ACOS ATAN LN EXP LOG ALOG ^ SQRT`, DEG/RAD, STD/FIX) and an RPN command parser - `INCLUDE HP50.FTH` then `HP` (`OFF` quits), with `HP50TEST.FTH` self-checking it (78 tests).
+
+**Compiled-image snapshot.** Because compiling a large library from source is slow (~30s, dominated by the per-word dictionary search), two native words snapshot the compiled dictionary for a ~1s reload. `S" NAME" SAVE-IMAGE` ( c-addr u -- ) writes the dictionary bytes, the user token-table slice, and the dictionary-state pointers to three device-8 files named `NAME.DIC`/`NAME.TOK`/`NAME.VAR`; `S" NAME" LOAD-IMAGE` ( c-addr u -- flag ) restores them (it is native so it can safely replace the dictionary). They are generic (work for any compiled `.FTH`); the image is tied to the exact `forthx16.prg` build.
 
 ## Known Issues
 

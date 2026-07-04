@@ -182,9 +182,9 @@ x16_coltab:
 	+token add, one, swap, vaddr		; VERA -> attr byte 2 (X)
 	+token swap, vwstore, vwstore, exit	; write X then Y as words
 
-; GETSPR ( sprite -- x y )   read a sprite's 12-bit X and Y position (inverse of
-; SPRITE-POS). Reads attr bytes 2-5 back through the auto-incrementing data port.
-+header ~getspr, ~getspr_n, "GETSPR"
+; SPRITE-GET ( sprite -- x y )   read a sprite's 12-bit X and Y position (inverse
+; of SPRITE-POS). Reads attr bytes 2-5 back through the auto-incrementing data port.
++header ~getspr, ~getspr_n, "SPRITE-GET"
 	+forth
 	+literal 8
 	+token mult
@@ -224,8 +224,8 @@ x16_coltab:
 
 ; --- BASIC-compatible sprite commands ----------------------------------------
 
-; MOVSPR ( num x y -- )   ( = BASIC: MOVSPR num,x,y )   set sprite position
-+header ~movspr, ~movspr_n, "MOVSPR"
+; SPRITE-MOV ( num x y -- )   ( = BASIC: MOVSPR num,x,y )   set sprite position
++header ~movspr, ~movspr_n, "SPRITE-MOV"
 	+forth
 	+token rot							; ( x y num )
 	+literal 8
@@ -235,9 +235,9 @@ x16_coltab:
 	+token add, one, swap, vaddr		; VERA -> attr byte 2 (X)
 	+token swap, vwstore, vwstore, exit	; write X then Y
 
-; SPRMEM ( num bank addr -- )   ( = BASIC: SPRMEM num,bank,addr )
+; SPRITE-MEM ( num bank addr -- )   ( = BASIC: SPRMEM num,bank,addr )
 ; Point sprite's image at VRAM (bank:addr), 4bpp. addr should be 32-aligned.
-+header ~sprmem, ~sprmem_n, "SPRMEM"
++header ~sprmem, ~sprmem_n, "SPRITE-MEM"
 	+forth
 	+literal 5
 	+token rshift, swap					; ( num addr>>5 bank )
@@ -784,15 +784,16 @@ bv_store:
 
 ; ===========================================================================
 ; SAVE-IMAGE / LOAD-IMAGE - turnkey compiled-dictionary snapshot (device 8).
-; Save the compiled dictionary once, reload it in ~1s instead of recompiling
-; the source. Three files:
-;   F.DIC = dictionary bytes   [dict-start .. HERE)
-;   F.TOK = user token table   [core+1 .. hightoken)  (core tokens already valid)
-;   F.VAR = dictionary-state zero-page block (HERE/LATEST/HIGHTOKEN/wordlists)
+; Save the compiled dictionary once, reload it in ~1s instead of recompiling the
+; source. A base name is given on the stack ( c-addr u -- ); three files are
+; written/read using it, e.g.  S" JYV" SAVE-IMAGE  ->  JYV.DIC JYV.TOK JYV.VAR :
+;   <name>.DIC = dictionary bytes   [dict-start .. HERE)
+;   <name>.TOK = user token table   [core+1 .. hightoken)  (core tokens already valid)
+;   <name>.VAR = dictionary-state zero-page block (HERE/LATEST/HIGHTOKEN/wordlists)
 ; LOAD-IMAGE is native so it can overwrite the dictionary safely (the core, from
 ; which it runs, lives below the dictionary).  Works in every build (PRG, C64 cart,
-; and the bank-9 ROM): the filenames are copied to RAM via img_setnam first, so the
-; bridged KERNAL (which runs with bank 0 mapped) can read them.
+; and the bank-9 ROM): the name is copied to RAM (imgnam) and the suffix appended
+; there, so the bridged KERNAL (which runs with bank 0 mapped) can read it.
 ; ===========================================================================
 !if CART or X16ROM {
 IMG_DICT_START = $0801
@@ -801,9 +802,9 @@ IMG_DICT_START = end_of_image
 }
 IMG_TOKUSER = TOKENS + ((forth_system + 1) << 1)
 
-imgn_dic: !text "F.DIC"
-imgn_tok: !text "F.TOK"
-imgn_var: !text "F.VAR"
+imgsfx_dic: !text ".DIC"
+imgsfx_tok: !text ".TOK"
+imgsfx_var: !text ".VAR"
 
 ; copy the 61-byte dictionary-state zp block  (_here..7, _hightoken..54) <-> IMGBUF
 img_vars_save:
@@ -831,24 +832,70 @@ ivl2:	lda IMGBUF+7,x
 	bpl ivl2
 	rts
 
-; SETNAM with the filename copied to RAM first.  A = length, X/Y = source pointer
-; (a code literal - lives in ROM in the bank-9 / cart builds).  The copy runs with
-; the Forth bank mapped so it can read the literal; the bridged KERNAL later reads
-; the name from RAM (imgnam), which is visible in every bank.
-img_setnam:				; ( A=len, X=lo, Y=hi ) -> copy to imgnam, SETNAM
-	stx _scratch
-	sty _scratch+1
-	tax				; X = length (counts down)
+; Copy the base name (data stack ( c-addr u )) into imgnam and remember its
+; length in imgbaselen.  Reads _dtop (u = length) and NOS (c-addr = source addr);
+; runs with the Forth bank mapped so the source string is readable.  The length
+; is clamped to 16 (CBM filename limit; imgnam has room for 16 + a 4-char suffix).
+img_setbase:
+	lda _dtop
+	cmp #17
+	bcc isb_len
+	lda #16
+isb_len:
+	sta imgbaselen
+	ldy #2				; NOS = (_dstack),y -> source pointer
+	lda (_dstack),y
+	sta _scratch
+	ldy #3
+	lda (_dstack),y
+	sta _scratch+1
 	ldy #0
-isn1:	lda (_scratch),y
+isb_cp:
+	cpy imgbaselen
+	beq isb_done
+	lda (_scratch),y
 	sta imgnam,y
 	iny
-	dex
-	bne isn1
-	tya				; A = length (Y counted up to len)
+	bne isb_cp
+isb_done:
+	rts
+
+; Append the 4-char suffix at (_rscratch) to imgnam after the base name, then
+; SETNAM(imgnam, imgbaselen+4).  The suffix is a code literal (ROM in the bank-9 /
+; cart builds), read here with the Forth bank mapped; the KERNAL later reads the
+; assembled name from RAM (imgnam), which is visible in every bank.
+img_name:
+	ldx imgbaselen
+	ldy #0
+imn_cp:	lda (_rscratch),y
+	sta imgnam,x
+	inx
+	iny
+	cpy #4
+	bne imn_cp
+	txa				; A = total length (base + 4)
 	ldx #<imgnam
 	ldy #>imgnam
 	jmp SETNAM
+
+img_name_var:				; helpers: point _rscratch at a suffix, build the name
+	lda #<imgsfx_var
+	sta _rscratch
+	lda #>imgsfx_var
+	sta _rscratch+1
+	jmp img_name
+img_name_dic:
+	lda #<imgsfx_dic
+	sta _rscratch
+	lda #>imgsfx_dic
+	sta _rscratch+1
+	jmp img_name
+img_name_tok:
+	lda #<imgsfx_tok
+	sta _rscratch
+	lda #>imgsfx_tok
+	sta _rscratch+1
+	jmp img_name
 
 img_setlfs_save:			; logical 1, device 8, secondary 0 (header = start addr)
 	lda #1
@@ -861,14 +908,12 @@ img_setlfs_load:			; logical 1, device 8, secondary 1 (load to header addr)
 	ldy #1
 	jmp SETLFS
 
-+header ~saveimage, ~saveimage_n, "SAVE-IMAGE"
++header ~saveimage, ~saveimage_n, "SAVE-IMAGE"		; ( c-addr u -- )
 	+code
+	jsr img_setbase				; imgnam/imgbaselen = the base name
 	jsr img_vars_save
-	; ---- F.VAR : [IMGBUF .. IMGBUF+61) ----
-	lda #5
-	ldx #<imgn_var
-	ldy #>imgn_var
-	jsr img_setnam
+	; ---- <name>.VAR : [IMGBUF .. IMGBUF+61) ----
+	jsr img_name_var
 	jsr img_setlfs_save
 	lda #<IMGBUF
 	sta _scratch
@@ -878,11 +923,8 @@ img_setlfs_load:			; logical 1, device 8, secondary 1 (load to header addr)
 	ldx #<(IMGBUF+61)
 	ldy #>(IMGBUF+61)
 	jsr KSAVE
-	; ---- F.DIC : [IMG_DICT_START .. HERE) ----
-	lda #5
-	ldx #<imgn_dic
-	ldy #>imgn_dic
-	jsr img_setnam
+	; ---- <name>.DIC : [IMG_DICT_START .. HERE) ----
+	jsr img_name_dic
 	jsr img_setlfs_save
 	lda #<IMG_DICT_START
 	sta _scratch
@@ -892,11 +934,8 @@ img_setlfs_load:			; logical 1, device 8, secondary 1 (load to header addr)
 	ldx _here
 	ldy _here+1
 	jsr KSAVE
-	; ---- F.TOK : [IMG_TOKUSER .. TOKENS + 2*hightoken) ----
-	lda #5
-	ldx #<imgn_tok
-	ldy #>imgn_tok
-	jsr img_setnam
+	; ---- <name>.TOK : [IMG_TOKUSER .. TOKENS + 2*hightoken) ----
+	jsr img_name_tok
 	jsr img_setlfs_save
 	lda #<IMG_TOKUSER
 	sta _scratch
@@ -923,16 +962,19 @@ img_setlfs_load:			; logical 1, device 8, secondary 1 (load to header addr)
 	lda #<_scratch
 	jsr KSAVE
 	jsr CLRCHN			; restore keyboard-in/screen-out after the file writes
+	+dpop				; drop ( c-addr u )
+	+dpop
 	jmp next
 
-; LOAD-IMAGE ( -- flag )   flag = -1 if the image loaded, 0 if F.DIC was missing
+; LOAD-IMAGE ( c-addr u -- flag )   flag = -1 if the image loaded, 0 if <name>.DIC
+; was missing.  c-addr/u is the base name (same as SAVE-IMAGE).
 +header ~loadimage, ~loadimage_n, "LOAD-IMAGE"
 	+code
-	; F.DIC -> IMG_DICT_START (file header address)
-	lda #5
-	ldx #<imgn_dic
-	ldy #>imgn_dic
-	jsr img_setnam
+	jsr img_setbase			; imgnam/imgbaselen = base name
+	+dpop				; drop ( c-addr u ) - the name is copied to RAM now
+	+dpop
+	; <name>.DIC -> IMG_DICT_START (file header address)
+	jsr img_name_dic
 	jsr img_setlfs_load
 	lda #0
 	jsr KLOAD
@@ -942,19 +984,13 @@ img_setlfs_load:			; logical 1, device 8, secondary 1 (load to header addr)
 	tax
 	jmp dpush_and_next
 li_have:
-	; F.TOK -> IMG_TOKUSER (file header address)
-	lda #5
-	ldx #<imgn_tok
-	ldy #>imgn_tok
-	jsr img_setnam
+	; <name>.TOK -> IMG_TOKUSER (file header address)
+	jsr img_name_tok
 	jsr img_setlfs_load
 	lda #0
 	jsr KLOAD
-	; F.VAR -> IMGBUF (file header address)
-	lda #5
-	ldx #<imgn_var
-	ldy #>imgn_var
-	jsr img_setnam
+	; <name>.VAR -> IMGBUF (file header address)
+	jsr img_name_var
 	jsr img_setlfs_load
 	lda #0
 	jsr KLOAD
@@ -1843,36 +1879,9 @@ SMC_I2C_ADDR   = $42
 	+dpop
 	jmp next
 
-; I2CPOKE ( device register value -- )   write a byte to an I2C register
-+header ~i2cpoke, ~i2cpoke_n, "I2CPOKE"
-	+code
-	ldy #4
-	lda (_dstack),y		; device
-	tax
-	ldy #2
-	lda (_dstack),y		; register
-	tay
-	lda _dtop			; value
-	jsr i2c_write_byte
-	+dpop
-	+dpop
-	+dpop
-	jmp next
-
-; I2CPEEK ( device register -- value )   read a byte from an I2C register
-+header ~i2cpeek, ~i2cpeek_n, "I2CPEEK"
-	+code
-	ldy #2
-	lda (_dstack),y		; device
-	tax
-	lda _dtop			; register
-	tay
-	jsr i2c_read_byte	; A = value
-	+dpop				; drop register; _dtop now holds device
-	sta _dtop			; overwrite with the result
-	lda #0
-	sta _dtop+1
-	jmp next
+; I2CPOKE/I2CPEEK were removed to save ROM: rarely used, and they called the
+; KERNAL I2C routines ($FEC6/$FEC9) directly, which is unreachable from the
+; bank-9 ROM anyway. If needed, add a SYSCALL-based version to a toolkit file.
 
 ; SLEEP ( jiffies -- )   wait 'jiffies' 1/60-second ticks
 +header ~sleep, ~sleep_n, "SLEEP"
@@ -1894,6 +1903,36 @@ sleep_loop:
 	lda $05
 	sbc _dtop+1
 	bcc sleep_loop		; elapsed < jiffies, keep waiting
+	+dpop
+	jmp next
+
+; MS ( u -- )   wait ~u milliseconds. A calibrated busy loop (the jiffy clock
+; that SLEEP uses is only 1/60 s = 16.67 ms, too coarse for real ms). Tuned to
+; the X16's 8 MHz clock (~8000 cycles per ms); approximate - the VSYNC IRQ adds
+; a little, and a slower CPU speed would stretch it, but it honours "at least".
+MS_OUTER = 7				; outer/inner passes tuned to ~8 MHz, ~1 ms
+MS_INNER = 224
++header ~ms, ~ms_n, "MS"
+	+code
+ms_loop:
+	lda _dtop			; u == 0 ?  done
+	ora _dtop+1
+	beq ms_done
+	ldx #MS_OUTER			; ~1 ms delay
+ms_o:
+	ldy #MS_INNER
+ms_i:
+	dey
+	bne ms_i
+	dex
+	bne ms_o
+	lda _dtop			; u--  (16-bit)
+	bne ms_dec
+	dec _dtop+1
+ms_dec:
+	dec _dtop
+	jmp ms_loop
+ms_done:
 	+dpop
 	jmp next
 
@@ -2347,6 +2386,97 @@ f0lt_f:
 	lda #0
 	tax
 	jmp dpush_and_next
+
+; FABS ( F: r -- |r| )   absolute value: clear the sign bit of the packed float
+; (equivalent to  FDUP F0< IF FNEGATE THEN ). FP words live in a no-symbol token
+; zone, so this is native rather than a token-threaded colon word.
++header ~fabs, ~fabs_n, "FABS"
+	+code
+	lda fsp
+	sta $02
+	lda fsp+1
+	sta $03
+	ldy #1
+	lda ($02),y			; sign+mantissa byte; bit 7 = sign
+	and #$7f			; force non-negative
+	sta ($02),y
+	jmp next
+
+; FPOW ( F: x y -- x^y )   power via  exp(y * ln x)   (requires x > 0)
+; Same result as  FSWAP FLN F* FEXP , done natively.
++header ~fpow, ~fpow_n, "FPOW"
+	+code
+fpow_impl:
+	jsr fac_deep			; FAC = x  (the second float)
+	+basiccall FP_log		; FAC = ln(x)
+	jsr fsp5_to_02			; $02/$03 = address of the second float
+	ldx $02
+	ldy $03
+	+basiccall FP_movmf		; second float = ln(x)
+	jsr fac_deep			; FAC = ln(x)
+	lda fsp
+	ldy fsp+1
+	+basiccall FP_fmult		; FAC = ln(x) * y   (top float)
+	jsr fbin_store			; drop both, push FAC = y*ln(x)
+	jsr fac_top			; FAC = y*ln(x)
+	+basiccall FP_exp		; FAC = exp(y*ln x)
+	jsr fstore_top			; top float = x^y
+	jmp next
+
+; F** ( F: x y -- x^y )   the standard name for FPOW (shares its body)
++header ~fstarstar, ~fstarstar_n, "F**"
+	+code
+	jmp fpow_impl
+
+; --- FMAX / FMIN ( F: r1 r2 -- r ) -----------------------------------------
+; fcmp leaves FAC = r1 - r2 without popping; facexp ($C3)=0 means r1=r2,
+; facsgn ($C8) bit7 set means r1<r2. Then keep one float: fdrop_top drops the
+; top (r2, keeping r1); fnip drops the second (r1, keeping r2).
+fcmp:
+	jsr fac_top			; FAC = r2 (top)
+	jsr fsp5_to_02			; $02/$03 = &r1 (second)
+	lda $02
+	ldy $03
+	+basiccall FP_fsub		; FAC = r1 - r2
+	rts
+fnip:					; drop the SECOND float, keep the top
+	jsr fsp5_to_02			; $02/$03 = second slot (dest)
+	lda fsp
+	sta $04
+	lda fsp+1
+	sta $05				; $04/$05 = top slot (src)
+	ldy #4
+-	lda ($04),y
+	sta ($02),y
+	dey
+	bpl -
+fdrop_top:				; drop the top float (fsp += 5)
+	clc
+	lda fsp
+	adc #5
+	sta fsp
+	lda fsp+1
+	adc #0
+	sta fsp+1
+	jmp next
+
++header ~fmax, ~fmax_n, "FMAX"
+	+code
+	jsr fcmp
+	lda $C3				; r1 = r2 ?  -> keep r1
+	beq fdrop_top
+	lda $C8				; r1 < r2 ?  -> keep r2
+	bmi fnip
+	jmp fdrop_top			; r1 > r2    -> keep r1
+
++header ~fmin, ~fmin_n, "FMIN"
+	+code
+	jsr fcmp
+	lda $C3				; r1 = r2 ?  -> keep r1
+	beq fdrop_top
+	lda $C8				; r1 < r2 ?  -> keep r1 (the smaller)
+	bmi fdrop_top
+	jmp fnip			; r1 > r2    -> keep r2
 
 ; F< ( F: r1 r2 -- ) ( -- flag )   true if r1 < r2
 +header ~flt, ~flt_n, "F<"
@@ -2880,64 +3010,9 @@ collide_set:
 	+forth
 	+token accept, exit
 
-; BASIC floating-point function names ( F: r -- f(r) ). Each duplicates the
-; corresponding FP word's body rather than adding a code label to it.
-
-; SQR ( F: r -- sqrt )
-+header ~sqr, ~sqr_n, "SQR"
-	+code
-	jsr fac_top
-	+basiccall FP_sqr
-	jsr fstore_top
-	jmp next
-
-; SIN ( F: r -- sin )
-+header ~sin, ~sin_n, "SIN"
-	+code
-	jsr fac_top
-	+basiccall FP_sin
-	jsr fstore_top
-	jmp next
-
-; COS ( F: r -- cos )
-+header ~cos, ~cos_n, "COS"
-	+code
-	jsr fac_top
-	+basiccall FP_cos
-	jsr fstore_top
-	jmp next
-
-; TAN ( F: r -- tan )
-+header ~tan, ~tan_n, "TAN"
-	+code
-	jsr fac_top
-	+basiccall FP_tan
-	jsr fstore_top
-	jmp next
-
-; ATN ( F: r -- atan )
-+header ~atn, ~atn_n, "ATN"
-	+code
-	jsr fac_top
-	+basiccall FP_atn
-	jsr fstore_top
-	jmp next
-
-; LOG ( F: r -- ln )
-+header ~log, ~log_n, "LOG"
-	+code
-	jsr fac_top
-	+basiccall FP_log
-	jsr fstore_top
-	jmp next
-
-; EXP ( F: r -- e^r )
-+header ~exp, ~exp_n, "EXP"
-	+code
-	jsr fac_top
-	+basiccall FP_exp
-	jsr fstore_top
-	jmp next
+; BASIC floating-point function names (SQR SIN COS TAN ATN LOG EXP) were moved
+; out of the core to save ROM space - they only duplicated FSQRT/FSIN/FCOS/FTAN/
+; FATAN/FLN/FEXP. Load them on demand with  INCLUDE BASICMATH.FTH  (toolkit/).
 
 ; --- X16STR.FTH : BASIC string / number-conversion words -------------------
 
@@ -3256,43 +3331,10 @@ fbit_done:
 ; VERA PCM FIFO. AUDIO_CTRL packs volume(0-3) / 16-bit(5) / stereo(4) and, on
 ; write, bit 7 resets the FIFO. Feed 8/16-bit signed sample bytes to PCM!.
 
-; PCMCTRL ( n -- )   write AUDIO_CTRL (volume 0-15, format bits, bit7 = FIFO reset)
-+header ~pcmctrl, ~pcmctrl_n, "PCMCTRL"
-	+code
-	lda _dtop
-	sta VERA_AUDIO_CTRL
-	+dpop
-	jmp next
-
-; PCMRATE ( n -- )   write AUDIO_RATE (0 = stop .. 128 = 48 kHz)
-+header ~pcmrate, ~pcmrate_n, "PCMRATE"
-	+code
-	lda _dtop
-	sta VERA_AUDIO_RATE
-	+dpop
-	jmp next
-
-; PCM! ( byte -- )   push one sample byte into the FIFO (ignored if full)
-+header ~pcmstore, ~pcmstore_n, "PCM!"
-	+code
-	lda _dtop
-	sta VERA_AUDIO_DATA
-	+dpop
-	jmp next
-
-; PCMFULL? ( -- flag )   true when the FIFO cannot accept more data
-+header ~pcmfull, ~pcmfull_n, "PCMFULL?"
-	+code
-	lda VERA_AUDIO_CTRL
-	and #$80
-	beq pcmfull_no
-	lda #$ff
-	tax
-	jmp dpush_and_next
-pcmfull_no:
-	lda #0
-	tax
-	jmp dpush_and_next
+; The PCM register accessors PCMCTRL/PCMRATE/PCM!/PCMFULL? moved to
+; toolkit/PCMAUDIO.FTH to save ROM - they are one-line VERA-register C!/C@ words
+; (the audio regs at $9F3B-$9F3D are in the always-visible I/O page). Only the
+; streaming PCM-WRITE stays native (its tight loop matters for feed rate).
 
 ; PCM-WRITE ( addr count -- )   blast count bytes from RAM into the FIFO. Meant
 ; for priming an (empty) 4 KB FIFO; it does not throttle, so excess bytes past a

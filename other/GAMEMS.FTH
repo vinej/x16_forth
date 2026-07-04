@@ -159,9 +159,9 @@ VARIABLE S-TIMER
 \ 6. RENDER
 \ ===========================================================================
 : DRAW ( -- )
-   PLR-SPR PX @ PY @ MOVSPR
-   NDOTS 0 DO  I DOT-SPR  I DX @  I DY @  MOVSPR  LOOP
-   NBLUE 0 DO  I BLU-SPR  I BX @  I BY @  MOVSPR  LOOP ;
+   PLR-SPR PX @ PY @ SPRITE-MOV
+   NDOTS 0 DO  I DOT-SPR  I DX @  I DY @  SPRITE-MOV  LOOP
+   NBLUE 0 DO  I BLU-SPR  I BX @  I BY @  SPRITE-MOV  LOOP ;
 : SHOW-SCORE ( -- )
    0 0 LOCATE ." SCORE: " SCORE @ .  ."     "
    1 0 LOCATE ." MX " MXV @ .  ." MY " MYV @ .  ." MB " MBV @ .  ." SPD " SPEEDV @ .  ."     "
@@ -171,7 +171,7 @@ VARIABLE S-TIMER
 \ 7. SETUP + MAIN LOOP  (input -> logic -> audio -> VSYNC -> draw)
 \ ===========================================================================
 : MKSPR ( sprite vaddr -- )      \ define one 16x16 sprite from a VRAM image
-   OVER >R  0 SWAP SPRMEM   SPR-SZ SPR-SZ R@ SPRITE-SIZE   R> 3 SPRITE ;
+   OVER >R  0 SWAP SPRITE-MEM   SPR-SZ SPR-SZ R@ SPRITE-SIZE   R> 3 SPRITE ;
 : SETUP ( -- )
    0 SCREEN                         \ 640x480 - mouse coords match sprite coords here
    5 PLR-IMG MK-IMG   2 DOT-IMG MK-IMG   6 BLU-IMG MK-IMG

@@ -114,8 +114,8 @@ VARIABLE S-TIMER
 \ 6. RENDER
 \ ===========================================================================
 : DRAW ( -- )
-   0 PX @ PY @ MOVSPR
-   NDOTS 0 DO  I 1+  I DX @  I DY @  MOVSPR  LOOP ;
+   0 PX @ PY @ SPRITE-MOV
+   NDOTS 0 DO  I 1+  I DX @  I DY @  SPRITE-MOV  LOOP ;
 : SHOW-SCORE ( -- )  0 0 LOCATE ." Score: " SCORE @ .  ."     " ;
 
 \ ===========================================================================
@@ -124,9 +124,9 @@ VARIABLE S-TIMER
 : SETUP ( -- )
    3 SCREEN
    5 PLR-IMG MK-IMG   2 DOT-IMG MK-IMG
-   0 0 PLR-IMG SPRMEM   SPR-SZ SPR-SZ 0 SPRITE-SIZE   0 3 SPRITE
+   0 0 PLR-IMG SPRITE-MEM   SPR-SZ SPR-SZ 0 SPRITE-SIZE   0 3 SPRITE
    NDOTS 0 DO
-      I 1+ 0 DOT-IMG SPRMEM   SPR-SZ SPR-SZ I 1+ SPRITE-SIZE   I 1+ 3 SPRITE   I PUTDOT
+      I 1+ 0 DOT-IMG SPRITE-MEM   SPR-SZ SPR-SZ I 1+ SPRITE-SIZE   I 1+ 3 SPRITE   I PUTDOT
    LOOP
    SPRITES-ON
    WORLD-W 2/ PX !   WORLD-H 2/ PY !   0 SCORE !

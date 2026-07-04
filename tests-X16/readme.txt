@@ -13,8 +13,8 @@ extension words (only present in the X16 build, forthx16.prg):
                   prints OK/FAIL per check and "ALL X16 TESTS PASSED" at the end.
 * X16GFX.FTH    - self-checking test of the bitmap graphics words (GINIT, PSET,
                   LINE, RECT, FRAME, OVAL, RING); reads pixels back from VRAM.
-* X16SPR.FTH    - self-checking test of the BASIC sprite commands (MOVSPR,
-                  SPRMEM, SPRITE); reads the sprite attributes back from VRAM.
+* X16SPR.FTH    - self-checking test of the sprite commands (SPRITE-MOV,
+                  SPRITE-MEM, SPRITE); reads the sprite attributes back from VRAM.
 * X16INP.FTH    - self-checking test of the input words (JOY, MOUSE, MX, MY,
                   MB, MWHEEL); readings are 0 with nothing pressed.
 * X16MATH.FTH   - self-checking test of the math helpers (SGN, RND, RANDOM, POS).
@@ -46,7 +46,7 @@ extension words (only present in the X16 build, forthx16.prg):
 * X16BITS.FTH   - self-checking test of the bit/byte words (CATNIB, SPLIT,
                   SBIT, CBIT, FBIT) and the core shifts (LSHIFT, RSHIFT).
 * X16GET.FTH    - self-checking test of CURSOR (read text cursor, inverse of
-                  LOCATE) and GETSPR (read a sprite's position, inverse of
+                  LOCATE) and SPRITE-GET (read a sprite's position, inverse of
                   SPRITE-POS).
 * X16SAV.FTH    - self-checking test of the VRAM/sprite/tile disk save-load
                   words (VSAVE + BVLOAD, SPRSAVE/SPRLOAD, TILESAVE/TILELOAD,
