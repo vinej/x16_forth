@@ -1745,15 +1745,6 @@ usr_call:
 	jmp $ffff				; operand patched above to the target address
 
 ; MONITOR ( -- )   enter the built-in machine-language monitor (exit with X).
-; The monitor lives in its own ROM bank and uses zero page outside Forth's area,
-; so it returns cleanly. It does not require BASIC.
-+header ~monitor, ~monitor_n, "MONITOR"
-	+code
-	jsr JSRFAR
-	!word $C000
-	!byte $05				; BANK_MONITOR
-	jmp next
-
 ; EDIT ( c-addr u -- )   launch the X16 full-screen text editor on the named file
 ; (u = 0 opens a new empty buffer). Edit, save (Ctrl+S), and quit (Ctrl+Q) to
 ; return to Forth; then INCLUDE the file to compile it.
@@ -1926,24 +1917,6 @@ ms_dec:
 	jmp ms_loop
 ms_done:
 	+dpop
-	jmp next
-
-; RESET ( -- )   hardware reset via the SMC
-+header ~reset, ~reset_n, "RESET"
-	+code
-	lda #0
-	ldx #SMC_I2C_ADDR
-	ldy #2				; SMC register 2 = reset
-	+kcall i2c_write_byte
-	jmp next
-
-; POWEROFF ( -- )   power off via the SMC
-+header ~poweroff, ~poweroff_n, "POWEROFF"
-	+code
-	lda #0
-	ldx #SMC_I2C_ADDR
-	ldy #1				; SMC register 1 = power off
-	+kcall i2c_write_byte
 	jmp next
 
 ; REBOOT ( -- )   soft reboot through the reset vector

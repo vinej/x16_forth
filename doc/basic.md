@@ -99,9 +99,8 @@ confirmed against the ROM when implemented.
       `SYSCALL`-based version to a toolkit if needed.
 - [x] `SLEEP ( jiffies -- )` — wait n/60 seconds
 - [x] `MS ( u -- )` — wait ~u milliseconds (calibrated busy loop)
-- [x] `RESET ( -- )` — system reset (via SMC)
+- [ ] `RESET` / `POWEROFF` — removed from the ROM to save space; re-add via a toolkit `SYSCALL` (SMC I2C) if needed
 - [x] `REBOOT ( -- )` — soft reboot (reset vector)
-- [x] `POWEROFF ( -- )` — power off (via SMC)
 - [x] `KEYMAP ( c-addr u -- )` — set the keyboard layout by name, e.g. `S" en-us" KEYMAP`
 
 ## Math functions
@@ -128,34 +127,34 @@ a dedicated float stack:
 - [x] `>FLOAT` and interpreter float literals (`3.14`, `1E3`, `-2.5E-2` in interpret mode)
 - [x] `F.` — print a float ; `ISQRT ( n -- m )` — integer square root
 - [x] `FVARIABLE FCONSTANT` (toolkit/X16FP.FTH)
-- [x] BASIC names `SQR SIN COS TAN ATN LOG EXP` — aliases of the `F*` words; load `INCLUDE BASICMATH.FTH` (toolkit)
+- [x] BASIC names `SQR SIN COS TAN ATN LOG EXP` — aliases of the `F*` words; load `INCLUDE FPX.FTH` (toolkit)
 - [ ] optional polish: `FS. FE.`, float literals inside `:` definitions, signed `F>S`
 
-## String / number-conversion functions   (in toolkit/X16STR.FTH — INCLUDE it)
-Forth uses an `addr len` string model, so these take/return `c-addr u`:
-- [x] `HEX$ ( u -- c-addr u )` — number → hex digits
-- [x] `BIN$ ( u -- c-addr u )` — number → binary digits
-- [x] `STR$ ( n -- c-addr u )` — signed number → string
+## String / number-conversion functions   (in toolkit/BASICSTR.FTH — INCLUDE it)
+Forth uses an `addr len` string model, so these take/return `c-addr u`. No trailing
+`$` (valid Forth names); `NHEX`/`NBIN` take an `N` prefix because `HEX`/`BIN` are core words:
+- [x] `NHEX ( u -- c-addr u )` — number → hex digits
+- [x] `NBIN ( u -- c-addr u )` — number → binary digits
+- [x] `STR ( n -- c-addr u )` — signed number → string
 - [x] `VAL ( c-addr u -- n )` — string → number
 - [x] `ASC ( c-addr u -- code )` — first character's code
-- [x] `CHR$ ( code -- c-addr 1 )` — code → 1-char string
+- [x] `CHR ( code -- c-addr 1 )` — code → 1-char string
 - [x] `LEN ( c-addr u -- u )` — string length
-- [x] `LEFT$ ( c-addr u n -- c-addr n2 )` — first n characters
-- [x] `RIGHT$ ( c-addr u n -- c-addr2 n2 )` — last n characters
-- [x] `MID$ ( c-addr u start len -- c-addr2 len2 )` — substring (start 1-based)
-- [x] `RPT$ ( char n -- c-addr u )` — char repeated n times
+- [x] `LEFT ( c-addr u n -- c-addr n2 )` — first n characters
+- [x] `RIGHT ( c-addr u n -- c-addr2 n2 )` — last n characters
+- [x] `MID ( c-addr u start len -- c-addr2 len2 )` — substring (start 1-based)
+- [x] `RPT ( char n -- c-addr u )` — char repeated n times
 
 ## System / dev
 - [x] `USR ( addr -- )` — call a machine-language routine at addr (must RTS)
-- [x] `MONITOR ( -- )` — enter the built-in ML monitor (exit with X; needs no BASIC)
+- [ ] `MONITOR` — removed from the ROM to save space (enter the ML monitor from BASIC instead)
 - [x] `EDIT ( c-addr u -- )` — launch the X16 full-screen text editor on a file
       (u=0 = new buffer). Save + quit, then INCLUDE the file. Uses the X16EDIT
-      ROM bank; Forth's zero page is saved/restored around the call.
-      KNOWN ISSUE: returning from the editor leaves Forth's first console
-      operation glitchy (first RETURN swallowed; an immediate `INCLUDED` won't
-      compile). BASIC's EDIT returns cleanly; the cause is Forth-specific and
-      unresolved. Workaround: edit + save + quit, then RESET Forth (relaunch /
-      cold start) and `INCLUDED` in the fresh session. See doc/EDIT-known-issue.md.
+      ROM bank; Forth's zero page is saved/restored around the call. The general
+      "swallowed RETURN after a file read" glitch is fixed (plain `INCLUDED` is
+      fine now), but EDIT still leaves the first keyboard line after quitting
+      glitched — it disturbs more KERNAL state than a file read. Workaround:
+      after EDIT, reset Forth and `INCLUDE` in a fresh session.
 - [x] `OPEN ( c-addr u fam -- fileid ior )` — alias of `OPEN-FILE` (toolkit/X16BASIC.FTH)
 - [x] `CLOSE ( fileid -- ior )` — alias of `CLOSE-FILE` (toolkit/X16BASIC.FTH)
 - [x] `LINPUT ( c-addr +n -- +n2 )` — alias of `ACCEPT` (toolkit/X16BASIC.FTH)

@@ -2862,6 +2862,18 @@ qbbranch_1:
 	+dpop
 !if C64 {
 	sta _rscratch ; Note that this only works properly for small numbers, but this is platform-consistent anyway
+!if X16 {
+	; Reset the X16 KERNAL screen-editor line-input state before reading a
+	; console line. After any device-8 file read (INCLUDED / EDIT) this state
+	; can be left so the first RETURN is not accepted ("OPEN bug"): crsw!=0
+	; leaves the editor replaying a stale screen line instead of taking input,
+	; and a stuck qtsw/insrt makes control chars (incl. RETURN) insert literally.
+	lda #0
+	sta $037F	; crsw  - 0 = interactive input (not line-replay)
+	sta $0381	; qtsw  - quote mode off
+	sta $0385	; insrt - insert mode off
+	sta $0377	; rvs   - reverse-video mode off
+}
 	ldy #0
 accept_1:
 	jsr CHRIN

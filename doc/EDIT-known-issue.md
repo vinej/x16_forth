@@ -1,8 +1,24 @@
-# `EDIT` — return-to-Forth console glitch (open issue)
+# `EDIT` — first-line glitch after quitting the editor (partly fixed)
 
-Status: **crash FIXED** (ROM build, 2026-07-04); **console glitch open /
-unresolved** and accepted as a known limitation for now — use the workaround
-below. `EDIT` itself launches, edits and saves reliably.
+Status (2026-07-04):
+- **ROM-build crash — FIXED.**
+- **General "OPEN bug" (swallowed first RETURN after any device-8 file read,
+  e.g. `INCLUDED`) — FIXED and verified.** Forth's X16 `ACCEPT` (in `fthtx16.asm`)
+  now clears the KERNAL screen-editor line-input state — `crsw` `$037F`, `qtsw`
+  `$0381`, `insrt` `$0385`, `rvs` `$0377` — at the start of every console read, so
+  each keyboard line begins clean. Confirmed by the user: `S" X.FTH" INCLUDED`
+  then a command works on the first RETURN.
+- **`EDIT`-specific residual — STILL OPEN.** After quitting x16edit the first
+  keyboard line is still swallowed (needs several RETURNs). So x16edit leaves
+  *additional* KERNAL state off, beyond the four bytes `ACCEPT` now resets — a
+  plain file read is clean, but `EDIT` is not. The extra culprit is not yet
+  identified (candidates: `ldtb1` line-link table — but forcing it broke wrapped
+  lines; cursor tracking `tblx`/`pntr`; x16edit's keystroke-callback vectors
+  `edkeyvec`/`edkeybk`; or IRQ/scancode handler restore). Workaround: after
+  `EDIT`, reset Forth (relaunch / cold start), then `INCLUDE` the file.
+
+---
+
 
 **ROM-build crash fixed 2026-07-04** (separate, worse bug — do not confuse with
 the console glitch below): in the bank-9 ROM, quitting EDIT *crashed to the

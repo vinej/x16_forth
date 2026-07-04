@@ -233,9 +233,9 @@ Click a word to jump to its category section (words are also findable with your 
 
 **A** — [`ABORT`](#control-flow), [`ABORT"`](#control-flow), [`ABS`](#arithmetic), [`ACCEPT`](#terminal-io), [`ACTION-OF`](#defining-words), [`AGAIN`](#control-flow), [`AHEAD`](#control-flow), [`ALIGN`](#memory), [`ALIGNED`](#memory), [`ALLOT`](#memory), [`ALSO`](#wordlists-and-search-order), [`AND`](#bitwise), [`ASC`](#basic-alias-and-string-toolkit), [`ATN`](#basic-alias-and-string-toolkit)
 
-**B** — [`B!`](#x16-system-control), [`B@`](#x16-system-control), [`BASE`](#numeric-output), [`BEGIN`](#control-flow), [`BEGIN-STRUCTURE`](#structures), [`BIN`](#files), [`BIN$`](#basic-alias-and-string-toolkit), [`BL`](#constants-and-literals), [`BLANK`](#memory), [`BLOAD`](#x16-load-and-save), [`BORDER`](#x16-video-screen-and-cursor), [`BUFFER:`](#defining-words), [`BVERIFY`](#x16-load-and-save), [`BVLOAD`](#x16-load-and-save), [`BYE`](#system-and-environment)
+**B** — [`B!`](#x16-system-control), [`B@`](#x16-system-control), [`BASE`](#numeric-output), [`BEGIN`](#control-flow), [`BEGIN-STRUCTURE`](#structures), [`BIN`](#files), [`BL`](#constants-and-literals), [`BLANK`](#memory), [`BLOAD`](#x16-load-and-save), [`BORDER`](#x16-video-screen-and-cursor), [`BUFFER:`](#defining-words), [`BVERIFY`](#x16-load-and-save), [`BVLOAD`](#x16-load-and-save), [`BYE`](#system-and-environment)
 
-**C** — [`C!`](#memory), [`C"`](#characters-and-strings), [`C,`](#memory), [`C64`](#system-and-environment), [`C@`](#memory), [`CASE`](#control-flow), [`CATCH`](#control-flow), [`CATNIB`](#bit-and-byte-toolkit), [`CBIT`](#bit-and-byte-toolkit), [`CELL+`](#memory), [`CELLS`](#memory), [`CFIELD:`](#structures), [`CHAR`](#characters-and-strings), [`CHAR+`](#memory), [`CHARS`](#memory), [`CHR$`](#basic-alias-and-string-toolkit), [`CLOSE`](#basic-alias-and-string-toolkit), [`CLOSE-FILE`](#files), [`CLOSE-SOURCE`](#interpreter-and-input-source), [`CLS`](#x16-video-screen-and-cursor), [`CMOVE`](#memory), [`CMOVE>`](#memory), [`COLLIDE?`](#game-support), [`COLOR`](#x16-video-screen-and-cursor), [`COMPARE`](#characters-and-strings), [`COMPILE`](#compiling-and-dictionary), [`COMPILE,`](#compiling-and-dictionary), [`CONSTANT`](#defining-words), [`COS`](#basic-alias-and-string-toolkit), [`COUNT`](#characters-and-strings), [`CR`](#terminal-io), [`CREATE`](#defining-words), [`CREATE-FILE`](#files), [`CURSOR`](#x16-video-screen-and-cursor)
+**C** — [`C!`](#memory), [`C"`](#characters-and-strings), [`C,`](#memory), [`C64`](#system-and-environment), [`C@`](#memory), [`CASE`](#control-flow), [`CATCH`](#control-flow), [`CATNIB`](#bit-and-byte-toolkit), [`CBIT`](#bit-and-byte-toolkit), [`CELL+`](#memory), [`CELLS`](#memory), [`CFIELD:`](#structures), [`CHAR`](#characters-and-strings), [`CHAR+`](#memory), [`CHARS`](#memory), [`CHR`](#basic-alias-and-string-toolkit), [`CLOSE`](#basic-alias-and-string-toolkit), [`CLOSE-FILE`](#files), [`CLOSE-SOURCE`](#interpreter-and-input-source), [`CLS`](#x16-video-screen-and-cursor), [`CMOVE`](#memory), [`CMOVE>`](#memory), [`COLLIDE?`](#game-support), [`COLOR`](#x16-video-screen-and-cursor), [`COMPARE`](#characters-and-strings), [`COMPILE`](#compiling-and-dictionary), [`COMPILE,`](#compiling-and-dictionary), [`CONSTANT`](#defining-words), [`COS`](#basic-alias-and-string-toolkit), [`COUNT`](#characters-and-strings), [`CR`](#terminal-io), [`CREATE`](#defining-words), [`CREATE-FILE`](#files), [`CURSOR`](#x16-video-screen-and-cursor)
 
 **D** — [`D+`](#double-cell-math), [`D-`](#double-cell-math), [`D.`](#numeric-output), [`D.R`](#numeric-output), [`D0<`](#double-cell-math), [`D0=`](#double-cell-math), [`D2*`](#double-cell-math), [`D2/`](#double-cell-math), [`D<`](#double-cell-math), [`D=`](#double-cell-math), [`D>S`](#double-cell-math), [`DABS`](#double-cell-math), [`DECIMAL`](#numeric-output), [`DEFER`](#defining-words), [`DEFER!`](#defining-words), [`DEFER@`](#defining-words), [`DEFINITIONS`](#wordlists-and-search-order), [`DELETE-FILE`](#files), [`DEPTH`](#stack-manipulation), [`DMAX`](#double-cell-math), [`DMIN`](#double-cell-math), [`DNEGATE`](#double-cell-math), [`DO`](#control-flow), [`DOES>`](#defining-words), [`DROP`](#stack-manipulation), [`DU<`](#double-cell-math), [`DUP`](#stack-manipulation)
 
@@ -245,7 +245,7 @@ Click a word to jump to its category section (words are also findable with your 
 
 **G** — [`GCLS`](#x16-graphics), [`GET-CURRENT`](#wordlists-and-search-order), [`GET-ORDER`](#wordlists-and-search-order), [`GINIT`](#x16-graphics), [`GTEXT`](#x16-graphics)
 
-**H** — [`HANDLER`](#control-flow), [`HERE`](#memory), [`HEX`](#numeric-output), [`HEX$`](#basic-alias-and-string-toolkit), [`HOLD`](#numeric-output), [`HOLDS`](#numeric-output)
+**H** — [`HANDLER`](#control-flow), [`HERE`](#memory), [`HEX`](#numeric-output), [`HOLD`](#numeric-output), [`HOLDS`](#numeric-output)
 
 **I** — [`I`](#return-stack-and-loop-index), [`IF`](#control-flow), [`IMMEDIATE`](#compiling-and-dictionary), [`INCLUDE`](#files), [`INCLUDE-FILE`](#files), [`INCLUDED`](#files), [`INVERT`](#bitwise), [`IRQ`](#system-and-environment), [`IS`](#defining-words), [`ISQRT`](#floating-point)
 
@@ -253,21 +253,21 @@ Click a word to jump to its category section (words are also findable with your 
 
 **K** — [`KEY`](#terminal-io), [`KEYMAP`](#x16-system-control)
 
-**L** — [`LEAVE`](#control-flow), [`LEFT$`](#basic-alias-and-string-toolkit), [`LEN`](#basic-alias-and-string-toolkit), [`LINE`](#x16-graphics), [`LINPUT`](#basic-alias-and-string-toolkit), [`LITERAL`](#compiling-and-dictionary), [`LOAD`](#x16-load-and-save), [`LOCATE`](#x16-video-screen-and-cursor), [`LOG`](#basic-alias-and-string-toolkit), [`LOOP`](#control-flow), [`LSHIFT`](#bitwise)
+**L** — [`LEAVE`](#control-flow), [`LEFT`](#basic-alias-and-string-toolkit), [`LEN`](#basic-alias-and-string-toolkit), [`LINE`](#x16-graphics), [`LINPUT`](#basic-alias-and-string-toolkit), [`LITERAL`](#compiling-and-dictionary), [`LOAD`](#x16-load-and-save), [`LOCATE`](#x16-video-screen-and-cursor), [`LOG`](#basic-alias-and-string-toolkit), [`LOOP`](#control-flow), [`LSHIFT`](#bitwise)
 
-**M** — [`M*`](#arithmetic), [`M*/`](#arithmetic), [`M+`](#double-cell-math), [`MARKER`](#compiling-and-dictionary), [`MAX`](#arithmetic), [`MB`](#x16-input-devices), [`MID$`](#basic-alias-and-string-toolkit), [`MIN`](#arithmetic), [`MOD`](#arithmetic), [`MONITOR`](#x16-system-control), [`MOUSE`](#x16-input-devices), [`MOVE`](#memory), [`MS`](#x16-system-control), [`MWHEEL`](#x16-input-devices), [`MX`](#x16-input-devices), [`MY`](#x16-input-devices)
+**M** — [`M*`](#arithmetic), [`M*/`](#arithmetic), [`M+`](#double-cell-math), [`MARKER`](#compiling-and-dictionary), [`MAX`](#arithmetic), [`MB`](#x16-input-devices), [`MID`](#basic-alias-and-string-toolkit), [`MIN`](#arithmetic), [`MOD`](#arithmetic), [`MOUSE`](#x16-input-devices), [`MOVE`](#memory), [`MS`](#x16-system-control), [`MWHEEL`](#x16-input-devices), [`MX`](#x16-input-devices), [`MY`](#x16-input-devices)
 
-**N** — [`NEGATE`](#arithmetic), [`NIP`](#stack-manipulation)
+**N** — [`NBIN`](#basic-alias-and-string-toolkit), [`NEGATE`](#arithmetic), [`NHEX`](#basic-alias-and-string-toolkit), [`NIP`](#stack-manipulation)
 
 **O** — [`OF`](#control-flow), [`ONLY`](#wordlists-and-search-order), [`OPEN`](#basic-alias-and-string-toolkit), [`OPEN-FILE`](#files), [`OR`](#bitwise), [`ORDER`](#wordlists-and-search-order), [`OVAL`](#x16-graphics), [`OVER`](#stack-manipulation)
 
-**P** — [`PAD`](#memory), [`PARSE`](#number-and-text-parsing), [`PARSE-NAME`](#number-and-text-parsing), [`PICK`](#stack-manipulation), [`PLACE`](#characters-and-strings), [`POS`](#x16-video-screen-and-cursor), [`POSTPONE`](#compiling-and-dictionary), [`POWEROFF`](#x16-system-control), [`PREVIOUS`](#wordlists-and-search-order), [`PSET`](#x16-graphics), [`PSGCHORD`](#x16-audio), [`PSGFREQ`](#x16-audio), [`PSGINIT`](#x16-audio), [`PSGNOTE`](#x16-audio), [`PSGPAN`](#x16-audio), [`PSGPLAY`](#x16-audio), [`PSGVOL`](#x16-audio), [`PSGWAV`](#x16-audio)
+**P** — [`PAD`](#memory), [`PARSE`](#number-and-text-parsing), [`PARSE-NAME`](#number-and-text-parsing), [`PICK`](#stack-manipulation), [`PLACE`](#characters-and-strings), [`POS`](#x16-video-screen-and-cursor), [`POSTPONE`](#compiling-and-dictionary), [`PREVIOUS`](#wordlists-and-search-order), [`PSET`](#x16-graphics), [`PSGCHORD`](#x16-audio), [`PSGFREQ`](#x16-audio), [`PSGINIT`](#x16-audio), [`PSGNOTE`](#x16-audio), [`PSGPAN`](#x16-audio), [`PSGPLAY`](#x16-audio), [`PSGVOL`](#x16-audio), [`PSGWAV`](#x16-audio)
 
 **Q** — [`QUIT`](#control-flow)
 
-**R** — [`R/O`](#files), [`RP@`](#control-flow), [`R/W`](#files), [`R>`](#return-stack-and-loop-index), [`R@`](#return-stack-and-loop-index), [`RANDOM`](#system-and-environment), [`RDROP`](#return-stack-and-loop-index), [`READ-FILE`](#files), [`READ-LINE`](#files), [`REBOOT`](#x16-system-control), [`RECT`](#x16-graphics), [`RECURSE`](#control-flow), [`REFILL`](#interpreter-and-input-source), [`RENAME-FILE`](#files), [`REPEAT`](#control-flow), [`REPOSITION-FILE`](#files), [`REQUIRE`](#files), [`REQUIRED`](#files), [`RESET`](#x16-system-control), [`RESIZE-FILE`](#files), [`RESTORE-INPUT`](#interpreter-and-input-source), [`RIGHT$`](#basic-alias-and-string-toolkit), [`RING`](#x16-graphics), [`RND`](#system-and-environment), [`ROLL`](#stack-manipulation), [`ROT`](#stack-manipulation), [`RPT$`](#basic-alias-and-string-toolkit), [`RSHIFT`](#bitwise)
+**R** — [`R/O`](#files), [`RP@`](#control-flow), [`R/W`](#files), [`R>`](#return-stack-and-loop-index), [`R@`](#return-stack-and-loop-index), [`RANDOM`](#system-and-environment), [`RDROP`](#return-stack-and-loop-index), [`READ-FILE`](#files), [`READ-LINE`](#files), [`REBOOT`](#x16-system-control), [`RECT`](#x16-graphics), [`RECURSE`](#control-flow), [`REFILL`](#interpreter-and-input-source), [`RENAME-FILE`](#files), [`REPEAT`](#control-flow), [`REPOSITION-FILE`](#files), [`REQUIRE`](#files), [`REQUIRED`](#files), [`RESIZE-FILE`](#files), [`RESTORE-INPUT`](#interpreter-and-input-source), [`RIGHT`](#basic-alias-and-string-toolkit), [`RING`](#x16-graphics), [`RND`](#system-and-environment), [`ROLL`](#stack-manipulation), [`ROT`](#stack-manipulation), [`RPT`](#basic-alias-and-string-toolkit), [`RSHIFT`](#bitwise)
 
-**S** — [`S"`](#characters-and-strings), [`S>D`](#double-cell-math), [`S>F`](#floating-point), [`SAVE`](#x16-load-and-save), [`SAVE-INPUT`](#interpreter-and-input-source), [`SBIT`](#bit-and-byte-toolkit), [`SCREEN`](#x16-video-screen-and-cursor), [`SCROLLX`](#x16-video-screen-and-cursor), [`SCROLLY`](#x16-video-screen-and-cursor), [`SEARCH-WORDLIST`](#wordlists-and-search-order), [`SET-CURRENT`](#wordlists-and-search-order), [`SET-ORDER`](#wordlists-and-search-order), [`SETBANK`](#x16-system-control), [`SGN`](#arithmetic), [`SIGN`](#numeric-output), [`SIN`](#basic-alias-and-string-toolkit), [`SLEEP`](#x16-system-control), [`SLITERAL`](#compiling-and-dictionary), [`SM/REM`](#arithmetic), [`SOURCE`](#interpreter-and-input-source), [`SOURCE-ID`](#interpreter-and-input-source), [`SP@`](#control-flow), [`SPACE`](#terminal-io), [`SPACES`](#terminal-io), [`SPLIT`](#bit-and-byte-toolkit), [`SPRITE`](#x16-sprites), [`SPRITE-GET`](#x16-sprites), [`SPRITE-IMAGE`](#x16-sprites), [`SPRITE-MEM`](#x16-sprites), [`SPRITE-MOV`](#x16-sprites), [`SPRITE-POS`](#x16-sprites), [`SPRITE-SIZE`](#x16-sprites), [`SPRITE-Z`](#x16-sprites), [`SPRITES-OFF`](#x16-sprites), [`SPRITES-ON`](#x16-sprites), [`SPRLOAD`](#x16-load-and-save), [`SPRSAVE`](#x16-load-and-save), [`SQR`](#basic-alias-and-string-toolkit), [`STATE`](#interpreter-and-input-source), [`STR$`](#basic-alias-and-string-toolkit), [`SWAP`](#stack-manipulation), [`S\"`](#characters-and-strings)
+**S** — [`S"`](#characters-and-strings), [`S>D`](#double-cell-math), [`S>F`](#floating-point), [`SAVE`](#x16-load-and-save), [`SAVE-INPUT`](#interpreter-and-input-source), [`SBIT`](#bit-and-byte-toolkit), [`SCREEN`](#x16-video-screen-and-cursor), [`SCROLLX`](#x16-video-screen-and-cursor), [`SCROLLY`](#x16-video-screen-and-cursor), [`SEARCH-WORDLIST`](#wordlists-and-search-order), [`SET-CURRENT`](#wordlists-and-search-order), [`SET-ORDER`](#wordlists-and-search-order), [`SETBANK`](#x16-system-control), [`SGN`](#arithmetic), [`SIGN`](#numeric-output), [`SIN`](#basic-alias-and-string-toolkit), [`SLEEP`](#x16-system-control), [`SLITERAL`](#compiling-and-dictionary), [`SM/REM`](#arithmetic), [`SOURCE`](#interpreter-and-input-source), [`SOURCE-ID`](#interpreter-and-input-source), [`SP@`](#control-flow), [`SPACE`](#terminal-io), [`SPACES`](#terminal-io), [`SPLIT`](#bit-and-byte-toolkit), [`SPRITE`](#x16-sprites), [`SPRITE-GET`](#x16-sprites), [`SPRITE-IMAGE`](#x16-sprites), [`SPRITE-MEM`](#x16-sprites), [`SPRITE-MOV`](#x16-sprites), [`SPRITE-POS`](#x16-sprites), [`SPRITE-SIZE`](#x16-sprites), [`SPRITE-Z`](#x16-sprites), [`SPRITES-OFF`](#x16-sprites), [`SPRITES-ON`](#x16-sprites), [`SPRLOAD`](#x16-load-and-save), [`SPRSAVE`](#x16-load-and-save), [`SQR`](#basic-alias-and-string-toolkit), [`STATE`](#interpreter-and-input-source), [`STR`](#basic-alias-and-string-toolkit), [`SWAP`](#stack-manipulation), [`S\"`](#characters-and-strings)
 
 **T** — [`TAN`](#basic-alias-and-string-toolkit), [`TATTR`](#x16-video-screen-and-cursor), [`TDATA`](#x16-video-screen-and-cursor), [`THEN`](#control-flow), [`THROW`](#control-flow), [`TIB`](#interpreter-and-input-source), [`TILE`](#x16-video-screen-and-cursor), [`TILELOAD`](#x16-load-and-save), [`TILESAVE`](#x16-load-and-save), [`TMAPLOAD`](#x16-load-and-save), [`TMAPSAVE`](#x16-load-and-save), [`TO`](#defining-words), [`TRUE`](#constants-and-literals), [`TUCK`](#stack-manipulation), [`TYPE`](#characters-and-strings)
 
@@ -907,17 +907,20 @@ core (to make room for `CD`/`DIR`) into `toolkit/BASICSTR.FTH` — they are plai
 Forth over `<# #S #>`, `>NUMBER`, `/STRING`, `FILL`, `MIN`. Load them with
 `INCLUDE BASICSTR.FTH`:
 
-- **`HEX$`** ( u -- c-addr u ) — number as hexadecimal digits. `255 HEX$ TYPE` → `FF`
-- **`BIN$`** ( u -- c-addr u ) — number as binary digits.
-- **`STR$`** ( n -- c-addr u ) — signed number as a string (current base).
+These carry no trailing `$` (unlike BASIC) so the names are valid Forth; `NHEX`/`NBIN`
+use an `N` prefix because `HEX` and `BIN` are core words (`HEX` sets BASE=16, `BIN` is the file mode).
+
+- **`NHEX`** ( u -- c-addr u ) — number as hexadecimal digits. `255 NHEX TYPE` → `FF`
+- **`NBIN`** ( u -- c-addr u ) — number as binary digits. `5 NBIN TYPE` → `101`
+- **`STR`** ( n -- c-addr u ) — signed number as a string (current base). `-12 STR TYPE` → `-12`
 - **`VAL`** ( c-addr u -- n ) — string to number (current base). `S" 42" VAL .` → `42`
 - **`ASC`** ( c-addr u -- code ) — code of the first character.
-- **`CHR$`** ( code -- c-addr 1 ) — one-character string (in PAD). `65 CHR$ TYPE` → `A`
+- **`CHR`** ( code -- c-addr 1 ) — one-character string (in PAD). `65 CHR TYPE` → `A`
 - **`LEN`** ( c-addr u -- u ) — string length (returns the count).
-- **`LEFT$`** ( c-addr u n -- c-addr n2 ) — first n characters.
-- **`RIGHT$`** ( c-addr u n -- c-addr2 n2 ) — last n characters.
-- **`MID$`** ( c-addr u start len -- c-addr2 len2 ) — substring; `start` is 1-based. `S" HELLO" 2 3 MID$ TYPE` → `ELL`
-- **`RPT$`** ( char n -- c-addr u ) — a character repeated n times (in PAD). `[CHAR] * 5 RPT$ TYPE` → `*****`
+- **`LEFT`** ( c-addr u n -- c-addr n2 ) — first n characters.
+- **`RIGHT`** ( c-addr u n -- c-addr2 n2 ) — last n characters.
+- **`MID`** ( c-addr u start len -- c-addr2 len2 ) — substring; `start` is 1-based. `S" HELLO" 2 3 MID TYPE` → `ELL`
+- **`RPT`** ( char n -- c-addr u ) — a character repeated n times (in PAD). `[CHAR] * 5 RPT TYPE` → `*****`
 - **`FVARIABLE`** ( "name" -- ) — create a float variable (5 bytes); read/write with `F@`/`F!`.
 - **`FCONSTANT`** ( "name" -- ) ( F: r -- ) — create a word that pushes the float r. `3 S>F FCONSTANT THREE`
 
@@ -931,20 +934,19 @@ Forth over `<# #S #>`, `>NUMBER`, `/STRING`, `FILL`, `MIN`. Load them with
 
 ## X16 system control
 
-- **`MONITOR`** ( -- ) — enter the built-in machine-language monitor (exit with `X`).
 - **`EDIT`** ( c-addr u -- ) — open the named file in the built-in X16 text editor
-  (`u`=0 for a new buffer); edit, save (Ctrl-S), quit (Ctrl-Q). Known limitation:
-  the first keyboard line typed right after quitting the editor may be glitched
-  (a swallowed RETURN / `?STACK`) — just re-enter it, or use the reset+reload
-  loop: `S" P.FTH" EDIT`, then reset Forth and `S" P.FTH" INCLUDED`. Programmatic
-  `INCLUDED` after `EDIT` works. See `doc/EDIT-known-issue.md`.
+  (`u`=0 for a new buffer); edit, save (Ctrl-S), quit (Ctrl-Q), then
+  `INCLUDE` the file to compile it. **Known limitation:** the first keyboard line
+  right after quitting `EDIT` is still glitched (a swallowed RETURN — takes
+  several presses). This is now `EDIT`-specific: x16edit leaves more KERNAL state
+  off than a plain file read, so the console-reader reset that fixed `INCLUDED`
+  doesn't fully cover it. Workaround: after `EDIT`, reset Forth (relaunch /
+  cold start), then `INCLUDE` the file. (Plain `INCLUDED` on its own is fine.)
 - **`SETBANK`** ( bank -- ) — select the RAM bank visible at `$A000-$BFFF`.
 - **`B@`** ( bank off -- byte ) — read a byte from banked RAM (`off` = 0..8191 into `$A000`).
 - **`B!`** ( byte bank off -- ) — store a byte into banked RAM.
 - **`SLEEP`** ( jiffies -- ) — wait `jiffies` 1/60-second ticks. `60 SLEEP` waits ~1 s.
 - **`MS`** ( u -- ) — wait ~`u` milliseconds (calibrated 8 MHz busy loop; approximate but ≥ `u` ms). `1000 MS` ≈ 1 s.
-- **`RESET`** ( -- ) — hardware reset via the SMC.
-- **`POWEROFF`** ( -- ) — power the machine off via the SMC.
 - **`REBOOT`** ( -- ) — soft reboot through the reset vector.
 - **`KEYMAP`** ( c-addr u -- ) — set the keyboard layout by name. `S" en-us" KEYMAP`
 

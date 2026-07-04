@@ -496,7 +496,6 @@ USR      ( addr -- )   call a machine-language routine at addr (it must RTS)
 IRQ      ( xt -- )     run a Forth word on every 60 Hz VSYNC interrupt (arm with
                        an xt from `'`; `0 IRQ` disarms). The callback must be short
                        and stack-neutral; it runs on its own stacks. (RAM/PRG build.)
-MONITOR  ( -- )        enter the built-in ML monitor (exit with X)
 EDIT     ( c-addr u -- )  edit a file in the X16 full-screen editor (u=0 = new)
 SETBANK  ( bank -- )   select the RAM bank visible at $A000-$BFFF
 B@       ( bank off -- byte )   read a byte from banked RAM (off 0..8191)
@@ -504,9 +503,7 @@ B!       ( byte bank off -- )   store a byte into banked RAM (off 0..8191)
 SLEEP    ( jiffies -- )  wait 'jiffies' 1/60-second ticks
 MS       ( u -- )        wait ~u milliseconds (calibrated 8 MHz busy loop)
 KEYMAP   ( c-addr u -- )  set the keyboard layout, e.g. S" en-us" KEYMAP
-RESET    ( -- )        hardware reset (via the SMC)
 REBOOT   ( -- )        soft reboot through the reset vector
-POWEROFF ( -- )        power off (via the SMC)
 
   -- game-support primitives --
 VSYNC    ( -- )        wait for the next video frame (frame-locked 60 Hz, via a
@@ -518,25 +515,29 @@ VFILL    ( value count -- )  fill 'count' VRAM bytes with a value (set addr with
 COLLIDE? ( ax ay aw ah bx by bw bh -- flag )  bounding-box overlap test
 ```
 `EDIT` drives the standalone X16EDIT ROM (not the BASIC wrapper) to create and
-edit files directly on the machine. KNOWN ISSUE: returning from the editor
-leaves Forth's *first* console operation glitchy - the first RETURN is swallowed
-(it takes several presses), and an `INCLUDED` run immediately afterward won't
-compile. BASIC's own `EDIT` returns cleanly, so the cause is Forth-specific and
-currently unresolved (see `doc/EDIT-known-issue.md`). Reliable workflow:
-`S" MYPROG.FTH" EDIT`, write out and quit the editor, then RESET Forth (relaunch
-or cold start) and `S" MYPROG.FTH" INCLUDED` in the fresh session.
+edit files directly on the machine. The general "swallowed RETURN after a device-8
+file read" glitch is **fixed** — `ACCEPT` resets the KERNAL screen-editor
+line-input state before each keyboard line, so a plain `S" X.FTH" INCLUDED`
+followed by a command works on the first RETURN. **`EDIT` still has a residual
+glitch**, though: the first keyboard line right after quitting the editor is
+swallowed (x16edit leaves more KERNAL state off than a file read does, beyond what
+the `ACCEPT` reset covers). Reliable EDIT workflow: `S" MYPROG.FTH" EDIT`, write
+out and quit, then reset Forth (relaunch / cold start) and
+`S" MYPROG.FTH" INCLUDED` in the fresh session. See `doc/EDIT-known-issue.md`.
 
 BASIC-style aliases for existing Forth words are **built into the X16 build**:
 `OPEN` (=`OPEN-FILE`), `CLOSE` (=`CLOSE-FILE`), `LINPUT` (=`ACCEPT`). The other
 BASIC-integrated commands (`DOS HELP BOOT MENU`) are not provided: they parse the
 BASIC text buffer and use BASIC's zero page, which conflicts with Forth.
 
-The BASIC string / number-conversion functions
-(`HEX$ BIN$ STR$ VAL ASC CHR$ LEN LEFT$ RIGHT$ MID$ RPT$`), using Forth's
+The string / number-conversion functions
+(`NHEX NBIN STR VAL ASC CHR LEN LEFT RIGHT MID RPT`), using Forth's
 `c-addr u` string model, live in `toolkit/BASICSTR.FTH` (`INCLUDE BASICSTR.FTH`)
 — they are plain Forth over the pictured-numeric-output words, so they were moved
-out of the ROM core to make room for the filesystem words. `FVARIABLE`/`FCONSTANT`
-are built in; the BASIC math names are in `toolkit/BASICMATH.FTH`.
+out of the ROM core to make room for the filesystem words. They carry no trailing
+`$` (so the names are valid Forth); `NHEX`/`NBIN` take an `N` prefix because `HEX`
+and `BIN` are core words. `FVARIABLE`/`FCONSTANT` are built in; the BASIC math
+names (`SQR SIN COS TAN ATN LOG EXP`) are in `toolkit/FPX.FTH`.
 
 ### Binary LOAD / SAVE
 Filenames are Forth strings `( c-addr u )`, e.g. `S" DATA.BIN"`. `dev` is the
