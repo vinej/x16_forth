@@ -1,0 +1,30 @@
+\ FORTHX16 - FM (YM2151) AUDIO SELF-TEST
+\ EXERCISES FMFREQ / FMDRUM / FMVIB / FMPAN / FMPOKE / FMPLAY / FMCHORD.
+\ THE YM2151 is write-only, so this confirms each word runs and the interpreter
+\ survives (no hang / no zero-page corruption) rather than reading state back.
+\ REQUIRES THE X16 BUILD. RUN WITH:  INCLUDE X16FM.FTH
+
+DECIMAL
+VARIABLE #FAIL
+
+: CHECK
+   2DUP = IF 2DROP ."  OK" CR
+   ELSE ."  FAIL GOT=" SWAP . ." WANT=" . 1 #FAIL +! CR THEN ;
+
+: RUN-FM
+   0 #FAIL !
+   CR ." == X16 FM TESTS ==" CR
+
+   FMINIT
+   ." FMFREQ  " 440 0 FMFREQ 111 111 CHECK
+   ." FMDRUM  " 30 0 FMDRUM 111 111 CHECK
+   ." FMVIB   " 5 10 FMVIB 111 111 CHECK
+   ." FMPAN   " 3 0 FMPAN 111 111 CHECK
+   ." FMPOKE  " 127 32 FMPOKE 111 111 CHECK
+   ." FMPLAY  " S" C" 0 FMPLAY 111 111 CHECK
+   ." FMCHORD " S" CEG" 0 FMCHORD 111 111 CHECK
+
+   ." ALIVE   " 12345 12345 CHECK
+   CR #FAIL @ 0= IF ." ALL FM TESTS PASSED" ELSE ." FM FAILURES: " #FAIL @ . THEN CR ;
+
+RUN-FM
