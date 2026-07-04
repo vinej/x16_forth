@@ -1360,5 +1360,94 @@ calculator is on screen about a second after boot.
 - No symbolic algebra (CAS) and no user programs — out of scope for this port.
 
 
+# Section 6 — Inline assembler (ASSEMBLER.FTH)
+
+`toolkit/ASSEMBLER.FTH` is a 6502 assembler (the classic Ragsdale FIG assembler,
+adapted to ForthX16) that lets you define words whose body is hand-written
+machine code. Reach for it for tight inner loops — memory fills/blits,
+checksums, decompressors, collision scans — and for interrupt handlers, where
+raw speed matters most.
+
+```
+S" ASSEMBLER.FTH" INCLUDED
+```
+
+## 6.1 Defining a CODE word
+
+```
+CODE name  ( stack effect )
+   <6502 instructions>
+   NEXT JMP,          \ hand control back to the interpreter
+END-CODE
+```
+
+- **Opcodes** are written mnemonic-first with a trailing comma: `LDA,` `STA,`
+  `INX,` `CLC,` `JSR,` … Structured control words exist too: `IF,` `ELSE,`
+  `THEN,` `BEGIN,` `UNTIL,` (with condition prefixes `BEQ:` `BNE:` `BCC:`
+  `BCS:` `BMI:` `BPL:` `BVC:` `BVS:`, named for the branch you *want taken*).
+- **Addressing modes** are set by a word before the opcode:
+  `n #` immediate · `addr` absolute/zero-page (default, `MEM`) · `addr ,X` ·
+  `addr ,Y` · `addr )Y` indirect-indexed `(zp),Y` · `addr X)` indexed-indirect
+  `(zp,X)` · `addr )` indirect · `.A` accumulator.
+
+## 6.2 The register/stack model
+
+- **`DTOP`** — the 16-bit top-of-stack, in zero page. `DTOP LDA,` / `DTOP 1+ LDA,`
+  read its low/high byte; store back to change it in place.
+- **`POP`** — `JSR POP` drops the top cell and returns it in **A=low, X=high**.
+- **`PUSH`** — `JSR PUSH` pushes **A=low, X=high** as a new top cell.
+- **`N`** — scratch; bytes `N-1 … N+7` are free for use within one CODE word.
+- **`NEXT`** — jump here (`NEXT JMP,`) to return to the Forth interpreter.
+
+The zero page is laid out so this mapping is exact (`DTOP` = data-stack top,
+etc.); `VER >BODY` exposes the base and the `NEXT`/`POP`/`PUSH` addresses.
+
+Example — a 16-bit increment with carry:
+
+```
+CODE 1+!  ( n -- n+1 )
+   DTOP INC,
+   BEQ: IF, DTOP 1+ INC, THEN,
+   NEXT JMP,
+END-CODE
+```
+
+## 6.3 Assembly in an interrupt (VSYNC) — the game case
+
+The interrupt is usually the one place a game needs assembly (music tick, sprite
+multiplexer, scroll, timers). ForthX16 supplies safe plumbing, so you never
+touch `CINV`:
+
+- **`xt IRQ`** — run execution-token `xt` once per interrupt (~60 Hz VSYNC);
+  **`0 IRQ`** disarms. The dispatcher saves/restores the whole VM, runs the
+  callback on private stacks, and chains to the KERNAL — so the callback may be
+  any word. Install a **CODE word** and you have a pure-assembly ISR.
+- **`VSYNC`** ( -- ) — block until the next video frame.
+- **`FRAMES`** ( -- n ) — free-running 0..255 frame counter; take byte deltas.
+
+```
+VARIABLE GTICK
+CODE IRQ-TICK ( -- )                 \ callbacks take nothing, keep them short
+   GTICK INC,  BEQ: IF, GTICK 1+ INC, THEN,
+   NEXT JMP,
+END-CODE
+['] IRQ-TICK IRQ                     \ arm;  0 IRQ  to stop
+```
+
+A callback must have stack effect `( -- )`, stay short, and save/restore any
+VERA address ports it uses (the foreground may be mid-transfer).
+
+## 6.4 Learning by example
+
+Three self-checking files in `toolkit/` (load `ASSEMBLER.FTH` first):
+
+- **`ASMTEST.FTH`** — 28 assertions covering every addressing mode, the 16-bit
+  ALU idioms, `PUSH`/`POP`, and the control words. Run it after any change.
+- **`ASMDEMO.FTH`** — `AFILLB` (memory fill) and `AXOR` (checksum) in assembly,
+  each with a correctness check and a speed race against the pure-Forth version
+  (`ASMDEMO` runs both; assembly wins by ~80×).
+- **`ASMIRQ.FTH`** — an assembly VSYNC interrupt handler (`IRQ-DEMO` shows a
+  counter advancing in the interrupt; `IRQ-TEST` self-checks it).
+
 *Generated for ForthX16 / TX16 2.0. See also `readme.md`, `doc/forth-in-rom-scope.md`,
 and the self-checking examples in `tests-X16/`.*
