@@ -2,10 +2,9 @@
 ## Intro
 The Forth developement of version 1.5 was done by Vasyl Tsvirkunov on his github here: https://github.com/VasylTsv/ForthX16
 
-Version 2.0 on my github https://github.com/vinej/x16_forth was developed by Claude Opus 4.7
-with my help for testing and debugging. Claude did all the code. Version 2.0 has the same features of X16 Basic 2.0 and all the features of X16 can be used. I only tested the new version with X16.
+Version 2.0 on my github https://github.com/vinej/x16_forth was developed by Claude Opus 4.8 and Claude Fable. Fable found out the latest bug that Open cannot resolve. My participation was to help testing and debugging. Claude did all the code. Version 2.0 has the same features of X16 Basic 2.0 and all the features of X16 can be used. I only tested the new version with X16 and into a mister core : https://github.com/vinej/x16_mister
 
-I am not developer for this case, only the analyst/tester who helped Claude to implement all features.
+I am not the developer for this case, only the analyst/tester who helped Claude to implement all features.
 
 Forth TX16 or ForthX16 is an enhanced port of my older project [Forth Model T](https://github.com/VasylTsv/ForthModelT) for [Commander X16](https://www.commanderx16.com/) and other 6502-based platforms. It is a completely functional Forth 2012 standard implementation. Unlike Forth Model T which used direct threaded model, Forth TX16 is using token threaded model. This was mostly done to minimize the size - one of the goals of the project was to fit the entire interpreter on 8K C64 cartridge.
 
