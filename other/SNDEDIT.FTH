@@ -11,7 +11,7 @@
 \   SG-DEMO   SG-PLAY          \ build a sample tune and play it (PSG)
 \   FM  SG-PLAY                \ same tune on the FM synth
 \   SNDED                      \ interactive editor
-\   S" TUNE.SNG" SG-SAVE       \ save; later (even in a game)  S" TUNE.SNG" SG-LOAD  SG-PLAY
+\   S" TUNE.SNG" SG-SAVE       \ later, even in a game: S" TUNE.SNG" SG-LOAD SG-PLAY
 \
 \ Building a song from Forth
 \   SG-CLR                     \ empty the song
@@ -83,41 +83,62 @@ CREATE NMTAB  ," C C#D D#E F F#G G#A A#B "     \ 12 * 2 chars, index = (semi-1)*
    $48 8 NOTE,  $46 8 NOTE,  $45 8 NOTE,  $43 8 NOTE,
    $41 16 NOTE, ;
 
-\ --- interactive editor ----------------------------------------------------
+\ --- interactive editor (incremental redraw: only changed rows repaint) -----
 CREATE PIANOKEYS  ," ZSXDCVGBHNJM"             \ index+1 = semitone
 : >UPPER ( c -- c )  DUP [CHAR] a [CHAR] z 1+ WITHIN IF 32 - THEN ;
 : KEY>SEMI ( key -- semi true | false )
    12 0 DO
       DUP  PIANOKEYS 1+ I + C@  =  IF DROP I 1+ TRUE UNLOOP EXIT THEN
    LOOP  DROP FALSE ;
+: GETKEY ( -- key )  BEGIN KEY ?DUP UNTIL ;    \ KEY is non-blocking; wait for a key
 
-: CUR-MOVE ( d -- )  EC + 0 MAX SG-LEN MIN TO EC ;
-: PUT-NOTE ( note -- )         \ preview, then store at cursor (append if at end)
-   DUP SND-NOTE  6 SLEEP  0 SND-NOTE
-   EC SG-LEN = IF
-      SG-LEN MAXSTEP < IF SG-LEN 1+ TO SG-LEN ELSE DROP EXIT THEN
-   THEN
-   ED-DUR EC STEP!  1 CUR-MOVE ;
-: DEL-STEP ( -- )              \ remove the step under the cursor, shift the rest up
-   EC SG-LEN < IF
-      SG-LEN 1- EC ?DO  I 1+ STEP@ I STEP!  LOOP
-      SG-LEN 1- TO SG-LEN
-   THEN ;
-
-: SHOW-STEP ( i -- )
+0 VALUE LTOP                     \ song index on the top list row
+: STEP-LINE ( s -- )         \ one step's text, padded to overwrite
    DUP EC = IF [CHAR] > EMIT ELSE SPACE THEN
    DUP 2 .R ." : "
-   DUP SG-LEN < IF STEP@ SWAP .NOTE ." /" 3 .R ELSE DROP ." --- (end)" THEN CR ;
-: DRAW-LIST ( -- )
-   EC 8 - 0 MAX  DUP 16 + SG-LEN 1+ MIN  SWAP ?DO I SHOW-STEP LOOP ;
+   DUP SG-LEN < IF  STEP@ SWAP .NOTE ." /" 3 .R ."       "
+   ELSE  SG-LEN = IF ." --- (end)     " ELSE ."                " THEN  THEN ;
+: DRAW-ROW  ( s -- )   DUP LTOP - 2 +  0 LOCATE  STEP-LINE ;
+: DRAW-LIST ( -- )     LTOP 16 +  LTOP  DO  I DRAW-ROW  LOOP ;
 : DRAW-HDR ( -- )
-   ." AUDIO EDITOR   "
-   SYNTH IF ." FM  inst=" INST . ELSE ." PSG wave=" WAVE . THEN
-   ."  ch=" CHAN .  ." oct=" ED-OCT .  ." dur=" ED-DUR .  ." len=" SG-LEN . CR ;
-: DRAW-HELP ( -- )
-   ." piano ZSXDCVGBHNJM=C..B  1-8 oct  +/- dur  SPACE rest  DEL del" CR
-   ." P play  T PSG/FM  W wave  I inst  , . channel  Q quit" ;
-: ED-DRAW ( -- )  CLS DRAW-HDR CR DRAW-LIST CR DRAW-HELP ;
+   0 0 LOCATE  ." AUDIO EDITOR   "
+   SYNTH IF ." FM inst=" INST . ELSE ." PSG wave=" WAVE . THEN
+   ." ch=" CHAN . ." oct=" ED-OCT . ." dur=" ED-DUR . ." steps=" SG-LEN . ."   " ;
+: DRAW-HELP ( -- )           \ static, drawn once
+   19 0 LOCATE
+   ." ZSXDCVGBHNJM set pitch  1-8 oct  INS add step  DEL del  SPACE rest" CR
+   ." +/- note dur  P play  T PSG/FM  W wave  I inst  , . chan  Q quit" ;
+
+: CUR-MOVE ( d -- )          \ repaint only the 2 changed rows
+   EC + 0 MAX SG-LEN MIN     ( newEC )
+   DUP EC = IF DROP EXIT THEN
+   EC SWAP TO EC             ( oldEC )
+   EC LTOP - 0 16 WITHIN IF                 \ new cursor still visible?
+      DRAW-ROW  EC DRAW-ROW                 \ old row off, new row on
+   ELSE
+      DROP  EC LTOP < IF EC ELSE EC 15 - THEN TO LTOP  DRAW-LIST
+   THEN ;
+: PUT-NOTE ( note -- )       \ short pitch blip, then set the note at the cursor
+   DUP SND-NOTE  3 SLEEP  0 SND-NOTE
+   EC SG-LEN = IF                          \ at the end: append and advance
+      SG-LEN MAXSTEP < IF
+         SG-LEN 1+ TO SG-LEN  ED-DUR EC STEP!  1 CUR-MOVE
+      ELSE DROP THEN
+   ELSE                                    \ on a note: change it in place, stay
+      ED-DUR EC STEP!  EC DRAW-ROW
+   THEN ;
+: DEL-STEP ( -- )            \ remove step, shift up, redraw
+   EC SG-LEN < IF
+      SG-LEN 1- EC ?DO  I 1+ STEP@ I STEP!  LOOP
+      SG-LEN 1- TO SG-LEN  EC SG-LEN MIN TO EC  DRAW-LIST
+   THEN ;
+: SET-DUR@CUR ( -- )         \ change the duration of the note under the cursor
+   EC SG-LEN < IF  EC STEP@ DROP  ED-DUR EC STEP!  EC DRAW-ROW  THEN ;
+: INS-STEP ( -- )            \ insert a rest at the cursor, shifting the rest down (grow)
+   SG-LEN MAXSTEP < IF
+      SG-LEN EC - 0 ?DO  SG-LEN 1- I -  DUP STEP@  ROT 1+ STEP!  LOOP
+      0 ED-DUR EC STEP!  SG-LEN 1+ TO SG-LEN  DRAW-LIST
+   THEN ;
 
 : SET-OCT ( key -- )  [CHAR] 0 -  TO ED-OCT ;
 : SYN-TOGGLE ( -- )  SYNTH 0= 1 AND TO SYNTH  0 TO CHAN  SND-INIT ;
@@ -128,9 +149,10 @@ CREATE PIANOKEYS  ," ZSXDCVGBHNJM"             \ index+1 = semitone
       145 OF -1 CUR-MOVE ENDOF                 \ cursor up
       17  OF  1 CUR-MOVE ENDOF                 \ cursor down
       32  OF  0 PUT-NOTE ENDOF                 \ SPACE = rest
-      20  OF DEL-STEP ENDOF                    \ DEL
-      [CHAR] + OF ED-DUR 1+ 60 MIN TO ED-DUR ENDOF
-      [CHAR] - OF ED-DUR 1- 1 MAX TO ED-DUR ENDOF
+      20  OF DEL-STEP ENDOF                    \ DEL = remove step
+      148 OF INS-STEP ENDOF                    \ INS = insert step
+      [CHAR] + OF ED-DUR 1+ 60 MIN TO ED-DUR SET-DUR@CUR ENDOF
+      [CHAR] - OF ED-DUR 1- 1 MAX TO ED-DUR SET-DUR@CUR ENDOF
       [CHAR] . OF CHAN 1+ SYNTH IF 7 ELSE 15 THEN MIN TO CHAN ENDOF
       [CHAR] , OF CHAN 1- 0 MAX TO CHAN ENDOF
       [CHAR] W OF SYNTH 0= IF WAVE 1+ 3 AND TO WAVE SND-INIT THEN ENDOF
@@ -141,8 +163,11 @@ CREATE PIANOKEYS  ," ZSXDCVGBHNJM"             \ index+1 = semitone
       DUP [CHAR] 1 [CHAR] 8 1+ WITHIN IF DUP SET-OCT THEN   \ default: octave digit
    ENDCASE ;
 : SNDED ( -- )
-   0 TO EC  0 TO ED-QUIT  SND-INIT
-   BEGIN  ED-DRAW  KEY ED-KEY  ED-QUIT UNTIL
+   0 TO EC  0 TO ED-QUIT  0 TO LTOP  SND-INIT
+   CLS  DRAW-HELP  DRAW-HDR  DRAW-LIST         \ full draw once
+   BEGIN
+      GETKEY ED-KEY  DRAW-HDR  ED-QUIT   \ header cheap; list is incremental
+   UNTIL
    0 SND-NOTE  CLS
    ." Song kept in memory.  SG-PLAY to hear, SG-SAVE to keep it." CR ;
 

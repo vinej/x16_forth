@@ -756,6 +756,10 @@ Two synths: the VERA PSG (16 voices, 0-15) and the YM2151 FM chip (8 channels,
 - **`FMPLAY`** ( c-addr u channel -- ) — play a play-string on an FM channel (blocking).
 - **`FMCHORD`** ( c-addr u channel -- ) — play a chord string on an FM channel (blocking).
 
+> To compose and play tunes interactively, load the `other/SNDEDIT.FTH` utility
+> (`INCLUDE SNDEDIT.FTH`, then `SNDED`) — a PSG/FM step-sequencer song editor with
+> `NOTE,`/`SG-PLAY` words and disk save/load a game can reuse.
+
 ## X16 load and save
 
 `dev` is the device number (usually 8 for the SD card). Names are `( c-addr u )`

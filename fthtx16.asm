@@ -115,9 +115,21 @@ STOP = $FFE1
 ; So typing "TEST" (replacing the demo) boots Forth from ROM. The 16K RAM copy is
 ; scratch (the dictionary overwrites it later). coldstart is also a direct jsrfar
 ; target (a loader can jsr $FF6E / !word coldstart / !byte $09).
-FORTH_BANK = $09		; the ROM bank this image lives in
+!ifndef FORTH_BANK { FORTH_BANK = $09 }		; ROM bank this image lives in (a cart build overrides it)
+!ifndef X16CART { X16CART = 0 }			; 1 = build as an X16 cartridge (boot2.rom)
 * = $C000
 start_of_image:
+!if X16CART {
+	; X16 cartridge: the KERNAL's boot_cartridge checks for "CX16" at $C000 and,
+	; if found, far-calls $C004 with THIS ROM bank active and IRQs masked (the
+	; screen and audio are already initialised). See kernal/drivers/x16/x16.s.
+	!byte $43, $58, $31, $36			; "CX16" signature ($C000-$C003)
+	jmp coldstart					; $C004 - cartridge entry point
+	!fill $C00F - *, $ff				; pad so coldstart is at $C00F, same as the
+							; bank-9 build -> one TK image works for both
+} else {
+	; Bank-9 build: loader.prg far-calls coldstart directly at $C00F. The four
+	; words at $C000 are the TEST launcher table (copied to and run from RAM $1000).
 	!word $1000 + (test_launcher - start_of_image)	; TEST / TEST 0
 	!word $1000 + (test_launcher - start_of_image)	; TEST 1
 	!word $1000 + (test_launcher - start_of_image)	; TEST 2
@@ -128,7 +140,9 @@ test_launcher:
 	!word coldstart
 	!byte FORTH_BANK
 	rts				; (Forth never returns)
+}
 coldstart:
+	cli				; a cart is entered with IRQs masked; the console needs them
 	ldx #0				; copy the KERNAL bridge trampolines into RAM
 -	lda brg_template,x		; (needed before any KERNAL call)
 	sta brg_ram,x
