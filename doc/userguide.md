@@ -23,6 +23,30 @@ with the top of stack on the right. `n`=signed number, `u`=unsigned, `d`=double
 (two-cell) number, `c`=character, `addr`=address, `xt`=execution token, `flag`=
 `TRUE`(-1)/`FALSE`(0), `f:`=floating-point stack item.
 
+## Further reading
+
+**This project**
+- [Advanced guide](advanceguide.md) — the harder words explained with worked,
+  tested examples: defining words (incl. `CREATE … DOES>`), compiling / the
+  dictionary, and control flow.
+
+**The Forth 2012 standard** (TX16 targets this standard)
+- [forth-standard.org](https://forth-standard.org/) — the official, searchable
+  Forth 2012 Standard; browse and read every standard word.
+
+**Learning Forth** (free books & tutorials)
+- [Starting FORTH](https://www.forth.com/starting-forth/) — Leo Brodie's classic
+  beginner tutorial, free online edition. The best place to start.
+- [Easy Forth](https://skilldrick.github.io/easyforth/) — Nick Morgan's
+  interactive, in-browser tutorial: run the code as you read.
+- [Thinking Forth](http://thinking-forth.sourceforge.net/) — Leo Brodie on Forth
+  style and design philosophy (free, Creative Commons).
+- [Gforth](https://gforth.org/) — a mature Forth 2012 implementation with a
+  comprehensive manual; handy as a cross-reference on a desktop machine.
+
+External tutorials use their own Forth systems, so a few words or details may
+differ from TX16 — Section 2 below is the authoritative reference for *this* system.
+
 ---
 
 # Section 1 — Tutorial
@@ -687,6 +711,10 @@ access set the address once with `VADDR` then stream with `V!`/`V@`.
 - **`SPRITE-MOV`** ( num x y -- ) — set position (= BASIC `MOVSPR num,x,y`).
 - **`SPRITE-MEM`** ( num bank addr -- ) — point a sprite's image at VRAM `bank:addr` (= BASIC `SPRMEM num,bank,addr`).
 - **`SPRITE`** ( num zdepth -- ) — set Z-depth and enable the sprite layer (BASIC `SPRITE num,zdepth`).
+
+> To draw/edit sprite images interactively, load the `other/SPREDIT.FTH` utility
+> (`INCLUDE SPREDIT.FTH`, then `SPED`) — a 4bpp sprite editor with `SPSET`/`SPGET`
+> pixel words, `SPDUMP`, disk save/load, and a live on-screen preview.
 
 ## X16 graphics
 
