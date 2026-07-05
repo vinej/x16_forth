@@ -150,6 +150,11 @@ coldstart:
 	sta brg_ram+$100,x
 	inx
 	bne -
+	ldx #chrget_template_end - chrget_template - 1
+-	lda chrget_template,x		; init BASIC CHRGET in zp $E7: a cartridge boots before
+	sta $E7,x			; BASIC would set it up, and >FLOAT (used to probe an
+	dex				; unknown word / a float literal) does jsr CHRGET
+	bpl -
 warmstart:
 } else if CART {
 ; Only used in cartridge build
@@ -5927,6 +5932,12 @@ brg_jf_ram:
 ; low-RAM trampolines so an IRQ/NMI taken while the bank is selected is handled
 ; (bank saved, KERNAL entered, bank restored). See inc/banks.inc: irq=$038b,
 ; nmi=$03b7. Pad the image up to the 16K bank's vector table.
+; BASIC ROM CHRGET routine (r49), copied to zero page $E7 at cold start so a cart
+; build (which boots before BASIC) can parse float literals / probe unknown words.
+chrget_template:
+	!byte $E6,$EE,$D0,$02,$E6,$EF,$AD,$60,$EA,$C9,$3A,$B0,$0A,$C9
+	!byte $20,$F0,$EF,$38,$E9,$30,$38,$E9,$D0,$60
+chrget_template_end:
 	!fill $FFFA - *, $ff
 	!word $03b7		; NMI  -> KERNAL NMI RAM trampoline
 	!word $ffff		; RESET (hardware forces ROM bank 0 on reset; unused here)

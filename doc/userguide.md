@@ -643,6 +643,14 @@ File access methods combine with `BIN`: e.g. `R/O BIN`.
 - **`FLUSH-FILE`** ( fileid -- ior ) — flush buffers.
 - **`R/O`** ( -- fam ) read-only, **`W/O`** write-only, **`R/W`** read/write, **`BIN`** ( fam -- fam ) binary modifier.
 
+X16 SD-card directory (device 8):
+- **`DIR`** ( -- ) — list the current directory (built in).
+- **`CD`** ( "name" -- ) — change directory, parsing the name like `INCLUDE`: `CD FORTH`.
+- **`CD..`** ( -- ) — go up to the parent; **`CD/`** ( -- ) — go to the root.
+- **`(CD)`** ( c-addr u -- ) — the worker (built in); takes a string, e.g. `S" DR1" (CD)`,
+  and first primes/mounts the card so the first `CD` after boot takes effect.
+  (`CD`/`CD..`/`CD/` live in `toolkit/DIRNAV.FTH`, baked into the TK image.)
+
 ## Structures
 
 - **`BEGIN-STRUCTURE`** ( "name" -- addr 0 ) — begin a structure definition. `BEGIN-STRUCTURE POINT`

@@ -2981,12 +2981,20 @@ collide_set:
 	+forth
 	+token closefile, exit
 
-; CD ( c-addr u -- )   change directory: send "CD:<name>" to the device-8 DOS
-; command channel (logical file 15, secondary 15).  S" DR1" CD  enters DR1;
-; S" .." CD  goes up;  S" /" CD  goes to the root.  (name up to ~16 chars)
-+header ~cd, ~cd_n, "CD"
+; (CD) ( c-addr u -- )   worker for the CD / CD.. / CD/ words (toolkit/DIRNAV.FTH):
+; send "CD:<name>" to the device-8 DOS command channel (LFN 15, secondary 15).
+; It first does a benign empty command-channel open to PRIME the SD card: the very
+; first device-8 access after boot runs sdcard_init + reset_dos (CMDR-DOS main.s),
+; and a chdir issued in that same access does not take - so we mount the card here
+; first, then send the real CD against a ready, mounted directory context.
++header ~pcd, ~pcd_n, "(CD)"
 	+code
-	lda #'C'
+	lda #0				; prime: an empty command-channel open mounts the card
+	ldx #<imgnam
+	ldy #>imgnam
+	jsr SETNAM
+	jsr cd_cmdchan
+	lda #'C'			; now build and send "CD:<name>"
 	sta imgnam
 	lda #'D'
 	sta imgnam+1
@@ -3020,17 +3028,22 @@ cd_setnam:
 	ldx #<imgnam
 	ldy #>imgnam
 	jsr SETNAM
+	jsr cd_cmdchan
+	+dpop
+	+dpop
+	jmp next
+; open then immediately close the device-8 DOS command channel (LFN 15, secondary
+; 15); SETNAM must already be set. Shared by the CD prime and the real CD command.
+cd_cmdchan:
 	lda #15			; logical file 15, device 8, secondary 15 = command channel
 	ldx #8
 	ldy #15
 	jsr SETLFS
-	jsr OPEN		; opening the command executes the DOS CD
+	jsr OPEN		; opening the command channel executes the queued DOS command
 	lda #15
 	jsr CLOSE
 	jsr CLRCHN
-	+dpop
-	+dpop
-	jmp next
+	rts
 
 ; DIR ( -- )   list the current directory (reads the "$" pseudo-file on device 8
 ; and prints each entry line: filename + type; block counts are omitted).

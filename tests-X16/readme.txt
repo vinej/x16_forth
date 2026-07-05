@@ -33,9 +33,10 @@ extension words (only present in the X16 build, forthx16.prg):
 * X16STRT.FTH   - self-checking test of the string functions now baked into
                   the X16 build (HEX$ BIN$ STR$ VAL ASC CHR$ LEN LEFT$ RIGHT$
                   MID$ RPT$), formerly toolkit/X16STR.FTH.
-* X16BAST.FTH   - self-checking test of the BASIC-name aliases baked into the
-                  X16 build (OPEN CLOSE LINPUT SQR SIN COS TAN ATN LOG EXP),
-                  formerly toolkit/X16BASIC.FTH.
+* X16BAST.FTH   - self-checking test of the BASIC-name aliases. OPEN CLOSE
+                  LINPUT are native; SQR SIN COS TAN ATN LOG EXP now live in
+                  toolkit/FPX.FTH, so INCLUDE FPX.FTH (or load the TK image)
+                  BEFORE running this test.  Formerly toolkit/X16BASIC.FTH.
 * X16FPT.FTH    - self-checking test of the FP defining words baked into the
                   X16 build (FVARIABLE FCONSTANT), formerly toolkit/X16FP.FTH.
 * X16FLT.FTH    - self-checking test of the floating-point words (F+ F- F* F/,
