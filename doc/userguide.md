@@ -489,6 +489,9 @@ Pictured example (format with a decimal point): `: .## ( n -- ) 0 <# # # [CHAR] 
 
 ## Defining words
 
+> New to these? The [advanced guide](advanceguide.md) explains them with worked
+> examples and when-to-use notes — especially `CREATE … DOES>` and `VALUE`/`TO`.
+
 - **`:`** ( "name" -- ) — start a new definition (enter compile state). `: SQ DUP * ;`
 - **`;`** ( -- ) — finish a definition (IMMEDIATE).
 - **`:NONAME`** ( -- xt ) — start an unnamed definition; leaves its xt at `;`.
@@ -509,6 +512,9 @@ Pictured example (format with a decimal point): `: .## ( n -- ) 0 <# # # [CHAR] 
 - **`DEFER!`** ( xt2 xt1 -- ) — set the action of a deferred word by xt.
 
 ## Compiling and dictionary
+
+> These metaprogramming words (execution tokens, immediate words, `POSTPONE`,
+> `MARKER`, …) are explained with examples in the [advanced guide](advanceguide.md).
 
 - **`'`** ( "name" -- xt ) — find a word's execution token. `' DUP EXECUTE`
 - **`[']`** ( "name" -- ) — compile a word's xt (in a definition).
