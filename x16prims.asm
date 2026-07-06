@@ -197,6 +197,25 @@ tof_copy:
 tof_done:
 	lda #0
 	sta _fnamebuf,y		; zero-terminate
+!if X16CART {
+	; Cart safety: a float can only start with '+', '-', '.' or a digit
+	; (Forth 2012 <significand> rule). Anything else - i.e. every typo'd
+	; word - returns false HERE, without ever touching CHRGET or BASIC's
+	; bank-4 parser. The cart boots before BASIC, so those calls are the
+	; crash surface; this guard makes unknown words structurally safe.
+	; '+','-','.' are contiguous $2B-$2E (',' slips through harmlessly:
+	; BASIC's parser rejects it and the length check returns false).
+	lda _fnamebuf		; first char (empty string -> 0 -> rejected)
+	cmp #'+'		; below '+' ($2B)? -> can't be a float
+	bcc tof_bad
+	cmp #'.'+1		; '+' ',' '-' '.' -> probe it
+	bcc +
+	cmp #'0'		; '/' ($2F)? -> no
+	bcc tof_bad
+	cmp #'9'+1		; above '9'? (letters, ':', ...) -> no
+	bcs tof_bad
++
+}
 	lda #<(_fnamebuf-1)	; txtptr = buffer-1; chrget advances to the first char
 	sta TXTPTR
 	lda #>(_fnamebuf-1)

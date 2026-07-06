@@ -55,6 +55,9 @@ VERSION_LOW_INT = 0
 !ifndef X16ROM {
 X16ROM = 0
 }
+!ifndef X16CART {
+X16CART = 0		; 1 = bank-32 cartridge build (boot2.rom, autoboots via "CX16")
+}
 !if X16ROM {
 !ifndef X16 {
 X16 = 1
@@ -115,9 +118,17 @@ STOP = $FFE1
 ; So typing "TEST" (replacing the demo) boots Forth from ROM. The 16K RAM copy is
 ; scratch (the dictionary overwrites it later). coldstart is also a direct jsrfar
 ; target (a loader can jsr $FF6E / !word coldstart / !byte $09).
-FORTH_BANK = $09		; the ROM bank this image lives in
+!ifndef FORTH_BANK { FORTH_BANK = $09 }		; ROM bank this image lives in (a cart build overrides to 32)
 * = $C000
 start_of_image:
+!if X16CART {
+	; X16 cartridge: the KERNAL's boot_cartridge checks for "CX16" at $C000 and, if
+	; found, far-calls $C004 with THIS ROM bank active and IRQs masked (screen/audio
+	; already inited). On the MiSTer the file must be named boot2.rom to autoboot.
+	; coldstart sits directly at $C004 - no jmp, no pad (every ROM byte is needed).
+	!byte $43, $58, $31, $36		; "CX16" signature ($C000-$C003)
+} else {
+	; bank-9: 4-word TEST vector table + launcher (a loader can also jsrfar $C00F/bank 9).
 	!word $1000 + (test_launcher - start_of_image)	; TEST / TEST 0
 	!word $1000 + (test_launcher - start_of_image)	; TEST 1
 	!word $1000 + (test_launcher - start_of_image)	; TEST 2
@@ -128,7 +139,11 @@ test_launcher:
 	!word coldstart
 	!byte FORTH_BANK
 	rts				; (Forth never returns)
+}
 coldstart:
+!if X16CART {
+	cli				; a cart is entered with IRQs masked; the console needs them
+}
 	ldx #0				; copy the KERNAL bridge trampolines into RAM
 -	lda brg_template,x		; (needed before any KERNAL call)
 	sta brg_ram,x
@@ -136,6 +151,17 @@ coldstart:
 	sta brg_ram+$100,x
 	inx
 	bne -
+!if X16CART {
+	; the cart boots BEFORE BASIC, so BASIC's CHRGET was never copied to zp $E7;
+	; >FLOAT (float literals) does "jsr CHRGET". Install it ourselves. Cart-only:
+	; bank-9/PRG enter from a running BASIC whose CHRGET is already set - never
+	; touch $E7 there (overwriting it was the old bank-9 regression).
+	ldx #chrget_template_end - chrget_template - 1
+-	lda chrget_template,x
+	sta $E7,x
+	dex
+	bpl -
+}
 warmstart:
 } else if CART {
 ; Only used in cartridge build
@@ -5913,6 +5939,14 @@ brg_jf_ram:
 ; low-RAM trampolines so an IRQ/NMI taken while the bank is selected is handled
 ; (bank saved, KERNAL entered, bank restored). See inc/banks.inc: irq=$038b,
 ; nmi=$03b7. Pad the image up to the 16K bank's vector table.
+!if X16CART {
+; BASIC ROM CHRGET routine (r49), copied to zp $E7 at cart coldstart (the cart
+; boots before BASIC would install it). Cart-only: keeps bank-9 byte-identical.
+chrget_template:
+	!byte $E6,$EE,$D0,$02,$E6,$EF,$AD,$60,$EA,$C9,$3A,$B0,$0A,$C9
+	!byte $20,$F0,$EF,$38,$E9,$30,$38,$E9,$D0,$60
+chrget_template_end:
+}
 	!fill $FFFA - *, $ff
 	!word $03b7		; NMI  -> KERNAL NMI RAM trampoline
 	!word $ffff		; RESET (hardware forces ROM bank 0 on reset; unused here)

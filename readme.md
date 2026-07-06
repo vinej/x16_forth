@@ -589,6 +589,16 @@ A modified copy of dynamic memory support package can be found in `dynamic`. Thi
 
 The interpreter will look for file `AUTORUN.FTH` and execute it if found.
 
+**AUTORUN and the toolkit images per build (X16).** ForthX16 can run three ways, and each build needs its own compiled-toolkit image (a `SAVE-IMAGE` snapshot is tied to the exact binary that made it - loading another build's image crashes). The `emulator/` folder ships one image per build plus a ready-made autorun for each:
+
+| Build | Started by | Toolkit image | Autorun file |
+|---|---|---|---|
+| Program (`forthx16.prg`) | `LOAD"FORTHX16.PRG",8` + `RUN` from BASIC | `TKPRG.DIC/.TOK/.VAR` | `AUTORUNPRG.FTH` |
+| ROM bank 9 (`forthx16rom.bin` in `rom.bin`) | `loader.prg` (or `TEST`) from BASIC | `TK9.DIC/.TOK/.VAR` | `AUTORUN9.FTH` |
+| ROM bank 32 cartridge (`boot2.rom`) | autoboots (`CX16` signature) | `TK32.DIC/.TOK/.VAR` | `AUTORUN32.FTH` |
+
+Only the file literally named `AUTORUN.FTH` runs at boot, so copy the variant matching the build over it (e.g. for bank 9: `AUTORUN9.FTH` -> `AUTORUN.FTH`). The shipped `AUTORUN.FTH` is a copy of `AUTORUN32.FTH` (the cartridge case). Each variant just does `S" TKxx" LOAD-IMAGE DROP` and prints a `TOOLKIT READY` banner naming its target, so a mismatch is easy to spot. All three images bundle the same toolkit: `FPX BASICSTR PCMAUDIO ASSEMBLER DIRNAV`.
+
 A modified copy of Forth test suite is in `tests` - copy files from there to the file system of Commander X16 and start it with `INCLUDE RUNTESTS.FTH`. The current version should run all tests without errors. The runtime on the emulator is about 4 minutes on Commander X16 (and a LOT more on C64).
 
 `tests-X16` holds self-checking tests and demos for the Commander X16 extension words (VERA, sprites, tiles, audio, floating point, the baked-in string/BASIC-alias/FP toolkit words, the bit/byte words, `SCROLLX/SCROLLY` + `IRQ`, and the sprite/tile disk save-load words). Each is self-contained - run e.g. `INCLUDE X16TEST.FTH`; see `tests-X16/readme.txt` for the list.
@@ -609,7 +619,7 @@ A few examples and benchmarks are in `other`.
 
 **`HP50.FTH`** is an HP-50g-style RPN scientific calculator: a typed value stack, an HP-style numbered-level display, and a small object system. Types: reals; exact 32-bit integers with BIN/OCT/DEC/HEX bases and bitwise `AND OR XOR NOT`; complex numbers `(re,im)` (`+ - * / CONJ RE IM ARG ABS R->C C->R`); and lists `[ 1 2 3 ]` (`SIZE GET`, `+` concatenates) which double as vectors (`DOT V+ V- NORM CROSS`) and matrices (`DET TRN M*`). It also has named user variables (`STO RCL PURGE CLVAR`, and a bare name recalls) that persist across `CLEAR`. Plus the usual scientific functions (`SIN COS TAN ASIN ACOS ATAN LN EXP LOG ALOG ^ SQRT`, DEG/RAD, STD/FIX) and an RPN command parser - `INCLUDE HP50.FTH` then `HP` (`OFF` quits), with `HP50TEST.FTH` self-checking it (78 tests).
 
-**Compiled-image snapshot.** Because compiling a large library from source is slow (~30s, dominated by the per-word dictionary search), two native words snapshot the compiled dictionary for a ~1s reload. `S" NAME" SAVE-IMAGE` ( c-addr u -- ) writes the dictionary bytes, the user token-table slice, and the dictionary-state pointers to three device-8 files named `NAME.DIC`/`NAME.TOK`/`NAME.VAR`; `S" NAME" LOAD-IMAGE` ( c-addr u -- flag ) restores them (it is native so it can safely replace the dictionary). They are generic (work for any compiled `.FTH`) and work in both the PRG and the bank-9 ROM build. One image can bundle **several** libraries at once - `INCLUDE` them all, finish with `ONLY FORTH DEFINITIONS DECIMAL`, then one `SAVE-IMAGE`; make `S" NAME" LOAD-IMAGE DROP` the last line of `AUTORUN.FTH` to auto-load the whole toolkit at boot. The image is tied to the exact interpreter build (rebuild it if you rebuild the `.prg`/`rom.bin`). See the user guide ("Bundling several libraries into one image") for the full rules.
+**Compiled-image snapshot.** Because compiling a large library from source is slow (~30s, dominated by the per-word dictionary search), two native words snapshot the compiled dictionary for a ~1s reload. `S" NAME" SAVE-IMAGE` ( c-addr u -- ) writes the dictionary bytes, the user token-table slice, and the dictionary-state pointers to three device-8 files named `NAME.DIC`/`NAME.TOK`/`NAME.VAR`; `S" NAME" LOAD-IMAGE` ( c-addr u -- flag ) restores them (it is native so it can safely replace the dictionary). They are generic (work for any compiled `.FTH`) and work in the PRG, bank-9 ROM and bank-32 cartridge builds. One image can bundle **several** libraries at once - `INCLUDE` them all, finish with `ONLY FORTH DEFINITIONS DECIMAL`, then one `SAVE-IMAGE`; make `S" NAME" LOAD-IMAGE DROP` the last line of `AUTORUN.FTH` to auto-load the whole toolkit at boot. The image is tied to the exact interpreter build (rebuild it if you rebuild the `.prg`/`rom.bin`). See the user guide ("Bundling several libraries into one image") for the full rules.
 
 ## Known Issues
 

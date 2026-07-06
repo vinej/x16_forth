@@ -1869,12 +1869,11 @@ SMC_I2C_ADDR   = $42
 ; SLEEP ( jiffies -- )   wait 'jiffies' 1/60-second ticks
 +header ~sleep, ~sleep_n, "SLEEP"
 	+code
-	jsr RDTIM			; A=msb, X=mid, Y=lsb
-	sty $02				; start low
+	jsr RDTIM			; A=LSB, X=mid, Y=MSB (X16 order - opposite of C64)
+	sta $02				; start low
 	stx $03				; start high
 sleep_loop:
-	jsr RDTIM
-	tya
+	jsr RDTIM			; A already = LSB
 	sec
 	sbc $02
 	sta $04				; elapsed low
