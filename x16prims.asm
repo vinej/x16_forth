@@ -177,9 +177,21 @@ VERA_AUDIO_DATA  = $9F3D
 	+forth
 	+token twodrop, false, exit
 
+; >FLOAT dispatches through a RAM vector (tofloat_vec) rather than a DEFER:
+; a defer's action cell sits in the word body, which is ROM in the bank-9/
+; cart builds - IS could never write it on real hardware (the emulator's
+; -cartbin maps the bank as RAM, which masked this). The toolkit hooks in
+; with  ' (>FLT) >FLOAT-VEC !  (see FLOAT.FTH's FPHOOK), and the hook must
+; be re-applied after LOAD-IMAGE (the vector is not part of a saved image).
 +header ~tofloat, ~tofloat_n, ">FLOAT"
-	+code dodefer
-	+value tofloat_stub
+	+code
+	lda tofloat_vec
+	ldx tofloat_vec+1
+	jmp invokeax
+
++header ~tofloatvec, ~tofloatvec_n, ">FLOAT-VEC"
+	+code doconst
+	+value tofloat_vec
 }
 
 !if FPCORE {

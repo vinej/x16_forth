@@ -435,6 +435,14 @@ IRQ_DSTACK_TOP = irq_dstack + 64 - 2
 +hmbuffer ~frame_isr, 6		; the 6-byte stub lives here (RAM, so CINV can reach it)
 }
 
+!if X16 {
+!if FPCORE = 0 {
+; action vector for the >FLOAT hook (see x16prims.asm) - must be RAM because
+; the word body itself may be in ROM. Coldstart points it at tofloat_stub.
++hmbuffer ~tofloat_vec, 2
+}
+}
+
 ; SAVE-IMAGE/LOAD-IMAGE turnkey: 64-byte buffer holding the saved dictionary-state
 ; zero-page block (see x16.asm).
 +hmbuffer ~IMGBUF, 64
@@ -921,6 +929,11 @@ STACKLIMIT = DSIZE/2 - 2*SSAFE
 	sta fsp
 	lda #>FSTACK_TOP
 	sta fsp+1
+} else {
+	lda #<tofloat_stub	; >FLOAT vector: default to "not a float"
+	sta tofloat_vec
+	lda #>tofloat_stub
+	sta tofloat_vec+1
 }
 
 	lda #0			; no IRQ callback installed yet
