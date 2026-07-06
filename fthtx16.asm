@@ -58,6 +58,9 @@ X16ROM = 0
 !ifndef X16CART {
 X16CART = 0		; 1 = bank-32 cartridge build (boot2.rom, autoboots via "CX16")
 }
+!ifndef NATIVE816 {
+NATIVE816 = 0		; 1 = 65816 native-mode build (MiSTer core, flat 16MB RAM, X16 only)
+}
 !if X16ROM {
 !ifndef X16 {
 X16 = 1
@@ -87,6 +90,9 @@ F256 = 0
 }
 !if CART != 0 and C64 = 0 {
 !error "Invalid cartridge target"
+}
+!if NATIVE816 != 0 and X16 = 0 {
+!error "NATIVE816 requires X16"
 }
 
 !if C64 {
@@ -536,6 +542,13 @@ STACKLIMIT = DSIZE/2 - 2*SSAFE
 	sbc #.op
 }
 
+; These stay the original unconditional 8-bit A(low):X(high) pair convention
+; even in NATIVE816 builds - NEXT/CALL/RETURN/CREATE/FIND/DOES>/the trampoline
+; use them and stay permanently 8-bit (see the coldstart comment above). A
+; converted +code word body that wants a native single-16-bit-A cell value
+; just uses a plain "lda"/"sta" directly inside its own REP #$20 bracket -
+; no macro needed there, since one native instruction already does the job
+; these macros need two 8-bit instructions for.
 !macro ldax .addr {
 	lda .addr
 	ldx .addr+1
@@ -795,6 +808,32 @@ STACKLIMIT = DSIZE/2 - 2*SSAFE
 ; ==============================================================================
 ; Initialize the system
 
+!if NATIVE816 {
+; Enter 65816 native mode (E=0). NEXT/CALL/RETURN/CREATE/FIND/DOES>/the RTS
+; trampoline stay 8-bit A/X permanently and are UNCHANGED from the 6502
+; version - NEXT's token fetch is byte-grain (one token byte at a time from a
+; byte-oriented stream) and does not benefit from a wider accumulator, and the
+; trampoline's raw PHA/PLA return-address construction is only correct at
+; 8-bit A. So 8-bit-A/X is the PERMANENT RESTING STATE everywhere in this
+; file, matching today's behavior exactly. Individual converted +code word
+; bodies (the ones doing real 16-bit Forth-cell arithmetic) locally bracket
+; just their own body with REP #$20 / SEP #$20 (widen A only, never X/Y) -
+; see [[x16-forth-65c816-phase1-progress]] for the full rationale. Native
+; mode (vs staying in emulation/E=1) is needed only so those local REP/SEP
+; brackets - and later MVN/MVP bulk copies - have any effect at all; SEP/REP
+; are no-ops in emulation mode.
+	clc
+	xce			; E=0 (native mode); C<->E swap, so C was cleared above
+	sep #$30		; explicit known-good 8-bit A/X/Y (the resting state below)
+	rep #$20		; briefly 16-bit A just to zero D cleanly (avoids stale
+	!al			; garbage in the hidden high byte of C leaking into D)
+	lda #$0000
+	tcd			; D=$0000 - existing zero-page block $22-$7F stays valid
+	!as
+	sep #$20		; back to the permanent 8-bit-A resting state
+	phk
+	plb			; DBR = program bank (0) - matches KERNAL/VERA/zero-page
+}
 	lda #<forth_system_c
 	ldx #>forth_system_c
 	+stax _ri				; _w does not need to be initialized
@@ -1759,6 +1798,38 @@ negate_c:
 ; code rshift
 ;
 
+!if NATIVE816 {
+; NATIVE816: each iteration's 2-instruction 8-bit shift-pair on the _dtop
+; cell fuses to one native 16-bit shift - same loop, same iteration count.
++header ~lshift, ~lshift_n, "LSHIFT"
+	+code
+	+dpop
+	tax
+	beq lshift_2
+	rep #$20
+lshift_1:
+	clc
+	asl _dtop
+	dex
+	bne lshift_1
+	sep #$20
+lshift_2:
+	jmp next
+
++header ~rshift, ~rshift_n, "RSHIFT"
+	+code
+	+dpop
+	tax
+	beq rshift_2
+	rep #$20
+rshift_1:
+	lsr _dtop
+	dex
+	bne rshift_1
+	sep #$20
+rshift_2:
+	jmp next
+} else {
 +header ~lshift, ~lshift_n, "LSHIFT"
 	+code
 	+dpop
@@ -1772,7 +1843,7 @@ lshift_1:
 	bne lshift_1
 lshift_2:
 	jmp next
-			
+
 +header ~rshift, ~rshift_n, "RSHIFT"
 	+code
 	+dpop
@@ -1785,6 +1856,7 @@ rshift_1:
 	bne rshift_1
 rshift_2:
 	jmp next
+}
 
 ; Double-word math follows. Some words are in Core even if they work with double values. Depending on architecture, this
 ; part may be relatively easy to do or quite hard. RatC VM is clearly at the very hard end when it comes to division and
@@ -1864,6 +1936,41 @@ _shigh		= _wscratch ; dpop_scratch_wscratch requires the first two items used to
 _slow		= _rscratch
 _sdiv		= _scratch
 
+!if NATIVE816 {
+; NATIVE816: each 16-bit-wide zero-page pair (_slow/_shigh/_sdiv) is one native
+; register now, so the 32-bit shift chain and the two-pass 8-bit compare both
+; collapse to a single instruction each - same restoring-division algorithm,
+; same carry-flow, just fusing byte-pairs that were only ever split because
+; the 6502 has no wider register. No immediate operands are affected here,
+; so no !al/!as bracketing is needed, only the runtime REP/SEP.
++header ~ummod, ~ummod_n, "UM/MOD"
+	+code
+	jsr dpop_scratch_wscratch_dtopto_rscratch ; note _sdiv and _shigh assignments
+	rep #$20
+	ldx #17
+ummod_1:
+	dex
+	beq ummod_x
+	asl _slow
+	rol _shigh		; carry-out here = old top bit of the 32-bit (_shigh:_slow) pair
+	bcs ummod_2		; overflow past bit 31 -> _shigh is unconditionally >= _sdiv
+	lda _shigh
+	cmp _sdiv		; one native 16-bit compare replaces the old high-then-low 8-bit pass
+	bcc ummod_1
+ummod_2:
+	lda _shigh
+	sec
+	sbc _sdiv
+	sta _shigh
+	inc _slow		; sets the just-shifted-in bit 0 (quotient bit = 1)
+	+bra ummod_1
+ummod_x:
+	sep #$20
+	+ldax _shigh
+	+stax _dtop
+	+ldax _slow
+	jmp dpush_and_next
+} else {
 +header ~ummod, ~ummod_n, "UM/MOD"
 	+code
 	jsr dpop_scratch_wscratch_dtopto_rscratch ; note _sdiv and _shigh assignments
@@ -1907,6 +2014,7 @@ ummod_x:
 	+stax _dtop
 	+ldax _slow
 	jmp dpush_and_next
+}
 
 ;
 ; : ud/mod >r 0 r@ um/mod rot rot r> um/mod rot ;
@@ -1934,6 +2042,45 @@ ummod_x:
 
 _smult		= _scratch
 
+!if NATIVE816 {
+; NATIVE816: the 32-bit (_shigh:_slow) shift-right-through-carry and the
+; 16-bit add both fuse to one native instruction per byte-pair, same as
+; UM/MOD above - the two-instruction native rotate chain reproduces the old
+; four-instruction 8-bit chain's carry threading exactly (verified bit by
+; bit: ror _shigh's carry-out feeds ror _slow's carry-in, same as the old
+; _shigh+1->_shigh->_slow+1->_slow chain), and the native ADC's carry-out is
+; the same "18th bit" the algorithm relies on carrying into the next
+; iteration's rotate.
++header ~ummult, ~ummult_n, "UM*"
+	+code
+	+dpop
+	+stax _smult
+	lda #0
+	sta _shigh
+	sta _shigh+1
+	+ldax _dtop		; Note that we don't pull the last value from the stack!
+	+stax _slow
+	rep #$20
+	clc
+	ldx #18
+ummult_1:
+	dex
+	beq ummult_x
+	ror _shigh	; carry-out here feeds ror _slow's carry-in, same threading as
+	ror _slow	; the old 4-step chain (verified: shigh+1->shigh->slow+1->slow)
+	bcc ummult_1
+	lda _shigh
+	clc
+	adc _smult
+	sta _shigh
+	+bra ummult_1
+ummult_x:
+	sep #$20
+	+ldax _slow
+	+stax _dtop
+	+ldax _shigh
+	jmp dpush_and_next
+} else {
 +header ~ummult, ~ummult_n, "UM*"
 	+code
 	+dpop
@@ -1966,6 +2113,7 @@ ummult_x:
 	+stax _dtop
 	+ldax _shigh
 	jmp dpush_and_next
+}
 
 ; UD* is not part of the standard but it is very convenient to use in formatting words
 ;
@@ -2041,6 +2189,23 @@ mmult_1:
 	+token minusone, xor, exit
 
 ; Find lowest zero (free) bit index
+!if NATIVE816 {
++header ~freebit, ~freebit_n
+	+code
+	ldx #0
+	rep #$20
+-:
+	lsr _dtop
+	bcc +
+	inx
+	bne -
++:
+	sep #$20
+	stx _dtop
+	lda #0
+	sta _dtop+1
+	jmp next
+} else {
 +header ~freebit, ~freebit_n
 	+code
 	ldx #0
@@ -2054,7 +2219,8 @@ mmult_1:
 	stx _dtop
 	lda #0
 	sta _dtop+1
-	jmp next	
+	jmp next
+}
 
 
 +header ~setbit, ~setbit_n
@@ -3952,10 +4118,67 @@ dpop_scratch_wscratch_dtopto_rscratch:
 	rts
 
 
+; NATIVE816: MVN moves the whole (count) block in one CPU-microcoded pass
+; instead of the 6502 nested-loop-with-page-carry above (kept unmodified for
+; the other platforms/non-native build - see dpop_scratch_wscratch_rscratch
+; for the _scratch=count/_wscratch=dest/_rscratch=source assignment). MVN
+; walks addresses upward (matches CMOVE's low-to-high copy order); count==0
+; must be special-cased since MVN's operand is (count-1) and would otherwise
+; wrap into a 65536-byte copy.
+!if NATIVE816 {
 +header ~cmove, ~cmove_n, "CMOVE"
 	+code
 	jsr dpop_scratch_wscratch_rscratch
-	
+	lda _scratch
+	ora _scratch+1
+	beq cmove_done
+	rep #$30
+!al
+!rl
+	lda _scratch
+	dec
+	ldx _rscratch
+	ldy _wscratch
+	mvn 0, 0		; bank 0 -> bank 0 (Phase 1: no far-bank dictionary yet)
+!as
+!rs
+	sep #$30
+cmove_done:
+	jmp next
+
+; In optional String word set
++header ~cmovex, ~cmovex_n, "CMOVE>"
+	+code
+	jsr dpop_scratch_wscratch_rscratch
+	lda _scratch
+	ora _scratch+1
+	beq cmovex_done
+	rep #$30
+!al
+!rl
+	lda _scratch		; MVP walks addresses downward (matches CMOVE>'s
+	dec			; high-to-low copy order) - X/Y must hold the LAST
+	clc			; byte of each region, not the first.
+	adc _rscratch
+	tax
+	lda _scratch
+	dec
+	clc
+	adc _wscratch
+	tay
+	lda _scratch
+	dec
+	mvp 0, 0
+!as
+!rs
+	sep #$30
+cmovex_done:
+	jmp next
+} else {
++header ~cmove, ~cmove_n, "CMOVE"
+	+code
+	jsr dpop_scratch_wscratch_rscratch
+
 	ldy #0
 	ldx _scratch+1
 	beq movedown_2
@@ -3991,7 +4214,7 @@ movedown_4:
 ;	+stax _wscratch
 ;	+dpop
 ;	+stax _rscratch
-	
+
 	ldx _scratch+1
 	txa
 	clc
@@ -4021,6 +4244,7 @@ moveup_3:
 	dex
 	bne moveup_1
 	jmp next
+}
 
 +header ~move, ~move_n, "MOVE"
 	+forth
@@ -4196,6 +4420,35 @@ fill_2:
 wlow = _wscratch
 whigh = _scratch
 
+!if NATIVE816 {
+; NATIVE816: the whole thing is really a 32-bit add across two 16-bit cells
+; (sum.lo = d1.lo+d2.lo, sum.hi = d1.hi+d2.hi+carry) - the original's Y
+; juggling only exists because a 6502 pop only hands back two registers
+; (A:X), so d1.hi (fetched via +dpop, not yet in memory) needs a temp home
+; before it can be added. Stash it in _rscratch (unused elsewhere here),
+; then two chained native 16-bit ADCs (no CLC between them, so the carry
+; from the low-cell add correctly flows into the high-cell add) replace the
+; original's four 8-bit ADCs plus the Y shuffle. Verified by hand: this is
+; the exact same two-stage 32-bit add, not a reordering of what it computes.
++header ~dadd, ~dadd_n, "D+"
+	+code
+	jsr dpop_scratch_wscratch ; see the note about scratch assignments above
+	+dpop				; pops d1.hi into A:X - not yet in memory
+	+stax _rscratch			; stash d1.hi as a 16-bit cell
+	rep #$20
+	!al
+	clc
+	lda _dtop			; d1.lo
+	adc wlow			; + d2.lo
+	sta _dtop			; sum.lo
+	lda _rscratch			; d1.hi
+	adc whigh			; + d2.hi + carry from the low-cell add
+	sta _rscratch			; sum.hi
+	sep #$20
+	!as
+	+ldax _rscratch
+	jmp dpush_and_next
+} else {
 +header ~dadd, ~dadd_n, "D+"
 	+code
 	jsr dpop_scratch_wscratch ; see the note about scratch assignments above
@@ -4220,6 +4473,7 @@ whigh = _scratch
 	tax
 	tya
 	jmp dpush_and_next
+}
 
 ; : d< rot > if 2drop true else < then ;
 +header ~dless, ~dless_n, "D<"

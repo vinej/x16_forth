@@ -1761,6 +1761,21 @@ usr_call:
 	ldy #3
 	lda (_dstack),y
 	sta $03
+!if NATIVE816 {
+; NATIVE816: a fixed 94-byte memory-to-memory copy, non-overlapping regions -
+; exactly the CMOVE/MVN shape (see fthtx16.asm). A fixed count needs no
+; zero-length guard here (94 is a compile-time constant, never 0).
+	rep #$30
+	!al
+	!rl
+	lda #$5d			; count-1 = 93 (94 bytes)
+	ldx #$22			; source = zero page $22
+	ldy #edit_zpsave		; dest
+	mvn 0, 0
+	sep #$30
+	!as
+	!rs
+} else {
 	ldx #0				; save Forth zero page $22-$7F (94 bytes)
 edit_save:
 	lda $22,x
@@ -1768,6 +1783,7 @@ edit_save:
 	inx
 	cpx #$5e
 	bne edit_save
+}
 	ldx #10				; first RAM bank for the editor
 	ldy #255			; last RAM bank
 	lda #0
@@ -1782,6 +1798,18 @@ edit_save:
 	jsr JSRFAR
 	!word $C006			; main_loadfile_with_options_entry
 	!byte $0D			; BANK_X16EDIT
+!if NATIVE816 {
+	rep #$30
+	!al
+	!rl
+	lda #$5d			; count-1 = 93 (94 bytes)
+	ldx #edit_zpsave		; source
+	ldy #$22			; dest = zero page $22
+	mvn 0, 0
+	sep #$30
+	!as
+	!rs
+} else {
 	ldx #0				; restore Forth zero page
 edit_restore:
 	lda edit_zpsave,x
@@ -1789,6 +1817,7 @@ edit_restore:
 	inx
 	cpx #$5e
 	bne edit_restore
+}
 	; Reselect RAM bank 0 (the editor leaves the bank register at 10; Forth's later
 	; KERNAL calls - RDTIM etc. - need 0). Then CLALL: close all KERNAL logical
 	; files and reset the default I/O channels. x16edit does file I/O and can leave
@@ -2488,6 +2517,15 @@ flt_t:
 ; FP path and frees the FP stack, which matters when it is called per scanline
 ; (e.g. SPLIT.FTH's filled OVAL/DISC/FCIRCLE/FELL).
 ;   c=0; d=$4000; while d: t=c+d; if x>=t {x-=t; c=c>>1+d} else {c>>=1}; d>>=2
+; NATIVE816 note: a fused-16-bit version of this was attempted and, despite
+; extensive isolated verification (single-instruction tests, 1/2/4/8-iteration
+; loop tests all passing), proved unreliable - an instruction-for-instruction
+; identical rewrite gave correct results in one test session and incorrect
+; results in another, with no root cause pinned down despite ruling out
+; algorithm logic, zero-page overlap, byte encoding, interrupts, and specific
+; instruction choice. Not safe to ship - left as the plain 8-bit version
+; unconditionally. See [[x16-forth-65c816-phase1-progress]] for the full
+; debugging writeup if this is revisited.
 +header ~isqrt, ~isqrt_n, "ISQRT"
 	+code
 	lda _dtop			; x = n
@@ -2662,6 +2700,17 @@ irq_arm_done:
 
 ; The interrupt handler, reached via jmp (CINV) from the KERNAL.
 irq_handler:
+!if NATIVE816 {
+; Defensive: this handler's body assumes 8-bit A/X throughout (it was written
+; for 6502/emulation-mode and never does its own SEP/REP). Under NATIVE816 an
+; IRQ can fire asynchronously while a converted +code word is mid-REP #$20
+; (A=16-bit) - without this, irq_handler's own lda/beq checks would silently
+; misread. Safe to force here: the INTERRUPTED code's original P (including
+; M/X) was already auto-saved by the hardware interrupt entry and is restored
+; by the eventual RTI further down the chain, unaffected by what we do to the
+; live register here.
+	sep #$30
+}
 	lda irq_armed
 	beq irq_chainj
 	lda irq_busy			; do not re-enter if a callback is still running
