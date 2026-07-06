@@ -170,6 +170,19 @@ VERA_AUDIO_DATA  = $9F3D
 
 ; >FLOAT ( c-addr u -- flag )   parse a string as a float; if valid push it (F: -- r).
 ; Referenceable (above the token boundary) so NUMBER can recognize float literals.
+; FPCORE=0: >FLOAT is a DEFERred hook defaulting to "not a float" - loading
+; toolkit/FLOAT.FTH does  ' (impl) IS >FLOAT  and float literals come alive.
+!if FPCORE = 0 {
++header ~tofloat_stub, ~tofloat_stub_n	; default action: reject ( c-addr u -- false )
+	+forth
+	+token twodrop, false, exit
+
++header ~tofloat, ~tofloat_n, ">FLOAT"
+	+code dodefer
+	+value tofloat_stub
+}
+
+!if FPCORE {
 ; Uses the ROM's fin parser (bank 4); valid only if the whole string is consumed.
 ; (fpush_fac lives in x16.asm - a forward reference the assembler resolves.)
 FP_fin = $E039			; ROM: parse a float from the CHRGET stream into FAC
@@ -305,6 +318,7 @@ tof_bad:
 	bpl -
 	+dpop				; pop f-addr
 	jmp next
+} ; FPCORE
 
 ; IRQPAUSE - hidden, nameless word used to end an IRQ Forth callback. It must
 ; be above the token boundary so its token can be emitted as a literal byte in

@@ -95,6 +95,36 @@ F256 = 0
 !error "NATIVE816 requires X16"
 }
 
+; FPCORE: 1 = floating point baked into the image (original layout; the
+; ROM/cart builds keep this so their images stay unchanged), 0 = FP moves to
+; toolkit/FLOAT.FTH (self-contained CODE words over the same BASIC ROM bank-4
+; routines; load with  INCLUDE FLOAT.FTH ). With FPCORE=0 the core keeps only
+; a DEFERred >FLOAT hook so float literals start working the moment the
+; toolkit loads (~1.3KB of image + 84 buffer bytes freed).
+!ifndef FPCORE {
+!if X16ROM {
+FPCORE = 1
+} else {
+FPCORE = 0
+}
+}
+
+; FASTLOAD: fast .FTH source loading (hash index over the core dictionary for
+; FIND - see build_hashtable - plus native READ-LINE/PARSE/WORD/NUMBER inner
+; loops). RAM-based X16 builds only - the 16K bank-9/cart ROM images have no
+; room for the extra code.
+!ifndef FASTLOAD {
+!if X16 {
+!if X16ROM {
+FASTLOAD = 0
+} else {
+FASTLOAD = 1
+}
+} else {
+FASTLOAD = 0
+}
+}
+
 !if C64 {
 !if X16ROM = 0 {
 ; KERNAL entries (direct). In X16ROM mode these are RAM bridge trampolines
@@ -377,15 +407,19 @@ NEW_LINE = $0D
 +hmbuffer ~DSTACK, DSIZE		; data stack
 
 !if X16 {
+!if FPCORE {
 +hmbuffer ~FSTACK, 80		; floating-point stack: 16 x 5-byte MFLPT floats
 FSTACK_TOP = FSTACK + 80
 +hmbuffer ~fsp, 2		; float-stack pointer - MUST be in RAM (was inline in x16.asm,
 				; which is read-only in the ROM build -> FP wrote to $0000). Set at cold start.
+}
 
 ; State for the IRQ Forth-callback (see x16.asm). Kept in RAM (not in the code
 ; image) so it works when the interpreter runs from ROM later.
 +hmbuffer ~irq_save, 20		; saved VM zero-page registers (_ri.._scratch_2)
+!if FPCORE {
 +hmbuffer ~irq_save_fsp, 2	; saved float-stack pointer
+}
 ; Private data/return stacks for the callback. Re-entering the (non-atomic)
 ; push/pop routines on the foreground's stacks would corrupt a half-finished
 ; operation, so the callback runs on its own stacks. Keep callbacks shallow.
@@ -427,6 +461,34 @@ IRQ_DSTACK_TOP = irq_dstack + 64 - 2
 ; EDIT saves Forth's zero page ($22-$7F, 94 bytes) here across x16edit. Must be
 ; RAM: in the bank-9 ROM the code section is read-only, so this cannot be inline.
 +hmbuffer ~edit_zpsave, $5e
+
+!if FASTLOAD {
+; Hash index over the (fixed, static) CORE dictionary, built once at
+; coldstart. FIND's linear near-list scan (fast, favors self-references in
+; user-compiled code) is unchanged; when that scan reaches forth_system_n
+; (the boundary into the large static core section) it jumps to hash_lookup
+; instead of continuing the slow linear walk (~440 named core words).
+; Layout (compact bucket slices, not linked chains): HASHNFA is a contiguous
+; array of 2-byte NFAs grouped by hash bucket; HASHIDX[b] points at the
+; START of bucket b's slice and HASHIDX[b+1] at its end (129 entries, the
+; last is the sentinel end-of-everything). Named core words only - nameless
+; internal words can't be found by name, and zero-length lookups stay on
+; the linear path. If the core ever outgrows HASHNFA_MAX, build_hashtable
+; leaves hash_ok=0 and every lookup silently stays linear (degrades to
+; slow, never to corrupt). See build_hashtable/hash_lookup.
+HASH_BUCKETS = 128
+HASH_MASK = HASH_BUCKETS-1
+HASHNFA_MAX = 512		; named core words are ~442 as of this writing
+; HASHNFA lives in the X16's golden RAM ($0400-$07FF, unused by this PRG
+; build) - 512 entries x 2 bytes fills the 1KB block exactly and keeps that
+; kilobyte out of the dictionary space. CAVEAT: x16edit also uses golden RAM,
+; so EDIT rebuilds the table (jsr build_hashtable, idempotent) after the
+; editor returns - see x16.asm.
+HASHNFA = $0400
++hmbuffer ~HASHIDX, 2*HASH_BUCKETS+2	; bucket -> slice start; [128] = end sentinel
++hmbuffer ~hash_ok, 1			; 1 = table valid; 0 = fall back to linear
+HASHNFA_END = HASHNFA + 2*HASHNFA_MAX
+}
 
 !if X16ROM {
 ; --- KERNAL bridge (v3 run-from-ROM) --------------------------------------
@@ -861,10 +923,12 @@ STACKLIMIT = DSIZE/2 - 2*SSAFE
 	sta exc_handler+1
 
 !if X16 {
+!if FPCORE {
 	lda #<FSTACK_TOP	; initialize the floating-point stack pointer
 	sta fsp
 	lda #>FSTACK_TOP
 	sta fsp+1
+}
 
 	lda #0			; no IRQ callback installed yet
 	sta irq_armed
@@ -887,6 +951,9 @@ STACKLIMIT = DSIZE/2 - 2*SSAFE
 
 ; In token threaded code we need to generate the mapping of tokens to addresses
 	jsr generate_token_table
+!if FASTLOAD {
+	jsr build_hashtable
+}
 
 	lda #<forth_system
 	ldx #>forth_system
@@ -3195,6 +3262,201 @@ type_out:
 ; ==============================================================================
 ; Word lookup. This is where the complex things begin.
 
+!if FASTLOAD {
+; Native source scanning. The interpreted loops these replace ran ~12-20
+; tokens PER CHARACTER of source text (measured ~4800 cycles per skipped
+; comment character) - the dominant per-character cost of INCLUDE after
+; readgen went native. Both words read the source frame directly:
+; (_source)+4 = >IN value, +6 = buffer address, +8 = buffer length
+; (see TIB / >IN / #TIB just above).
+
+; xskipdelim ( delim -- delim ): advance >IN past leading delimiters.
+; Matches the old WORD skip loop: chars are masked with 127 (shift-space
+; quirk) and TAB (9) is treated as a space before comparing to delim.
++header ~xskipdelim, ~xskipdelim_n
+	+code
+	lda _dtop		; the delimiter (left on the stack for PARSE)
+	sta _scratch
+	ldy #6
+	lda (_source),y		; cur = buffer + >IN
+	sta _rscratch
+	iny
+	lda (_source),y
+	sta _rscratch+1
+	ldy #4
+	lda (_source),y
+	clc
+	adc _rscratch
+	sta _rscratch
+	iny
+	lda (_source),y
+	adc _rscratch+1
+	sta _rscratch+1
+	ldy #8			; rem = length - >IN
+	lda (_source),y
+	sta _wscratch
+	iny
+	lda (_source),y
+	sta _wscratch+1
+	ldy #4
+	sec
+	lda _wscratch
+	sbc (_source),y
+	sta _wscratch
+	iny
+	lda _wscratch+1
+	sbc (_source),y
+	sta _wscratch+1
+	lda #0			; skipped-count
+	sta _scratch_1
+	sta _scratch_1+1
+xskd_loop:
+	lda _wscratch
+	ora _wscratch+1
+	beq xskd_done
+	ldy #0
+	lda (_rscratch),y
+	and #127
+	cmp #9			; TAB counts as a space
+	bne xskd_notab
+	lda #' '
+xskd_notab:
+	cmp _scratch
+	bne xskd_done
+	inc _rscratch
+	bne xskd_nc
+	inc _rscratch+1
+xskd_nc:
+	inc _scratch_1
+	bne xskd_ns
+	inc _scratch_1+1
+xskd_ns:
+	lda _wscratch
+	bne xskd_nd
+	dec _wscratch+1
+xskd_nd:
+	dec _wscratch
+	jmp xskd_loop
+xskd_done:
+	ldy #4			; >IN += skipped
+	clc
+	lda (_source),y
+	adc _scratch_1
+	sta (_source),y
+	iny
+	lda (_source),y
+	adc _scratch_1+1
+	sta (_source),y
+	jmp next
+
+; ( char "ccc<char>" -- c-addr u ) - native scan to the delimiter. Same
+; contract as the interpreted version: chars masked with 127 for the
+; compare, u excludes the delimiter, >IN ends past the delimiter (or at
+; the end of the source if none found).
++header ~parse, ~parse_n, "PARSE"
+	+code
+	+dpop
+	sta _scratch		; the delimiter
+	ldy #6
+	lda (_source),y		; cur = buffer + >IN
+	sta _rscratch
+	iny
+	lda (_source),y
+	sta _rscratch+1
+	ldy #4
+	lda (_source),y
+	clc
+	adc _rscratch
+	sta _rscratch
+	iny
+	lda (_source),y
+	adc _rscratch+1
+	sta _rscratch+1
+	lda _rscratch		; c-addr result = starting cur
+	sta _scratch_2
+	lda _rscratch+1
+	sta _scratch_2+1
+	ldy #8			; rem = length - >IN
+	lda (_source),y
+	sta _wscratch
+	iny
+	lda (_source),y
+	sta _wscratch+1
+	ldy #4
+	sec
+	lda _wscratch
+	sbc (_source),y
+	sta _wscratch
+	iny
+	lda _wscratch+1
+	sbc (_source),y
+	sta _wscratch+1
+parse_loop:
+	lda _wscratch
+	ora _wscratch+1
+	beq parse_exh
+	ldy #0
+	lda (_rscratch),y
+	and #127
+	cmp _scratch
+	beq parse_fnd
+	inc _rscratch
+	bne parse_nc
+	inc _rscratch+1
+parse_nc:
+	lda _wscratch
+	bne parse_nd
+	dec _wscratch+1
+parse_nd:
+	dec _wscratch
+	jmp parse_loop
+parse_fnd:
+	ldx #1			; consumed = u+1 (step past the delimiter)
+	!byte $2c		; BIT abs: skip the next 2-byte instruction
+parse_exh:
+	ldx #0			; consumed = u (source exhausted)
+	sec			; u = cur - start
+	lda _rscratch
+	sbc _scratch_2
+	sta _scratch_1
+	lda _rscratch+1
+	sbc _scratch_2+1
+	sta _scratch_1+1
+	txa			; _wscratch = consumed = u + (0|1)
+	clc
+	adc _scratch_1
+	sta _wscratch
+	lda _scratch_1+1
+	adc #0
+	sta _wscratch+1
+	ldy #4			; >IN += consumed
+	clc
+	lda (_source),y
+	adc _wscratch
+	sta (_source),y
+	iny
+	lda (_source),y
+	adc _wscratch+1
+	sta (_source),y
+	+ldax _scratch_2	; push c-addr, u
+	+dpush
+	+ldax _scratch_1
+	jmp dpush_and_next
+
++header ~word, ~word_n, "WORD"
+	+forth
+	+token xskipdelim, parse, dup
+	+literal _wordbuf
+	+token cpoke
+	+literal _wordbuf
+	+token oneplus, swap, cmove
+	+literal _wordbuf
+	+token exit
+
++header ~parsename, ~parsename_n, "PARSE-NAME"
+	+forth
+	+token bl, xskipdelim, parse, exit
+} else {
 +header ~word, ~word_n, "WORD"
 	+forth
 	+token tor, source, swap, ptrin, peek, add
@@ -3257,6 +3519,7 @@ parsename_1:
 	+branch parsename_1
 parsename_2:
 	+token twodrop, bl, parse, exit
+}
 
 
 +header ~tobody, ~tobody_n, ">BODY"
@@ -3403,11 +3666,36 @@ sw_notfound:
 	+dpop
 	+stax _rscratch
 	+dpop
+!if FASTLOAD {
+	cmp #0				; zero-length target: instant not-found
+	bne xfp_lenok			; (long-form branch - the hash redirect
+	jmp xfind_nomorewords		; below pushed the direct beq out of range)
+xfp_lenok:
+} else {
 	cmp #0
 	beq xfind_nomorewords
+}
 	sta _scratch
-
 xfind_compare:
+!if FASTLOAD {
+; Hit the boundary into the (large, static) core dictionary? Skip the slow
+; linear walk through it entirely and use the coldstart-built hash index
+; instead. Covers both the plain-PRG case (reached via ordinary LFA-delta
+; decrement) and the ROM/CART split-memory case (reached via the explicit
+; xfind_linkcore "$FF alone" jump) - both funnel through here first.
+; High byte compared first: for the common case (scanning user words above
+; the core) it differs, so the check costs one cmp+branch per word scanned.
+	lda _rscratch+1
+	cmp #>forth_system_n
+	bne xfc_noredirect
+	lda _rscratch
+	cmp #<forth_system_n
+	bne xfc_noredirect
+	lda hash_ok		; table unusable (core outgrew it)? stay linear
+	beq xfc_noredirect	; (zero-length targets never get here - the
+	jmp hash_lookup		; xfind prologue rejects them outright)
+xfc_noredirect:
+}
 	ldy #0				; compare the word length at the scan pointer to _scratch
 	lda (_rscratch),y
 	and #NAMEMASK
@@ -3469,6 +3757,277 @@ xfind_found:
 	+ldax _rscratch
 	+stax _dtop
 	jmp next
+
+!if FASTLOAD {
+; hash_lookup: reached from xfind_compare when the linear near-list scan hits
+; forth_system_n, the boundary into the large static core dictionary. Uses
+; the coldstart-built hash index (build_hashtable) instead of continuing a
+; slow linear walk through core. On entry: _dtop = target char data
+; (0-indexed, no length prefix - NOT an NFA), _scratch = target length
+; (guaranteed >0 - the redirect keeps zero-length lookups linear). Exits
+; through the shared xfind_found/xfind_nomorewords paths so the calling
+; convention is identical either way.
+hash_lookup:
+	lda _scratch			; acc = len
+	sta _wscratch
+	ldx _scratch			; X = char countdown
+	ldy #0
+hl_hashloop:
+	asl _wscratch			; acc = rotl8(acc) ...
+	bcc hl_norot
+	inc _wscratch			; (bit 0 is clear after asl; inc sets it)
+hl_norot:
+	lda (_dtop),y			; ... eor (char & $5f)
+	and #$5f
+	eor _wscratch
+	sta _wscratch
+	iny
+	dex
+	bne hl_hashloop
+
+	lda _wscratch
+	and #HASH_MASK
+	asl				; bucket*2 = HASHIDX byte offset (0..254)
+	tay
+	lda HASHIDX,y			; _scratch_1 = slice start (lower bound)
+	sta _scratch_1
+	lda HASHIDX+1,y
+	sta _scratch_1+1
+	lda HASHIDX+2,y			; _wscratch = slice end = HASHIDX[b+1]
+	sta _wscratch			; (y<=254 so +3 tops out at HASHIDX+257,
+	lda HASHIDX+3,y			; the last byte of the sentinel entry)
+	sta _wscratch+1
+
+hl_slot:
+	lda _wscratch			; p -= 2. Scanning from the slice's END
+	sec				; downward visits newest-first, preserving
+	sbc #2				; the linear scan's newest-shadows-oldest
+	sta _wscratch			; semantics.
+	bcs hl_nb
+	dec _wscratch+1
+hl_nb:
+	lda _wscratch+1			; p < slice start? no match in this bucket
+	cmp _scratch_1+1
+	bcc hl_notfound
+	bne hl_cand
+	lda _wscratch
+	cmp _scratch_1
+	bcc hl_notfound
+hl_cand:
+	ldy #0
+	lda (_wscratch),y		; candidate NFA from the slice
+	sta _rscratch
+	iny
+	lda (_wscratch),y
+	sta _rscratch+1
+	ldy #0
+	lda (_rscratch),y		; cheap pre-filter: length must match
+	and #NAMEMASK
+	cmp _scratch
+	bne hl_slot
+	tax				; X = length (>0, only named words here)
+	lda _rscratch			; _scratch_2 = NFA+1 = candidate's chars
+	clc
+	adc #1
+	sta _scratch_2
+	lda _rscratch+1
+	adc #0
+	sta _scratch_2+1
+	ldy #0
+hl_cmploop:
+	lda (_scratch_2),y
+	eor (_dtop),y
+	and #$5f			; same masked compare as the linear scan
+	bne hl_slot
+	iny
+	dex
+	bne hl_cmploop
+	jmp xfind_found			; _rscratch = matched NFA
+hl_notfound:
+	lda #0				; xfind_nomorewords stores A to _dtop/+1
+	jmp xfind_nomorewords
+
+; build_hashtable: called once at coldstart (right after generate_token_table,
+; before any user code runs, so all the scratch zero-page registers are free).
+; Two passes over the static core chain (each walks newest-first from
+; forth_system_n via the same LFA decode as xfind_nextword, factored into
+; bh_advance): pass 1 counts named words per bucket, a prefix pass converts
+; the counts into cumulative slice-END pointers, and pass 2 places each
+; word's NFA by decrementing its bucket's pointer in place (counting-sort
+; trick) - leaving HASHIDX[b] = slice start, HASHIDX[b+1] = slice end,
+; exactly what hash_lookup consumes. Fill-downward + newest-first walk puts
+; the newest word at each slice's end, where hash_lookup looks first.
+build_hashtable:
+	lda #0
+	sta hash_ok			; invalid until fully built
+	ldx #0				; zero HASHIDX (256 bytes + 2 sentinel)
+bh_zeroidx:
+	sta HASHIDX,x
+	inx
+	bne bh_zeroidx
+	sta HASHIDX+256
+	sta HASHIDX+257
+
+; PASS 1: count named words per bucket (16-bit counts kept in HASHIDX[b])
+	lda #<forth_system_n
+	sta _rscratch
+	lda #>forth_system_n
+	sta _rscratch+1
+bh1_loop:
+	jsr bh_hashword			; A = bucket*2, or carry set = nameless
+	bcs bh1_next
+	tax
+	inc HASHIDX,x
+	bne bh1_next
+	inc HASHIDX+1,x
+bh1_next:
+	ldx _scratch			; length, for the LFA decode
+	jsr bh_advance
+	bcc bh1_loop
+
+; PREFIX: counts -> cumulative slice-END pointers, then the capacity check
+	lda #<HASHNFA
+	sta _scratch_1
+	lda #>HASHNFA
+	sta _scratch_1+1
+	ldx #0
+bh_prefix:
+	lda HASHIDX,x			; _scratch_2 = 2*count
+	sta _scratch_2
+	lda HASHIDX+1,x
+	sta _scratch_2+1
+	asl _scratch_2
+	rol _scratch_2+1
+	lda _scratch_1			; p += 2*count
+	clc
+	adc _scratch_2
+	sta _scratch_1
+	lda _scratch_1+1
+	adc _scratch_2+1
+	sta _scratch_1+1
+	lda _scratch_1			; HASHIDX[b] = p = END of slice b
+	sta HASHIDX,x
+	lda _scratch_1+1
+	sta HASHIDX+1,x
+	inx
+	inx
+	bne bh_prefix			; 128 entries: x = 0,2,..,254 then wraps
+	lda _scratch_1			; sentinel = end of the populated array
+	sta HASHIDX+256
+	lda _scratch_1+1
+	sta HASHIDX+257
+
+	lda _scratch_1+1		; p_final > HASHNFA_END? core outgrew the
+	cmp #>HASHNFA_END		; table: return with hash_ok still 0 and
+	bcc bh_capok			; every lookup stays linear - degrades to
+	bne bh_over			; slow, never to a memory stomp
+	lda _scratch_1
+	cmp #<HASHNFA_END
+	bcc bh_capok
+	beq bh_capok
+bh_over:
+	rts
+
+bh_capok:
+; PASS 2: place each named word's NFA, filling slices downward in place
+	lda #<forth_system_n
+	sta _rscratch
+	lda #>forth_system_n
+	sta _rscratch+1
+bh2_loop:
+	jsr bh_hashword
+	bcs bh2_next
+	tax
+	lda HASHIDX,x			; HASHIDX[b] -= 2 (end -> next free slot,
+	sec				; ends at slice start when the bucket is
+	sbc #2				; fully placed)
+	sta HASHIDX,x
+	bcs bh2_nb
+	dec HASHIDX+1,x
+bh2_nb:
+	lda HASHIDX,x			; write the NFA into the slot
+	sta _scratch_2
+	lda HASHIDX+1,x
+	sta _scratch_2+1
+	ldy #0
+	lda _rscratch
+	sta (_scratch_2),y
+	iny
+	lda _rscratch+1
+	sta (_scratch_2),y
+bh2_next:
+	ldx _scratch
+	jsr bh_advance
+	bcc bh2_loop
+
+	lda #1				; table complete and consistent
+	sta hash_ok
+	rts
+
+; bh_hashword: hash the name of the word at _rscratch (an NFA). Returns
+; A = bucket*2 with carry clear, or carry set for a nameless word (skip).
+; Leaves the length in _scratch; clobbers X/Y/_wscratch. MUST compute the
+; identical function to hash_lookup's inline version: acc = len, then per
+; char in FORWARD order acc = rotl8(acc) eor (char & $5f). (Order matters
+; because of the rotate - the chars sit at NFA offsets 1..len here vs
+; 0..len-1 of the target string there.)
+bh_hashword:
+	ldy #0
+	lda (_rscratch),y
+	and #NAMEMASK
+	sta _scratch
+	beq bh_hw_skip
+	sta _wscratch			; acc = len
+	tax				; X = char countdown
+	ldy #1
+bh_hw_loop:
+	asl _wscratch
+	bcc bh_hw_nr
+	inc _wscratch
+bh_hw_nr:
+	lda (_rscratch),y
+	and #$5f
+	eor _wscratch
+	sta _wscratch
+	iny
+	dex
+	bne bh_hw_loop
+	lda _wscratch
+	and #HASH_MASK
+	asl				; bucket*2; asl of <=$7F leaves carry clear
+	rts
+bh_hw_skip:
+	sec
+	rts
+
+; bh_advance: step _rscratch to the previous word via its LFA (identical
+; decode to xfind_nextword). X = current word's length on entry. Returns
+; carry set when the start of the chain is reached.
+bh_advance:
+	lda #0
+	sta _wscratch+1
+	txa
+	tay
+	iny
+	lda (_rscratch),y
+	beq bha_done			; LFA=0: first core word - end of chain
+	bpl bha_ok
+	cmp #$ff			; "$FF alone" never occurs inside core;
+	beq bha_done			; bail safely if it ever does
+	and #$7f
+	sta _wscratch+1
+	iny
+	lda (_rscratch),y
+bha_ok:
+	sta _wscratch
+	jsr rscratch_sub_wscratch
+	clc
+	rts
+bha_done:
+	sec
+	rts
+}
+
 
 ; Close to the reference implementation:
 ; : find 0 #order @ 0 ?do
@@ -3547,8 +4106,131 @@ tonumber_2:
 tonumber_3:
 	+token exit
 
+!if FASTLOAD {
+; xint ( c-addr -- n 1 | c-addr 0 ): native fast path for NUMBER. Converts a
+; counted string of the form [-]digits in the current BASE, wrapping mod
+; 65536 exactly like the interpreted path (which converts as a double and
+; drops the high cell). ANYTHING else - #/$/% prefixes, 'c' quotes, a
+; trailing '.', floats - fails cleanly with c-addr untouched and falls
+; through to the original interpreted code below, so all edge semantics
+; stay in the proven path. Measured ~14.5ms per numeric token before.
++header ~xint, ~xint_n
+	+code
+	lda _dtop		; the counted string (left on the stack in case
+	sta _rscratch		; of failure)
+	lda _dtop+1
+	sta _rscratch+1
+	ldy #0
+	lda (_rscratch),y
+	bne xint_notempty	; empty string is not a number (long-form
+xint_failj:
+	jmp xint_fail		; branch - xint_fail is out of beq range)
+xint_notempty:
+	sta _scratch_2+1	; length
+	lda #0
+	sta _scratch_2		; sign flag
+	sta _wscratch		; accumulator
+	sta _wscratch+1
+	ldy #1
+	lda (_rscratch),y
+	cmp #'-'
+	bne xint_digits
+	inc _scratch_2		; negative
+	iny
+	lda _scratch_2+1
+	cmp #1			; "-" alone is not a number
+	beq xint_failj
+xint_digits:
+	sty _scratch		; current char index
+xint_loop:
+	ldy _scratch
+	lda (_rscratch),y
+	cmp #'0'		; raw digit first, then letters case-masked
+	bcc xint_fail
+	cmp #'9'+1
+	bcs xint_letter
+	sec
+	sbc #'0'
+	jmp xint_have
+xint_letter:
+	and #$5f
+	cmp #'A'
+	bcc xint_fail
+	cmp #'Z'+1
+	bcs xint_fail
+	sec
+	sbc #'A'-10
+xint_have:
+	cmp _base		; digit must be valid in the current BASE
+	bcs xint_fail
+	pha			; save the digit across the multiply
+	lda #0			; _scratch_1 = accumulator * BASE (shift-add,
+	sta _scratch_1		; wrapping mod 65536 like the original)
+	sta _scratch_1+1
+	lda _base
+	ldx #8
+xint_mul:
+	asl _scratch_1
+	rol _scratch_1+1
+	asl
+	bcc xint_mskip
+	pha
+	clc
+	lda _scratch_1
+	adc _wscratch
+	sta _scratch_1
+	lda _scratch_1+1
+	adc _wscratch+1
+	sta _scratch_1+1
+	pla
+xint_mskip:
+	dex
+	bne xint_mul
+	pla			; accumulator = product + digit
+	clc
+	adc _scratch_1
+	sta _wscratch
+	lda _scratch_1+1
+	adc #0
+	sta _wscratch+1
+	inc _scratch		; next char, until the length is consumed
+	lda _scratch
+	cmp _scratch_2+1
+	bcc xint_loop
+	beq xint_loop
+	lda _scratch_2		; done - apply the sign
+	beq xint_pos
+	sec
+	lda #0
+	sbc _wscratch
+	sta _wscratch
+	lda #0
+	sbc _wscratch+1
+	sta _wscratch+1
+xint_pos:
+	+ldax _wscratch		; replace c-addr with the value, push true
+	+stax _dtop
+	lda #1
+	ldx #0
+	jmp dpush_and_next
+xint_fail:
+	lda #0			; c-addr untouched, push false
+	tax
+	jmp dpush_and_next
+}
+
 +header ~number, ~number_n	; NUMBER
 	+forth
+!if FASTLOAD {
+	+token xint
+	+qbranch_fwd number_slowpath
+	+token state, peek		; same tail as the interpreted single-cell
+	+qbranch_fwd number_fastexit	; exit (number_5/number_6 below)
+	+token compile, lit, comma
+number_fastexit:
+	+token exit
+number_slowpath:
+}
 	+token count, base, peek, tor
 	+token dup
 	+literal 3
@@ -4643,8 +5325,12 @@ filestatus_1:
 +header ~readline, ~readline_n, "READ-LINE"
 !if C64 {
 	+forth
+!if FASTLOAD {
+	+token one, readgen, exit	; mode 1 = line (native readgen_native)
+} else {
 	+literal xreadcharchecked
 	+token readgen, exit
+}
 } else if F256 {
 ;rl_stream = _scratch_1
 ;rl_limit = _scratch_1+1
@@ -4943,8 +5629,12 @@ rf_2:
 +header ~readfile, ~readfile_n, "READ-FILE"
 !if C64 {
 	+forth
+!if FASTLOAD {
+	+token zero, readgen, nip, exit	; mode 0 = raw bytes (native readgen_native)
+} else {
 	+literal xreadbyte
 	+token readgen, nip, exit
+}
 } else if F256 {
 rf_stream = _scratch_1
 rf_limit = _scratch_2

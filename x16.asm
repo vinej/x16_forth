@@ -1827,6 +1827,10 @@ edit_restore:
 	lda #0
 	sta $00
 	+kcall $FFE7			; CLALL - close all files + restore default I/O (ROM-safe)
+!if FASTLOAD {
+	jsr build_hashtable		; x16edit uses golden RAM ($0400-$07FF) where
+					; HASHNFA lives - rebuild (idempotent)
+}
 	+dpop
 	+dpop
 	jmp next
@@ -1991,6 +1995,7 @@ km_done:
 	+kcall keymap
 	jmp next
 
+!if FPCORE {
 ; ==============================================================================
 ; Floating point - proof of concept (calls the BASIC ROM FP package in bank 4).
 ; The X16 keeps FAC/ARG and FP temporaries in $A9-$D2, clear of Forth's $22-$7F,
@@ -2510,6 +2515,7 @@ flt_t:
 	lda #$ff
 	tax
 	jmp dpush_and_next
+} ; FPCORE
 
 ; ISQRT ( u -- m )   integer floor square root of an unsigned 16-bit value.
 ; Native binary digit-by-digit algorithm (no floating point): keeps c (result),
@@ -2786,10 +2792,12 @@ irq_savevm:
 	sta irq_save,x
 	dex
 	bpl -
+!if FPCORE {
 	lda fsp
 	sta irq_save_fsp
 	lda fsp+1
 	sta irq_save_fsp+1
+}
 	rts
 
 irq_restorevm:
@@ -2798,10 +2806,12 @@ irq_restorevm:
 	sta _ri,x
 	dex
 	bpl -
+!if FPCORE {
 	lda irq_save_fsp
 	sta fsp
 	lda irq_save_fsp+1
 	sta fsp+1
+}
 	rts
 
 ; ============================================================================
@@ -3188,7 +3198,9 @@ dpn_tab:
 ; they live in toolkit/BASICSTR.FTH now - load with  INCLUDE BASICSTR.FTH .
 
 ; --- X16FP.FTH : Forth-2012 floating-point defining words ------------------
+; (FPCORE=0: FVARIABLE/FCONSTANT live in toolkit/FLOAT.FTH instead)
 
+!if FPCORE {
 ; FVARIABLE name   -- creates a word returning the address of 5 float bytes
 +header ~fvariable, ~fvariable_n, "FVARIABLE"
 	+forth
@@ -3205,6 +3217,7 @@ dpn_tab:
 	!byte JSR_INSTR
 	+address does
 	+token ffetchmem, exit
+} ; FPCORE
 
 ; ============================================================================
 ; Bit / byte manipulation words. (LSHIFT and RSHIFT already exist in the core.)
