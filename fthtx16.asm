@@ -95,31 +95,24 @@ F256 = 0
 !error "NATIVE816 requires X16"
 }
 
-; FPCORE: 1 = floating point baked into the image (original layout; the
-; ROM/cart builds keep this so their images stay unchanged), 0 = FP moves to
-; toolkit/FLOAT.FTH (self-contained CODE words over the same BASIC ROM bank-4
-; routines; load with  INCLUDE FLOAT.FTH ). With FPCORE=0 the core keeps only
-; a DEFERred >FLOAT hook so float literals start working the moment the
-; toolkit loads (~1.3KB of image + 84 buffer bytes freed).
+; FPCORE: 1 = floating point baked into the image (the original layout),
+; 0 = FP moves to toolkit/FLOAT.FTH (self-contained CODE words over the same
+; BASIC ROM bank-4 routines; load with  INCLUDE FLOAT.FTH ). With FPCORE=0
+; the core keeps only a DEFERred >FLOAT hook so float literals start working
+; the moment the toolkit loads (~1.3KB of image + 84 buffer bytes freed -
+; which is what makes room for FASTLOAD in the 16K ROM/cart images). The
+; ROM/cart images also embed the conventional jsrfar stub at $FF6E so the
+; toolkit's cross-bank calls work with the Forth bank active.
 !ifndef FPCORE {
-!if X16ROM {
-FPCORE = 1
-} else {
 FPCORE = 0
-}
 }
 
 ; FASTLOAD: fast .FTH source loading (hash index over the core dictionary for
 ; FIND - see build_hashtable - plus native READ-LINE/PARSE/WORD/NUMBER inner
-; loops). RAM-based X16 builds only - the 16K bank-9/cart ROM images have no
-; room for the extra code.
+; loops). All X16 builds; the ROM/cart images fit it thanks to FPCORE=0.
 !ifndef FASTLOAD {
 !if X16 {
-!if X16ROM {
-FASTLOAD = 0
-} else {
 FASTLOAD = 1
-}
 } else {
 FASTLOAD = 0
 }
@@ -6890,6 +6883,16 @@ chrget_template:
 	!byte $E6,$EE,$D0,$02,$E6,$EF,$AD,$60,$EA,$C9,$3A,$B0,$0A,$C9
 	!byte $20,$F0,$EF,$38,$E9,$30,$38,$E9,$D0,$60
 chrget_template_end:
+}
+!if FPCORE = 0 {
+; The official X16 convention places a jsrfar entry at $FF6E in EVERY ROM
+; bank, so cross-bank callers (e.g. toolkit/FLOAT.FTH's CODE words doing
+; "jsr $FF6E / !word target / !byte bank") work no matter which bank is
+; active. Route it to our ported jsrfar - jmp preserves the caller's stack
+; exactly as brg_jsrfar expects. Only emitted when FP lives in the toolkit
+; (FPCORE=0): that's the only caller, and the FP-baked layout has no room.
+	!fill $FF6E - *, $ff
+	jmp brg_jsrfar
 }
 	!fill $FFFA - *, $ff
 	!word $03b7		; NMI  -> KERNAL NMI RAM trampoline

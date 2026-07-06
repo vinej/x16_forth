@@ -5,8 +5,10 @@
 \ entries, the FAC zero-page cells, CHRGET at $E7).
 \ Loads ASSEMBLER.FTH itself. After loading, float literals (1.5 etc.) work:
 \ the core's DEFERred >FLOAT hook is pointed at the parser defined here.
-\ Do NOT load on ROM/cart builds - FP is baked there and IS >FLOAT would
-\ corrupt the non-deferred core word.
+\ Works on all default builds (PRG, bank-9 ROM, cart) - the ROM images embed
+\ the conventional jsrfar stub at $FF6E so the bank-4 calls here work with
+\ the Forth bank active. Only a custom FPCORE=1 build (FP baked in) must NOT
+\ load this file: its >FLOAT is not deferred and IS >FLOAT would corrupt it.
 
 S" ASSEMBLER.FTH" INCLUDED
 
