@@ -450,6 +450,7 @@ CWIN_TOP = $BF00
 			; lowest bank so the editor can never overwrite it.
 CBANK_FLOOR = 2		; never descend into the KERNAL's banks 0/1
 }
+PER_BANK = CWIN_TOP - CWIN_BASE	; usable bytes per code bank
 WD_HEADROOM = $0400	; xcreate switches banks when less than this remains
 +hmbuffer ~_memtop, 2		; current allocation limit (MEMTOP or FARTOP)
 +hmbuffer ~_nearhere, 2		; near-dict end recorded at the allocation switch
@@ -3421,6 +3422,7 @@ allot_ok:
 }
 	+token here, sub, exit
 
+
 +header ~comma, ~comma_n, ","
 	+forth
 	+token here, two, allot, poke, exit
@@ -6302,6 +6304,11 @@ includefile_2:
 	+token twodrop, exit
 included_1:
 !if WIDEDICT {
+	+literal inc_msg_load			; progress: "Loading <name>, compiling"
+	+token count, type
+	+token twodup, type
+	+literal inc_msg_comp
+	+token count, type
 	; same stale-HERE hazard as CREATE: reveal the dummy via LATEST instead
 	+token twodup, xcreate			; create a dummy word with the same name as the included file
 	+literal RTS_INSTR
@@ -6315,7 +6322,21 @@ included_1:
 	+qbranch_fwd included_2
 	+token drop, exit
 included_2:
-	+token includefile, exit
+	+token includefile
+!if WIDEDICT {
+	+literal inc_msg_done			; "... done" once the dictionary is built
+	+token count, type, cr
+}
+	+token exit
+
+!if WIDEDICT {
+inc_msg_load:
+	+string "Loading "
+inc_msg_comp:
+	+string ", compiling"
+inc_msg_done:
+	+string " ... done"
+}
 
 +header ~required, ~required_n, "REQUIRED"
 	+forth
@@ -7462,6 +7483,49 @@ brace_3:
 	+value VAL_FALSE
 
 ; In optional Programming-Tools word set
+!if WIDEDICT != 0 and WD_ROMBANKS = 0 {
+; FREE ( -- )  report the two free pools: near (headers/stubs/data) and the
+; far code-body space across the RAM banks (as a double, it can exceed 64K).
+; Placed after +check_token_range so it takes a long token, not a short one.
+; RAM-mode only (top-down banks); ROM-mode free math would differ.
++header ~free, ~free_n, "FREE"
+	+forth
+	+literal free_msg_near
+	+token count, type
+	+token unused, dot			; near is always < 32K, plain . is fine
+	+literal free_msg_code
+	+token count, type
+	+literal _codebank
+	+token cpeek, dup
+	+qbranch_fwd free_none
+	+literal CBANK_FLOOR
+	+token sub
+	+literal PER_BANK
+	+token ummult
+	+literal CWIN_TOP
+	+literal _chere
+	+token peek, sub, zero, dadd
+	+branch_fwd free_show
+free_none:
+	+token drop
+	+literal _codetop
+	+token cpeek
+	+literal CBANK_FLOOR
+	+token sub, oneplus
+	+literal PER_BANK
+	+token ummult
+free_show:
+	+token ddot
+	+literal free_msg_bytes
+	+token count, type, cr, exit
+free_msg_near:
+	+string "near "
+free_msg_code:
+	+string "bytes  code "
+free_msg_bytes:
+	+string "bytes"
+}
+
 +header ~words, ~words_n, "WORDS"
 	+forth
 	+token get_order, zero, tuck, xqdo
