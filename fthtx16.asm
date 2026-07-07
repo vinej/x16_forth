@@ -5186,9 +5186,21 @@ xcreate_hupd:
 	+forth
 	+token rfrom								; which is the address of the "call xdoes" instruction
 !if WIDEDICT {
-	+token peek		; the far body holds an OPERAND = the VISIBLE
-				; DOES-code address (doesx put the code there so
-				; the child's JMP works from any bank); deref it
+	; Two callers: CONSTANT/VARIABLE/MARKER/etc are CORE (visible body) and
+	; use the classic inline "xcode JSR does <does-body>" form - rfrom already
+	; points at the visible JSR-does, use it directly. A user DOES> in a FAR
+	; defining word can't put the DOES-code in the far body (the child's JMP
+	; would miss the bank), so doesx stashed it VISIBLE and left an OPERAND
+	; (the visible address) in the far body - deref that. Distinguish by
+	; whether rfrom points into the code window.
+	+token dup
+	+literal CWIN_BASE
+	+token uless
+	+qbranch_fwd xcode_far
+	+branch_fwd xcode_cfa			; near (visible defining word): as-is
+xcode_far:
+	+token peek				; far: deref the operand -> visible addr
+xcode_cfa:
 	+literal _bsp		; R> consumed the caller's frame - drop its
 	+token cpeek, oneminus	; bank-stack entry too (_bsp C@ 1- _bsp C!)
 	+literal _bsp
@@ -5274,9 +5286,32 @@ compilecomma_1:
 
 +header ~cquote, ~cquote_n, "C\"", IMM_FLAG
 	+forth
+!if WIDEDICT {
+	; A compiled counted string must be readable by the CALLER (C@/@ after
+	; the word returns), so it can't live in the far body. Store it in
+	; VISIBLE data space (the parked _dhere) and compile just LIT <vaddr>.
+	+token qcomp
+	+literal '"'
+	+token parse				; ( ca u )
+	+literal _dhere
+	+token peek				; ( ca u dst )
+	+token dup, tor				; R: dst(=vaddr)
+	+token twodup, cpoke			; store length byte at dst
+	+token charplus, swap			; ( ca dst+1 u )
+	+token dup, tor				; R: dst u
+	+token cmove				; copy chars (src near, dst visible)
+	+token rfrom				; ( u )   R: dst
+	+token rat, add, charplus		; new _dhere = dst + u + 1
+	+literal _dhere
+	+token poke
+	+token rfrom				; ( vaddr )
+	+token compile, lit, comma
+	+token exit
+} else {
 	+token qcomp, compile, branch, fmark
 	+token here, swap, commaquote, fresolve, compile, lit, comma
 	+token exit
+}
 
 ; In some cases (ABORT?) may be called when the data stack is in bad state. This would fix it
 +header ~fixdstack, ~fixdstack_n
@@ -6738,14 +6773,14 @@ mmuldiv_1:
 	+forth
 !if WIDEDICT {
 	+token qcomp, compile, xcode
-	+literal _dhere			; operand into the (far) defining body:
+	+literal _incode		; ONLY when compiling far (a first DOES> in a
+	+token cpeek			; far word) do the visible-move; a nested/2nd
+	+qbranch_fwd doesx_novis	; DOES> is already in visible space (classic)
+	+literal _dhere			; operand into the (far) defining body =
 	+token peek, comma		; the visible address the DOES-code lands at
-	+literal _incode		; switch compilation back to VISIBLE space
-	+token cpeek			; so the child's JMP <does-code> works with
-	+qbranch_fwd doesx_novis	; any bank (data rule); usually far here
-	+token here
-	+literal _chere
-	+token poke			; far body ends here
+	+token here			; (child JMP <visible does-code> works from
+	+literal _chere			; any bank - data rule); far body ends here
+	+token poke
 	+literal _dhere
 	+token peek
 	+literal _here
@@ -6950,10 +6985,30 @@ squote_1:
 	+token dup, cpeek, one, xor, swap, cpoke
 	+token state, peek
 	+qbranch_fwd ssquote_1
+!if WIDEDICT {
+	; ( ca u ) = the escape-translated string in SBUF (visible). Store it
+	; permanently in VISIBLE data space so the returned pointer is readable
+	; by the caller, then compile LIT <vaddr> COUNT (as cquote does).
+	+literal _dhere
+	+token peek				; ( ca u dst )
+	+token dup, tor				; R: dst
+	+token twodup, cpoke			; store length byte
+	+token charplus, swap			; ( ca dst+1 u )
+	+token dup, tor				; R: dst u
+	+token cmove
+	+token rfrom
+	+token rat, add, charplus		; new _dhere = dst + u + 1
+	+literal _dhere
+	+token poke
+	+token rfrom				; ( vaddr )
+	+token compile, lit, comma
+	+token compile, count
+} else {
 	+token compile, branch, fmark
 	+token here, two, pick, dup, ccomma, allot, swap, fresolve
 	+token compile, lit, dup
 	+token comma, compile, count, oneplus, swap, cmove 
+}
 ssquote_1:
 	+token exit
 
