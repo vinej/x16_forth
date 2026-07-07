@@ -1883,6 +1883,15 @@ edit_save:
 }
 	ldx #10				; first RAM bank for the editor
 	ldy #255			; last RAM bank
+!if WIDEDICT = 1 {
+!if WD_ROMBANKS = 0 {
+	lda _codebank		; RAM-mode wide dict claims banks from the top
+	beq edit_capdone	; down; cap x16edit just below Forth's lowest
+	tay			; used bank so it can never overwrite the dict
+	dey
+edit_capdone:
+}
+}
 	lda #0
 	sta $05				; auto-indent (default)
 	sta $06				; tab width
@@ -1922,7 +1931,11 @@ edit_restore:
 	; console read (?STACK) and file OPEN/INCLUDED. (BASIC's own EDIT does nothing
 	; after the editor, but its main loop and READY path effectively reset I/O.)
 !if WIDEDICT {
-	lda #FARBANK			; the window must show the dict extension
+!if WD_ROMBANKS {
+	lda #FARBANK			; $00 window = the data extension
+} else {
+	lda #0				; RAM mode: $00 is the (unpinned) code reg
+}
 } else {
 	lda #0
 }
@@ -2916,10 +2929,16 @@ irq_savevm:
 	sta _ribank
 	lda _bsp		; IRQPAUSE unwinds the callback's frames by
 	sta irq_save_bsp	; restoring pointers - the bank stack too
-	lda $00			; the IRQ may interrupt code that switched the
-	sta irq_save_bank	; window (KERNAL file I/O, B!) - the callback
-	lda #FARBANK		; needs the dictionary extension visible
+	lda CBANKREG		; the callback starts unpinned (its own CALL
+	sta irq_save_bank	; re-pins per stub); the interrupted code's
+	lda #0			; pin is restored on exit
+	sta CBANKREG
+!if WD_ROMBANKS {
+	lda $00			; ROM mode: the $00 window is the static data
+	sta irq_save_bank2	; extension - the IRQ may interrupt B!/KERNAL
+	lda #FARBANK		; code that switched it
 	sta $00
+}
 }
 !if FPCORE {
 	lda fsp
@@ -2941,7 +2960,11 @@ irq_restorevm:
 	lda irq_save_bsp
 	sta _bsp
 	lda irq_save_bank
+	sta CBANKREG
+!if WD_ROMBANKS {
+	lda irq_save_bank2
 	sta $00
+}
 }
 !if FPCORE {
 	lda irq_save_fsp

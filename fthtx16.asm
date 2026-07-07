@@ -130,6 +130,12 @@ WIDEDICT = 0
 !if WIDEDICT != 0 and NATIVE816 = 0 {
 !error "WIDEDICT requires NATIVE816"
 }
+!ifndef WD_ROMBANKS { WD_ROMBANKS = 1 }	; WIDEDICT code-bank storage:
+			; 1 = 16K ROM banks 33+ via the $C000 window ($01) -
+			;     MiSTer / -cartbin; keeps the bank-2 data window.
+			; 0 = 8K RAM banks 2-9 via the $A000 window ($00) -
+			;     stock hardware; data stays near-only (the $00
+			;     window is dynamic), x16edit keeps banks 10-255.
 
 !if C64 {
 !if X16ROM = 0 {
@@ -413,7 +419,8 @@ NEW_LINE = $0D
 +hmbuffer ~TOKBANK, TOKEN_COUNT	; bank of each word's CFA (0 = home bank)
 +hmbuffer ~_dictbank, 1		; bank HERE currently allocates in (0 for now)
 +hmbuffer ~irq_save_ribank, 1	; _ribank across an IRQ Forth callback
-+hmbuffer ~irq_save_bank, 1	; RAM-bank register across an IRQ callback
++hmbuffer ~irq_save_bank, 1	; code-bank register across an IRQ callback
++hmbuffer ~irq_save_bank2, 1	; ROM mode: $00 data window across an IRQ
 FARBANK = 2		; high-RAM bank holding the dictionary extension.
 			; NOT bank 1: the KERNAL keeps keyboard/editor state
 			; there. The extension is addressed THROUGH THE BANKED
@@ -425,10 +432,37 @@ FARBANK = 2		; high-RAM bank holding the dictionary extension.
 			; the hardware route $A000-$BFFF via the register.)
 FARBASE = $A000		; the window; no near RAM pointer is ever >= $A000
 FARTOP = $BF00		; leave slack below $BFFF
+
+!if WD_ROMBANKS {
+CBANKREG = $01		; code banks: ROM-bank register / $C000 window
+CWIN_BASE = $C000
+CWIN_TOP = $FE00	; $FE00-$FFFF reserved: IRQ stub + vectors tail
+CBANK_FIRST = 33	; bank 32 = the Forth cart itself
+CBANK_LAST = 255
+} else {
+CBANKREG = $00		; code banks: RAM-bank register / $A000 window
+CWIN_BASE = $A000
+CWIN_TOP = $BF00
+			; RAM mode allocates code banks from the TOP of RAM
+			; DOWNWARD (MEMTOP-1, -2, ...) while x16edit grows from
+			; bank 10 UP - they only meet under a giant dict AND a
+			; giant document. EDIT is capped just below Forth's
+			; lowest bank so the editor can never overwrite it.
+CBANK_FLOOR = 2		; never descend into the KERNAL's banks 0/1
+}
 WD_HEADROOM = $0400	; xcreate switches banks when less than this remains
 +hmbuffer ~_memtop, 2		; current allocation limit (MEMTOP or FARTOP)
 +hmbuffer ~_nearhere, 2		; near-dict end recorded at the allocation switch
 				; (SAVE-IMAGE's .DIC must stop there, not at HERE)
++hmbuffer ~_chere, 2		; code-space allocation pointer (in CWIN window)
++hmbuffer ~_codebank, 1		; code bank _chere allocates in (0 = none claimed)
++hmbuffer ~_codetop, 1		; RAM mode: highest usable RAM bank (MEMTOP-1)
++hmbuffer ~_dhere, 2		; data-space HERE parked while compiling a body
++hmbuffer ~_dmemtop, 2		; data-space limit parked while compiling
++hmbuffer ~_incode, 1		; nonzero while HERE is swapped to code space
++hmbuffer ~_cbanks_ok, 1	; coldstart probe: code banks writable?
++hmbuffer ~kirq_vec, 2		; captured bank-0 native IRQ handler ($FFEE)
++hmbuffer ~knmi_vec, 2		; captured bank-0 native NMI handler ($FFEA)
 +hmbuffer ~BSTK, 256		; bank stack: one byte per call-frame depth
 +hmbuffer ~_bsp, 1		; bank stack pointer (index of next free slot)
 +hmbuffer ~irq_save_bsp, 1	; _bsp across an IRQ Forth callback
@@ -721,20 +755,8 @@ STACKLIMIT = DSIZE/2 - 2*SSAFE
 ; else, so no other code is affected. Label-free (byte-counted branches)
 ; because this expands inside several zones whose local labels would clash.
 !macro ldri {
-!if WIDEDICT {
-	lda _ribank		; reserved for true multi-bank far streams
-	beq * + 13		; (unused in the window model: _ribank stays 0)
-	php
-	sei
-	phb
-	pha
-	plb
-	lda (_ri),y
-	plb
-	plp
-	!byte $80, $02		; bra past the near fetch
-}
-	lda (_ri),y
+	lda (_ri),y	; token streams are always CPU-visible: near RAM or the
+			; code-bank window with its register pinned by CALL
 }
 
 ; Stack access is behind macros so it is easier to change in the future
@@ -1005,12 +1027,74 @@ STACKLIMIT = DSIZE/2 - 2*SSAFE
 	sta irq_busy
 !if WIDEDICT {
 	sta _ribank		; token stream starts in the home bank
+	sta _incode
+	sta _codebank		; no code bank claimed yet
 	lda #<MEMTOP
 	sta _memtop
 	lda #>MEMTOP
 	sta _memtop+1
-	lda #FARBANK		; resting state: the banked window shows the
-	sta $00			; dictionary extension bank
+	lda #<CWIN_BASE
+	sta _chere
+	lda #>CWIN_BASE
+	sta _chere+1
+!if WD_ROMBANKS {
+	lda #FARBANK		; resting state: the RAM window shows the
+	sta $00			; bank-2 data extension; ROM window = KERNAL
+	lda $FFEE		; capture the KERNAL's native-mode IRQ/NMI
+	sta kirq_vec		; handlers (bank 0 is mapped here) - the
+	lda $FFEF		; per-bank vector tails route through them
+	sta kirq_vec+1
+	lda $FFEA
+	sta knmi_vec
+	lda $FFEB
+	sta knmi_vec+1
+} else {
+	lda #0			; RAM mode: the $00 window is dynamic (code
+	sta $00			; banks); no bank-2 data extension
+	sec			; MEMTOP read: A = RAM bank count
+	jsr $FF99
+	sec			; top usable bank = count - 1
+	sbc #1
+	sta _codetop
+}
+	; probe: is the first code bank writable RAM? (MiSTer/-cartbin yes;
+	; plain emulator ROM area no; stock X16 ROM no)
+	php
+	sei
+	lda CBANKREG
+	pha
+!if WD_ROMBANKS {
+	lda #CBANK_FIRST
+} else {
+	lda _codetop		; probe the first bank we'd actually claim
+}
+	sta CBANKREG
+	lda CWIN_BASE
+	pha			; preserve whatever lives there
+	lda #$A5
+	sta CWIN_BASE
+	lda CWIN_BASE
+	cmp #$A5
+	bne wd_noprobe
+	lda #$5A
+	sta CWIN_BASE
+	lda CWIN_BASE
+	cmp #$5A
+	bne wd_noprobe
+	lda #1
+	sta _cbanks_ok
+	pla
+	sta CWIN_BASE		; restore the probed byte
+	bne wd_probed
+	beq wd_probed
+wd_noprobe:
+	pla			; discard the saved byte (ROM - nothing changed)
+	lda #0
+	sta _cbanks_ok
+wd_probed:
+	pla
+	sta CBANKREG
+	plp
 }
 }
 
@@ -1169,8 +1253,37 @@ call:
 	lda _ribank		; bank stack - the main rstack keeps its
 	sta BSTK,x		; 1-cell return-address protocol (R> juggling,
 	inc _bsp		; loop frames, xcode's frame drop all rely on it)
-	lda #0			; the word being entered is near (far colon
-	sta _ribank		; words come in via far_dispatch instead)
+	; user colon words carry a [RTS][body:2][bank:1] stub; core colon
+	; words (all below end_of_image) keep the classic RTS+tokens form
+	lda _w+1
+	cmp #>end_of_image
+	bcc call_classic
+	bne call_stub
+	lda _w
+	cmp #<end_of_image
+	bcs call_stub
+call_classic:
+	; A near word's tokens are in low RAM, so it runs regardless of the
+	; window - but words like xloop/xqdo/lit read INLINE data out of the
+	; CALLER's body via rfrom+@, which may be far. So the near word
+	; INHERITS the caller's bank (leave _ribank / CBANKREG untouched); the
+	; matching return: restores it from BSTK to the same value.
+	+ldax _w
+	+incax 1
+	+stax _ri
+	jmp next
+call_stub:
+	ldy #1
+	lda (_w),y
+	sta _ri
+	iny
+	lda (_w),y
+	sta _ri+1
+	iny
+	lda (_w),y
+	sta _ribank		; 0 = visible body; else the code bank
+	sta CBANKREG
+	jmp next
 }
 	+ldax _w
 	+incax 1
@@ -1185,10 +1298,11 @@ return:
 	+rpop
 	+stax _ri
 !if WIDEDICT {
-	dec _bsp		; unstack the caller's bank
-	ldx _bsp
+	dec _bsp		; unstack the caller's bank and re-pin the
+	ldx _bsp		; code-bank register to it
 	lda BSTK,x
 	sta _ribank
+	sta CBANKREG
 }
 	+bra next
 
@@ -1206,7 +1320,11 @@ invokeax:
 	adc #>TOKENS
 	sta _scratch+1
 	ldy #0
+!if WIDEDICT {
+	jmp fragment_1		; the grown CALL pushed this out of beq range
+} else {
 	beq fragment_1
+}
 ;	lda (_scratch),y
 ;	sta _w
 ;	iny
@@ -1234,14 +1352,14 @@ does:
 	+ldax _ri
 	+rpush
 !if WIDEDICT {
-	ldx _bsp		; same frame contract as CALL
-	lda _ribank
-	sta BSTK,x
-	inc _bsp
-	lda #0			; the DOES> body we are about to run lives in
-	sta _ribank		; the defining word - near until step 4
+	ldx _bsp		; same frame contract as CALL; the DOES-body
+	lda _ribank		; runs from the DEFINING word's body via the
+	sta BSTK,x		; JSR return address. Defining words that use
+	inc _bsp		; DOES> stay in VISIBLE space (bank 0) - see the
+	lda #0			; _incode guard in xcw_advcheck / colon: far
+	sta _ribank		; storage is skipped when a definition will
+	sta CBANKREG		; carry a DOES> body (data rule + does rule).
 }
-
 	pla
 	+add 1		; courtesy of 6502 JSR instruction, the return address is off by one
 	sta _ri
@@ -1817,6 +1935,7 @@ throw_have:
 	ldx _bsp
 	lda BSTK,x
 	sta _ribank
+	sta CBANKREG
 }
 	jmp next
 
@@ -2863,6 +2982,76 @@ rat_common:
 	+rpop
 	jmp next
 
+!if WIDEDICT {
++header ~wdcolon, ~wdcolon_n	; ( -- ) start a colon body: claim a code
+	+code			; bank, emit the [RTS][body:2][bank:1] stub at
+	jsr ccw_claim		; the data HERE, then swap HERE to code space
+	ldy #0
+	lda #RTS_INSTR
+	sta (_here),y
+	lda _codebank
+	bne wdc_far
+	; no code banks (or none claimed): the body follows the stub in the
+	; visible space - point the stub right past itself, bank 0, no swap
+	clc
+	lda _here
+	adc #4
+	pha
+	iny
+	sta (_here),y
+	lda _here+1
+	adc #0
+	pha
+	iny
+	sta (_here),y
+	lda #0
+	iny
+	sta (_here),y
+	pla
+	sta _here+1
+	pla
+	sta _here
+	jmp next
+wdc_far:
+	iny
+	lda _chere
+	sta (_here),y
+	iny
+	lda _chere+1
+	sta (_here),y
+	iny
+	lda _codebank
+	sta (_here),y
+	clc			; _here += 4 (past the stub)
+	lda _here
+	adc #4
+	sta _here
+	bcc wdc_nc
+	inc _here+1
+wdc_nc:
+	lda _here
+	sta _dhere
+	lda _here+1
+	sta _dhere+1
+	lda _memtop
+	sta _dmemtop
+	lda _memtop+1
+	sta _dmemtop+1
+	lda _chere
+	sta _here
+	lda _chere+1
+	sta _here+1
+	lda #<CWIN_TOP
+	sta _memtop
+	lda #>CWIN_TOP
+	sta _memtop+1
+	lda #1
+	sta _incode
+	lda _codebank
+	sta CBANKREG		; pin: compilation pokes go to the code bank
+	jmp next
+}
+
 
 +header ~twotor, ~twotor_n, "2>R"
 	+code
@@ -2936,7 +3125,11 @@ fragment_peek:
 
 +header ~poke, ~poke_n, "!"
 	+code
-
+!if WIDEDICT {
+	lda _dtop+1		; storing into the code-bank window? (happens
+	cmp #>CWIN_BASE		; while compiling a far body) - pin the register
+	bcs poke_win		; to _codebank around the store, then restore it
+}
 	ldy #3
 	lda (_dstack),y
 	tax
@@ -2958,9 +3151,54 @@ fragment_peek:
 ;	sta (_wscratch),y
 ;	jmp next
 
+!if WIDEDICT {
+poke_win:
+	ldy #3
+	lda (_dstack),y
+	tax
+	dey
+	lda (_dstack),y
+	sta _wscratch
+	lda CBANKREG
+	pha
+	lda _codebank
+	sta CBANKREG
+	lda _wscratch
+	ldy #0
+	sta (_dtop),y
+	txa
+	iny
+	sta (_dtop),y
+	pla
+	sta CBANKREG
+	+dpop
+	+dpop
+	jmp next
+cpoke_win:
+	ldy #2
+	lda (_dstack),y
+	sta _wscratch
+	lda CBANKREG
+	pha
+	lda _codebank
+	sta CBANKREG
+	lda _wscratch
+	ldy #0
+	sta (_dtop),y
+	pla
+	sta CBANKREG
+	+dpop
+	+dpop
+	jmp next
+}
+
 +header ~cpoke, ~cpoke_n, "C!"
 	+code
-
+!if WIDEDICT {
+	lda _dtop+1
+	cmp #>CWIN_BASE
+	bcs cpoke_win
+}
 	ldy #2
 	lda (_dstack),y
 	ldy #0
@@ -4601,8 +4839,145 @@ closesource_2:
 ; Colon definition and related words
 ; (CREATE) takes cstr,n and creates a raw header (NFA+LFA)
 !if WIDEDICT {
+; Ensure a code bank is claimed and has WD_HEADROOM left; claim/advance and
+; (ROM-bank mode) install the new bank's IRQ-vector tail. Falls back to
+; visible-space bodies when code banks are absent (_cbanks_ok=0): _codebank
+; stays 0 and colon bodies compile at the data HERE like classic words.
+ccw_claim:
+	lda _cbanks_ok
+	beq ccw_done		; no code banks: stub bank byte stays 0
+	lda _codebank
+	beq ccw_new		; nothing claimed yet: take the first bank
+	sec			; enough room left in this bank?
+	lda #<CWIN_TOP
+	sbc _chere
+	lda #>CWIN_TOP
+	sbc _chere+1
+	cmp #>WD_HEADROOM
+	bcs ccw_done
+!if WD_ROMBANKS {
+	lda _codebank		; ROM mode: banks ascend 33,34,...
+	cmp #CBANK_LAST
+	bcs ccw_done		; out of banks: let ?MEM fire naturally
+	inc _codebank
+} else {
+	lda _codebank		; RAM mode: banks descend MEMTOP-1, -2, ...
+	cmp #CBANK_FLOOR + 1
+	bcc ccw_done		; hit the floor: let ?MEM fire naturally
+	dec _codebank
+}
+	+bra ccw_reset
+ccw_new:
+!if WD_ROMBANKS {
+	lda #CBANK_FIRST
+} else {
+	lda _codetop		; top of RAM downward
+}
+	sta _codebank
+ccw_reset:
+	lda #<CWIN_BASE
+	sta _chere
+	lda #>CWIN_BASE
+	sta _chere+1
+!if WD_ROMBANKS {
+	jsr ccw_tail		; write the IRQ-vector tail into the new bank
+}
+ccw_done:
+	rts
+
+!if WD_ROMBANKS {
+; Write the IRQ tail into the newly claimed (RAM-backed) ROM bank:
+;   $FE00: jmp wd_irqshim   $FE03: jmp wd_nmishim
+;   native vectors $FFE4-$FFEF and emulation $FFF4-$FFFF -> the stubs.
+; Runs with interrupts blocked while the bank register points at the new bank.
+ccw_tail:
+	php
+	sei
+	lda CBANKREG
+	pha
+	lda _codebank
+	sta CBANKREG
+	lda #$4C		; jmp wd_irqshim
+	sta $FE00
+	lda #<wd_irqshim
+	sta $FE01
+	lda #>wd_irqshim
+	sta $FE02
+	lda #$4C		; jmp wd_nmishim
+	sta $FE03
+	lda #<wd_nmishim
+	sta $FE04
+	lda #>wd_nmishim
+	sta $FE05
+	ldx #10			; native COP/BRK/ABORT/NMI/IRQ ($FFE4-$FFEF,
+ccw_tv:				; every word -> $FE00; NMI gets $FE03 below)
+	lda #$00
+	sta $FFE4,x
+	lda #$FE
+	sta $FFE5,x
+	dex
+	dex
+	bpl ccw_tv
+	lda #$03		; native NMI ($FFEA) -> the NMI stub
+	sta $FFEA
+	ldx #10			; emulation vectors $FFF4-$FFFF likewise
+ccw_ev:
+	lda #$00
+	sta $FFF4,x
+	lda #$FE
+	sta $FFF5,x
+	dex
+	dex
+	bpl ccw_ev
+	lda #$03		; emulation NMI ($FFFA) -> the NMI stub
+	sta $FFFA
+	pla
+	sta CBANKREG
+	plp
+	rts
+
+; RAM shims (in the PRG - visible regardless of $01): switch to the KERNAL
+; bank, then enter the captured KERNAL handler with a FAKE return frame so
+; its RTI lands in wd_irqret, which restores the bank and RTIs for real.
+; Native-mode frames: entry pushed [PB PCH PCL P]; RTI pops [P PCL PCH PB].
+wd_irqshim:
+	pha
+	lda $01
+	pha			; saved bank (restored by wd_irqret)
+	lda #0
+	sta $01
+	phk			; fake frame: PB=0
+	lda #>wd_irqret
+	pha
+	lda #<wd_irqret
+	pha
+	php			; P (I is already set)
+	jmp (kirq_vec)
+wd_nmishim:
+	pha
+	lda $01
+	pha
+	lda #0
+	sta $01
+	phk
+	lda #>wd_irqret
+	pha
+	lda #<wd_irqret
+	pha
+	php
+	jmp (knmi_vec)
+wd_irqret:
+	pla			; the saved bank
+	sta $01
+	pla			; the saved A
+	rti			; pops the REAL interrupt frame
+}
+
 ; near bank nearly full? move allocation to the far bank (one-time switch)
 xcw_advcheck:
+!if WD_ROMBANKS = 0 {
+	rts			; RAM mode: no bank-2 data window (the $00
+}				; register is the dynamic code-bank pin)
 	lda _dictbank
 	bne xcw_noadv
 	sec
@@ -4811,6 +5186,9 @@ xcreate_hupd:
 	+forth
 	+token rfrom								; which is the address of the "call xdoes" instruction
 !if WIDEDICT {
+	+token peek		; the far body holds an OPERAND = the VISIBLE
+				; DOES-code address (doesx put the code there so
+				; the child's JMP works from any bank); deref it
 	+literal _bsp		; R> consumed the caller's frame - drop its
 	+token cpeek, oneminus	; bank-stack entry too (_bsp C@ 1- _bsp C!)
 	+literal _bsp
@@ -4917,6 +5295,28 @@ compilecomma_1:
 +header ~xquit, ~xquit_n
 	+code
 quit_c:
+!if WIDEDICT {
+	lda _incode		; an abort mid-definition leaves HERE swapped
+	beq quit_nsw		; into code space - undo it
+	lda _here
+	sta _chere
+	lda _here+1
+	sta _chere+1
+	lda _dhere
+	sta _here
+	lda _dhere+1
+	sta _here+1
+	lda _dmemtop
+	sta _memtop
+	lda _dmemtop+1
+	sta _memtop+1
+	lda #0
+	sta _incode
+quit_nsw:
+	lda #0
+	sta _ribank
+	sta CBANKREG		; unpin
+}
 	jsr close_open_files
 	jsr init_rstack
 	lda #<forth_system_r		; don't show the banner
@@ -4932,6 +5332,25 @@ quit_c:
 	+literal forth_system
 	+token greater
 	+qbranch_fwd xforget_error
+!if WIDEDICT {
+; boundary word is a colon stub with a far body? rewind the code space to it
+	+token dup, xttocfa		; ( xt cfa )
+	+token dup, cpeek
+	+literal RTS_INSTR
+	+token equal
+	+qbranch_fwd xfg_nostub
+	+token dup
+	+literal 3
+	+token add, cpeek, qdup		; ( xt cfa [bank] )
+	+qbranch_fwd xfg_nostub
+	+literal _codebank
+	+token cpoke			; ( xt cfa )
+	+token dup, oneplus, peek
+	+literal _chere
+	+token poke
+xfg_nostub:
+	+token drop			; ( xt )
+}
 ; Reset the search order to default
 	+token minusone, set_order, zero
 	+literal _current
@@ -5090,6 +5509,11 @@ dpop_scratch_wscratch_dtopto_rscratch:
 +header ~cmove, ~cmove_n, "CMOVE"
 	+code
 	jsr dpop_scratch_wscratch_rscratch
+!if WIDEDICT {
+	lda _wscratch+1		; destination in the code-bank window? (compile-
+	cmp #>CWIN_BASE		; time string copies: commaquote/SLITERAL/PLACE)
+	bcs cmove_win		; MVN uses flat banks that miss the window, so
+}				; loop through the window with the register pinned
 	lda _scratch
 	ora _scratch+1
 	beq cmove_done
@@ -5107,10 +5531,48 @@ dpop_scratch_wscratch_dtopto_rscratch:
 cmove_done:
 	jmp next
 
+!if WIDEDICT {
+cmove_win:
+	lda CBANKREG
+	pha
+	lda _codebank
+	sta CBANKREG
+	ldy #0
+cmw_loop:
+	lda _scratch
+	ora _scratch+1
+	beq cmw_end
+	lda (_rscratch),y	; source (near for compile-time copies)
+	sta (_wscratch),y	; dest through the window
+	inc _rscratch
+	bne cmw_s
+	inc _rscratch+1
+cmw_s:
+	inc _wscratch
+	bne cmw_d
+	inc _wscratch+1
+cmw_d:
+	lda _scratch
+	bne cmw_dec
+	dec _scratch+1
+cmw_dec:
+	dec _scratch
+	jmp cmw_loop
+cmw_end:
+	pla
+	sta CBANKREG
+	jmp next
+}
+
 ; In optional String word set
 +header ~cmovex, ~cmovex_n, "CMOVE>"
 	+code
 	jsr dpop_scratch_wscratch_rscratch
+!if WIDEDICT {
+	lda _wscratch+1
+	cmp #>CWIN_BASE
+	bcs cmovex_win
+}
 	lda _scratch
 	ora _scratch+1
 	beq cmovex_done
@@ -5135,6 +5597,66 @@ cmove_done:
 	sep #$30
 cmovex_done:
 	jmp next
+
+!if WIDEDICT {
+cmovex_win:
+	; point both pointers at the LAST byte, copy downward through the window
+	clc
+	lda _rscratch
+	adc _scratch
+	sta _rscratch
+	lda _rscratch+1
+	adc _scratch+1
+	sta _rscratch+1
+	lda _rscratch		; -1 (MVP semantics: end at first byte)
+	bne cmxw_r
+	dec _rscratch+1
+cmxw_r:
+	dec _rscratch
+	clc
+	lda _wscratch
+	adc _scratch
+	sta _wscratch
+	lda _wscratch+1
+	adc _scratch+1
+	sta _wscratch+1
+	lda _wscratch
+	bne cmxw_w
+	dec _wscratch+1
+cmxw_w:
+	dec _wscratch
+	lda CBANKREG
+	pha
+	lda _codebank
+	sta CBANKREG
+	ldy #0
+cmxw_loop:
+	lda _scratch
+	ora _scratch+1
+	beq cmxw_end
+	lda (_rscratch),y
+	sta (_wscratch),y
+	lda _rscratch
+	bne cmxw_rd
+	dec _rscratch+1
+cmxw_rd:
+	dec _rscratch
+	lda _wscratch
+	bne cmxw_wd
+	dec _wscratch+1
+cmxw_wd:
+	dec _wscratch
+	lda _scratch
+	bne cmxw_dec
+	dec _scratch+1
+cmxw_dec:
+	dec _scratch
+	jmp cmxw_loop
+cmxw_end:
+	pla
+	sta CBANKREG
+	jmp next
+}
 } else {
 +header ~cmove, ~cmove_n, "CMOVE"
 	+code
@@ -6214,19 +6736,54 @@ mmuldiv_1:
 ; Note that while DOES> looks like high-level word its implementation is depended on the opcode for native CALL/JSR
 +header ~doesx, ~doesx_n, "DOES>", IMM_FLAG
 	+forth
+!if WIDEDICT {
+	+token qcomp, compile, xcode
+	+literal _dhere			; operand into the (far) defining body:
+	+token peek, comma		; the visible address the DOES-code lands at
+	+literal _incode		; switch compilation back to VISIBLE space
+	+token cpeek			; so the child's JMP <does-code> works with
+	+qbranch_fwd doesx_novis	; any bank (data rule); usually far here
+	+token here
+	+literal _chere
+	+token poke			; far body ends here
+	+literal _dhere
+	+token peek
+	+literal _here
+	+token poke
+	+literal _dmemtop
+	+token peek
+	+literal _memtop
+	+token poke
+	+token zero
+	+literal _incode
+	+token cpoke
+	+token zero
+	+literal CBANKREG
+	+token cpoke			; unpin: the DOES-code compiles near
+doesx_novis:
+	+literal JSR_INSTR
+	+token ccomma
+	+literal does
+	+token comma, exit
+} else {
 	+token qcomp, compile, xcode
 	+literal JSR_INSTR
 	+token ccomma
 	+literal does
 	+token comma, exit	; compile (;CODE) followed by "call does_c"
+}
 
 ; Note that colon will remove the word from the search order (to be restored by semicolon)
 +header ~colon, ~colon_n, ":"
 	+forth
 	+token bl, word, count
 	+token xcreate
+!if WIDEDICT {
+	+token wdcolon
+} else {
 	+literal RTS_INSTR
 	+token ccomma
+}
 	+token bracketx, exit
 
 ; Words defined with :NONAME technically don't need to be linked in the vocabulary but if it is done that way RECURSE becomes harder
@@ -6242,8 +6799,12 @@ mmuldiv_1:
 	+forth
 	+token zero, dup
 	+token xcreate
+!if WIDEDICT {
+	+token wdcolon
+} else {
 	+literal RTS_INSTR
 	+token ccomma
+}
 	+token bracketx
 	+literal _hightoken
 	+token peek, exit
@@ -6254,7 +6815,33 @@ mmuldiv_1:
 
 +header ~semicolon, ~semicolon_n, ";", IMM_FLAG
 	+forth
+!if WIDEDICT {
+	+token qcomp, compile, exit
+	+literal _incode
+	+token cpeek
+	+qbranch_fwd wds_noswap
+	+token here			; _chere := HERE (end of the body)
+	+literal _chere
+	+token poke
+	+literal _dhere			; restore the data-space pointers
+	+token peek
+	+literal _here
+	+token poke
+	+literal _dmemtop
+	+token peek
+	+literal _memtop
+	+token poke
+	+token zero
+	+literal _incode
+	+token cpoke
+	+token zero			; unpin the code-bank register
+	+literal CBANKREG
+	+token cpoke
+wds_noswap:
+	+token bracket, latest, context, poke, exit
+} else {
 	+token qcomp, compile, exit, bracket, latest, context, poke, exit
+}
 
 +header ~variable, ~variable_n, "VARIABLE"
 	+forth
