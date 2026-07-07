@@ -645,11 +645,12 @@
 	number_7abort	= $1706	; unused
 	spaces_n	= $1a19
 	greater_n	= $eff
-	VAL_FALSE	= $0
+	WD_FARHDR	= $0
 	cfatoxt_n	= $ab9
 	deferpeek_n	= $18b9
 	dpop_scratch_wscratch_dtopto_rscratch	= $1a47	; ?
 	moveup_3	= $1aac	; ?
+	VAL_FALSE	= $0
 	space_n	= $13ef
 	_numvocs	= $73
 	binsearch	= $997

@@ -130,6 +130,10 @@ WIDEDICT = 0
 !if WIDEDICT != 0 and NATIVE816 = 0 {
 !error "WIDEDICT requires NATIVE816"
 }
+!ifndef WD_FARHDR { WD_FARHDR = 0 }	; WIDEDICT: also put word HEADERS (not just
+			; bodies) into the code banks, so near holds ~only data.
+			; RAM-window (WD_ROMBANKS=0) only; default off (isolated).
+!if WD_FARHDR != 0 and WIDEDICT = 0 { !error "WD_FARHDR requires WIDEDICT" }
 !ifndef WD_ROMBANKS { WD_ROMBANKS = 1 }	; WIDEDICT code-bank storage:
 			; 1 = 16K ROM banks 33+ via the $C000 window ($01) -
 			;     MiSTer / -cartbin; keeps the bank-2 data window.
@@ -1197,8 +1201,38 @@ fragment_1:
 	iny
 	lda (_scratch),y
 	sta _w+1
+!if WD_FARHDR {
+	cmp #>CWIN_BASE		; far-header CFA (in the window)? pin its bank
+	bcs nextfar		; (A still = _w+1 high byte)
+}
 	jmp (_w)
 ; end of fragment_1
+
+!if WD_FARHDR {
+; The callee's header+CFA live in a code bank. token = (_scratch-TOKENS)>>1
+; (TOKENS is page-aligned so its low byte is 0); pin $00 = TOKBANK[token] so
+; the far RTS/CFA at _w executes from the right bank, then dispatch.
+nextfar:
+	lda _scratch+1
+	sec
+	sbc #>TOKENS
+	lsr
+	sta _rscratch+1		; token high
+	lda _scratch		; 2*token low
+	ror
+	sta _rscratch		; token low
+	clc
+	lda _rscratch
+	adc #<TOKBANK
+	sta _rscratch
+	lda _rscratch+1
+	adc #>TOKBANK
+	sta _rscratch+1
+	ldy #0
+	lda (_rscratch),y
+	sta CBANKREG		; window -> callee's bank
+	jmp (_w)
+}
 
 
 ; Special entry for tokens 0-16 - the jump from next will lead directly here per the token table.
