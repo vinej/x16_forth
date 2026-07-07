@@ -520,7 +520,11 @@ IRQ_DSTACK_TOP = irq_dstack + 64 - 2
 
 ; SAVE-IMAGE/LOAD-IMAGE turnkey: 64-byte buffer holding the saved dictionary-state
 ; zero-page block (see x16.asm).
+!if WIDEDICT {
++hmbuffer ~IMGBUF, 80		; +71 bytes of .VAR state (code-bank fields)
+} else {
 +hmbuffer ~IMGBUF, 64
+}
 ; RAM copy of the image filename, built as <basename> + ".DIC"/".TOK"/".VAR".
 ; SAVE-IMAGE/LOAD-IMAGE take the base name on the stack ( c-addr u -- ), copy it
 ; here, append the suffix, then SETNAM. The buffer lives in RAM (readable in any

@@ -807,6 +807,9 @@ imgsfx_tok: !text ".TOK"
 imgsfx_var: !text ".VAR"
 !if WIDEDICT {
 imgsfx_di2: !text ".DI2"	; dictionary-extension slice [$A000..HERE)
+!if WD_ROMBANKS = 0 {
+imgsfx_cod: !text ".C00"	; RAM code-bank slice; last 2 chars patched per bank
+}
 }
 
 ; copy the 61-byte dictionary-state zp block  (_here..7, _hightoken..54) <-> IMGBUF
@@ -832,6 +835,16 @@ ivs2:	lda _hightoken,x
 	sta IMGBUF+64
 	lda _nearhere+1
 	sta IMGBUF+65
+	lda _codetop		; +66: top code bank the image was built on
+	sta IMGBUF+66
+	lda _codebank		; +67: lowest code bank used (0 = none)
+	sta IMGBUF+67
+	lda _chere		; +68/69: code allocation pointer
+	sta IMGBUF+68
+	lda _chere+1
+	sta IMGBUF+69
+	lda _incode		; +70: mid-definition flag (normally 0)
+	sta IMGBUF+70
 }
 	rts
 img_vars_load:
@@ -856,6 +869,16 @@ ivl2:	lda IMGBUF+7,x
 	sta _nearhere
 	lda IMGBUF+65
 	sta _nearhere+1
+	lda IMGBUF+66
+	sta _codetop
+	lda IMGBUF+67
+	sta _codebank
+	lda IMGBUF+68
+	sta _chere
+	lda IMGBUF+69
+	sta _chere+1
+	lda IMGBUF+70
+	sta _incode
 }
 	rts
 
@@ -931,6 +954,113 @@ img_name_di2:
 	sta _rscratch+1
 	jmp img_name
 }
+!if WD_ROMBANKS = 0 {
+; --- RAM code-bank snapshot: one <name>.Cxx file per used bank ($A000..$BF00
+; through the $00 window). xx = a running hex index from the top bank down. ---
+img_cod_suffix:				; A = index -> imgsfx_cod = ".Cxx"
+	pha
+	lda #'.'
+	sta imgsfx_cod
+	lda #'C'
+	sta imgsfx_cod+1
+	pla
+	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	jsr img_hexdigit
+	sta imgsfx_cod+2
+	pla
+	and #$0f
+	jsr img_hexdigit
+	sta imgsfx_cod+3
+	rts
+img_hexdigit:
+	cmp #10
+	bcc ihd_num
+	clc
+	adc #'A'-10
+	rts
+ihd_num:
+	clc
+	adc #'0'
+	rts
+img_name_cod:				; suffix already built in imgsfx_cod
+	lda #<imgsfx_cod
+	sta _rscratch
+	lda #>imgsfx_cod
+	sta _rscratch+1
+	jmp img_name
+
+; iterate banks _codetop..._codebank, calling (via _wscratch) KSAVE or KLOAD
+; on $A000..$BF00 with the window pointed at each. _wscratch=bank, _wscratch+1=index
+img_cod_setup:
+	lda _codetop
+	sta _wscratch
+	lda #0
+	sta _wscratch+1
+	rts
+img_cod_name:				; build the name for the current bank/index
+	lda _wscratch+1
+	jsr img_cod_suffix
+	jmp img_name_cod
+img_cod_range:				; _scratch = $A000, X/Y = $BF00 for K(SAVE/LOAD)
+	lda #<$A000
+	sta _scratch
+	lda #>$A000
+	sta _scratch+1
+	rts
+
+img_save_codebanks:
+	lda _codebank
+	beq iscb_done
+	jsr img_cod_setup
+iscb_loop:
+	jsr img_cod_name
+	jsr img_setlfs_save
+	lda _wscratch			; window -> bank B
+	sta $00
+	jsr img_cod_range
+	lda #<_scratch
+	ldx #<$BF00
+	ldy #>$BF00
+	jsr KSAVE
+	lda _wscratch			; B == _codebank -> done
+	cmp _codebank
+	beq iscb_end
+	dec _wscratch
+	inc _wscratch+1
+	jmp iscb_loop
+iscb_end:
+	lda #0
+	sta $00
+iscb_done:
+	rts
+
+img_load_codebanks:
+	lda _codebank
+	beq ilcb_done
+	jsr img_cod_setup
+ilcb_loop:
+	jsr img_cod_name
+	jsr img_setlfs_load
+	lda _wscratch			; window -> bank B
+	sta $00
+	lda #0				; load to the file-header address ($A000)
+	jsr KLOAD
+	lda _wscratch
+	cmp _codebank
+	beq ilcb_end
+	dec _wscratch
+	inc _wscratch+1
+	jmp ilcb_loop
+ilcb_end:
+	lda #0
+	sta $00
+ilcb_done:
+	rts
+}
 
 img_setlfs_save:			; logical 1, device 8, secondary 0 (header = start addr)
 	lda #1
@@ -956,8 +1086,8 @@ img_setlfs_load:			; logical 1, device 8, secondary 1 (load to header addr)
 	sta _scratch+1
 	lda #<_scratch
 !if WIDEDICT {
-	ldx #<(IMGBUF+66)
-	ldy #>(IMGBUF+66)
+	ldx #<(IMGBUF+71)
+	ldy #>(IMGBUF+71)
 } else {
 	ldx #<(IMGBUF+61)
 	ldy #>(IMGBUF+61)
@@ -1032,6 +1162,9 @@ svi_dicdone:
 	jsr KSAVE
 svi_nodi2:
 }
+!if WD_ROMBANKS = 0 {
+	jsr img_save_codebanks		; RAM code banks -> <name>.Cxx files
+}
 	jsr CLRCHN			; restore keyboard-in/screen-out after the file writes
 	+dpop				; drop ( c-addr u )
 	+dpop
@@ -1066,6 +1199,8 @@ li_have:
 	sta IMGBUF+61		; format (61-byte .VAR): near-bank state
 	sta IMGBUF+64
 	sta IMGBUF+65
+	sta IMGBUF+67		; +67 _codebank = 0 (no code banks)
+	sta IMGBUF+70		; +70 _incode = 0
 	sta _ribank
 	lda #<MEMTOP
 	sta IMGBUF+62
@@ -1091,6 +1226,9 @@ li_have:
 	tax
 	jmp dpush_and_next
 li_nodi2:
+}
+!if WD_ROMBANKS = 0 {
+	jsr img_load_codebanks		; RAM code banks <- <name>.Cxx files
 }
 	jsr CLRCHN			; restore keyboard-in/screen-out (KLOAD leaves it broken
 					; for the next console read - the "OPEN bug")
