@@ -6324,8 +6324,7 @@ included_1:
 included_2:
 	+token includefile
 !if WIDEDICT {
-	+literal inc_msg_done			; "... done" once the dictionary is built
-	+token count, type, cr
+	+token cr				; the compiling line completes when done
 }
 	+token exit
 
@@ -6333,9 +6332,7 @@ included_2:
 inc_msg_load:
 	+string "Loading "
 inc_msg_comp:
-	+string ", compiling"
-inc_msg_done:
-	+string " ... done"
+	+string ", compiling ..."
 }
 
 +header ~required, ~required_n, "REQUIRED"
