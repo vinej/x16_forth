@@ -118,6 +118,19 @@ FASTLOAD = 0
 }
 }
 
+; WIDEDICT: 65C816 Phase 2 - dictionary beyond 64KB (MiSTer flat-RAM core).
+; Requires NATIVE816. Design: token ids and the 2-byte TOKENS offsets stay
+; exactly as they are (the NEXT dispatch hot path is untouched); a parallel
+; TOKBANK byte array holds each word's bank (0 = the home bank = today's
+; behavior). Development flag - off everywhere by default, enabled only in
+; the experimental buildx16prg816w.asm while Phase 2 lands step by step.
+!ifndef WIDEDICT {
+WIDEDICT = 0
+}
+!if WIDEDICT != 0 and NATIVE816 = 0 {
+!error "WIDEDICT requires NATIVE816"
+}
+
 !if C64 {
 !if X16ROM = 0 {
 ; KERNAL entries (direct). In X16ROM mode these are RAM bridge trampolines
@@ -396,6 +409,34 @@ NEW_LINE = $0D
 }
 
 +hmbuffer ~TOKENS, 2*TOKEN_COUNT	; token lookup table (XT->CFA)
+!if WIDEDICT {
++hmbuffer ~TOKBANK, TOKEN_COUNT	; bank of each word's CFA (0 = home bank)
++hmbuffer ~_dictbank, 1		; bank HERE currently allocates in (0 for now)
++hmbuffer ~irq_save_ribank, 1	; _ribank across an IRQ Forth callback
++hmbuffer ~irq_save_bank, 1	; RAM-bank register across an IRQ callback
+FARBANK = 2		; high-RAM bank holding the dictionary extension.
+			; NOT bank 1: the KERNAL keeps keyboard/editor state
+			; there. The extension is addressed THROUGH THE BANKED
+			; WINDOW ($A000-$BFFF, RAM bank register $00) which is
+			; pinned to FARBANK as Forth's resting state - data and
+			; code there behave like ordinary near memory, so no
+			; special far addressing is needed anywhere. (65816 DBR
+			; addressing does NOT reach the window - both x16emu and
+			; the hardware route $A000-$BFFF via the register.)
+FARBASE = $A000		; the window; no near RAM pointer is ever >= $A000
+FARTOP = $BF00		; leave slack below $BFFF
+WD_HEADROOM = $0400	; xcreate switches banks when less than this remains
++hmbuffer ~_memtop, 2		; current allocation limit (MEMTOP or FARTOP)
++hmbuffer ~_nearhere, 2		; near-dict end recorded at the allocation switch
+				; (SAVE-IMAGE's .DIC must stop there, not at HERE)
++hmbuffer ~BSTK, 256		; bank stack: one byte per call-frame depth
++hmbuffer ~_bsp, 1		; bank stack pointer (index of next free slot)
++hmbuffer ~irq_save_bsp, 1	; _bsp across an IRQ Forth callback
++hmbuffer ~_ribank, 1		; bank of the token stream _ri points into
+				; (0 = home). Not zero-page - the zp block is
+				; full, and this is only ever loaded/stored
+				; directly, never used as a pointer.
+}
 +hmbuffer ~RSTACK, RSIZE		; return stack
 +hmbuffer ~DSTACK, DSIZE		; data stack
 
@@ -673,6 +714,29 @@ STACKLIMIT = DSIZE/2 - 2*SSAFE
 	}
 }
 
+; Fetch one byte of the token stream: lda (_ri),y honoring the stream's bank.
+; WIDEDICT: colon-word bodies may live outside the home bank; _ribank tags
+; the bank of the stream _ri points into. The far path brackets ONLY the
+; fetch with a DBR switch (phb / set / fetch / plb) - DBR is 0 everywhere
+; else, so no other code is affected. Label-free (byte-counted branches)
+; because this expands inside several zones whose local labels would clash.
+!macro ldri {
+!if WIDEDICT {
+	lda _ribank		; reserved for true multi-bank far streams
+	beq * + 13		; (unused in the window model: _ribank stays 0)
+	php
+	sei
+	phb
+	pha
+	plb
+	lda (_ri),y
+	plb
+	plp
+	!byte $80, $02		; bra past the near fetch
+}
+	lda (_ri),y
+}
+
 ; Stack access is behind macros so it is easier to change in the future
 
 !macro rpush {
@@ -939,6 +1003,15 @@ STACKLIMIT = DSIZE/2 - 2*SSAFE
 	lda #0			; no IRQ callback installed yet
 	sta irq_armed
 	sta irq_busy
+!if WIDEDICT {
+	sta _ribank		; token stream starts in the home bank
+	lda #<MEMTOP
+	sta _memtop
+	lda #>MEMTOP
+	sta _memtop+1
+	lda #FARBANK		; resting state: the banked window shows the
+	sta $00			; dictionary extension bank
+}
 }
 
 	lda #<forth_system_n
@@ -1019,7 +1092,7 @@ next:
 	ldx #>TOKENS		; note that LSB is assumed to be 0
 next_ext:
 	ldy #0
-	lda (_ri),y
+	+ldri
 	asl
 	bcc +
 	inx
@@ -1037,6 +1110,7 @@ fragment_1:
 	sta _w+1
 	jmp (_w)
 ; end of fragment_1
+
 
 ; Special entry for tokens 0-16 - the jump from next will lead directly here per the token table.
 ; The assumption is that _scratch has 2x the token id, so the exact page offset required. Token
@@ -1090,6 +1164,14 @@ call:
 
 	+ldax _ri
 	+rpush
+!if WIDEDICT {
+	ldx _bsp		; caller's stream bank goes on the separate
+	lda _ribank		; bank stack - the main rstack keeps its
+	sta BSTK,x		; 1-cell return-address protocol (R> juggling,
+	inc _bsp		; loop frames, xcode's frame drop all rely on it)
+	lda #0			; the word being entered is near (far colon
+	sta _ribank		; words come in via far_dispatch instead)
+}
 	+ldax _w
 	+incax 1
 	+stax _ri
@@ -1102,6 +1184,12 @@ call:
 return:
 	+rpop
 	+stax _ri
+!if WIDEDICT {
+	dec _bsp		; unstack the caller's bank
+	ldx _bsp
+	lda BSTK,x
+	sta _ribank
+}
 	+bra next
 
 ; INVOKE - this will execute word by CFA and continue to the next word (exposed to the language as EXECUTE)
@@ -1145,7 +1233,15 @@ created:
 does:
 	+ldax _ri
 	+rpush
-	
+!if WIDEDICT {
+	ldx _bsp		; same frame contract as CALL
+	lda _ribank
+	sta BSTK,x
+	inc _bsp
+	lda #0			; the DOES> body we are about to run lives in
+	sta _ribank		; the defining word - near until step 4
+}
+
 	pla
 	+add 1		; courtesy of 6502 JSR instruction, the return address is off by one
 	sta _ri
@@ -1166,6 +1262,7 @@ dodefer:
 	dey
 	lda (_w),y
 	+bra invokeax
+
 
 ; DOVALUE - semantics of a VALUE
 ;	Assumes a very particular structure: pointer to semantics block followed by value bytes. Semantics block contains
@@ -1207,6 +1304,7 @@ doconst:
 	lda (_w),y
 	jmp dpush_and_next
 
+
 ; Call to this subroutine (JSR contforth) allows to switch execution from native to Forth. One particular use case
 ; is error handling as it is easier to setup ABORT" from Forth
 contforth:
@@ -1216,6 +1314,8 @@ contforth:
 	sta _w+1
 	rts
 
+
+
 ; Return stack and data stack implementations, using correspondingly _rstack and _dstack pointers.
 ; Note that the data stack has the topmost item stored separately in _dtop
 
@@ -1223,6 +1323,10 @@ init_rstack:
 	lda #<RSTACK_INIT
 	ldx #>RSTACK_INIT
 	+stax _rstack
+!if WIDEDICT {
+	lda #0			; bank stack empty (QUIT/ABORT resync)
+	sta _bsp
+}
 	rts
 
 init_dstack:
@@ -1433,6 +1537,23 @@ gtt_done:
 	dey
 	bpl -
 
+!if WIDEDICT {
+	lda #<TOKBANK		; every word starts in the home bank: clear the
+	sta _wscratch		; whole bank table and the allocation bank
+	lda #>TOKBANK
+	sta _wscratch+1
+	lda #0
+	sta _dictbank
+	ldx #>TOKEN_COUNT	; TOKEN_COUNT is page-divisible (asserted above)
+	tay
+gtt_zerobank:
+	sta (_wscratch),y
+	iny
+	bne gtt_zerobank
+	inc _wscratch+1
+	dex
+	bne gtt_zerobank
+}
 	rts
 
 
@@ -1460,6 +1581,7 @@ rscratch_sub_wscratch: ; Happens more than once, saving a few bytes here
 
 +header ~nfatolfa, ~nfatolfa_n
 	+code
+
 	ldy #0
 	lda (_dtop),y
 	and #NAMEMASK
@@ -1475,6 +1597,7 @@ field_adjust:
 
 +header ~lfatocfa, ~lfatocfa_n
 	+code
+
 	ldy #0
 	lda (_dtop),y
 	bpl +
@@ -1637,9 +1760,17 @@ cfatoxt_found:		; Unless the system is broken, something has to be found and C i
 
 +header ~catch, ~catch_n, "CATCH"
 	+forth
+!if WIDEDICT {
+	+literal _bsp		; bank-stack depth, restored by THROW
+	+token cpeek, tor	; (via C@ - the short-token space is full)
+}
 	+token spat, tor, handler, peek, tor, rpat, handler, poke
 	+token execute
-	+token rfrom, handler, poke, rfrom, drop, zero, exit
+	+token rfrom, handler, poke, rfrom, drop
+!if WIDEDICT {
+	+token rfrom, drop	; the bank-stack depth cell
+}
+	+token zero, exit
 
 +header ~throw, ~throw_n, "THROW"
 	+code
@@ -1670,6 +1801,10 @@ throw_have:
 	jsr pop_rstack			; R> : saved SP -> _dstack
 	sta _dstack
 	stx _dstack+1
+!if WIDEDICT {
+	jsr pop_rstack			; R> : bank-stack depth as of CATCH entry
+	sta _bsp
+}
 	jsr pop_dstack			; drop to the i*x below xt (TOS <- top of i*x)
 	pla				; n back off the CPU stack
 	tax
@@ -1677,6 +1812,12 @@ throw_have:
 	jsr push_dstack			; push n as the result
 	+rpop				; return to CATCH's caller with ( i*x n )
 	+stax _ri
+!if WIDEDICT {
+	dec _bsp			; and its bank-stack entry, as RETURN would
+	ldx _bsp
+	lda BSTK,x
+	sta _ribank
+}
 	jmp next
 
 ; Reset data stack and perform QUIT.
@@ -2722,6 +2863,7 @@ rat_common:
 	+rpop
 	jmp next
 
+
 +header ~twotor, ~twotor_n, "2>R"
 	+code
 	+dpop
@@ -2772,6 +2914,7 @@ rat_common:
 +header ~peek, ~peek_n, "@"
 	+code
 fragment_peek:
+
 	ldy #1
 	lda (_dtop),y
 	tax
@@ -2780,16 +2923,20 @@ fragment_peek:
 	+stax _dtop
 	jmp next
 
+
 +header ~cpeek, ~cpeek_n, "C@"
 	+code
+
 	ldy #0
 	lda (_dtop),y
 	sta _dtop
 	sty _dtop+1
 	jmp next
 
+
 +header ~poke, ~poke_n, "!"
 	+code
+
 	ldy #3
 	lda (_dstack),y
 	tax
@@ -2813,6 +2960,7 @@ fragment_peek:
 
 +header ~cpoke, ~cpoke_n, "C!"
 	+code
+
 	ldy #2
 	lda (_dstack),y
 	ldy #0
@@ -2821,6 +2969,7 @@ cpoke_continue:
 	+dpop
 	+dpop
 	jmp next
+
 ;	+dpop
 ;	+stax _wscratch
 ;	+dpop
@@ -2848,10 +2997,10 @@ cpoke_continue:
 +header ~lit, ~lit_n	; LIT
 	+code
 	ldy #1
-	lda (_ri),y
+	+ldri
 	tax
 	dey
-	lda (_ri),y
+	+ldri
 	+dpush
 fragment_2:
 ;	+ldax _ri
@@ -2866,7 +3015,7 @@ fragment_2:
 +header ~blit, ~blit_n
 	+code
 	ldy #0
-	lda (_ri),y
+	+ldri
 	ldx #0
 	+dpush
 	inc _ri
@@ -3005,7 +3154,12 @@ sign_1:
 +header ~allot, ~allot_n, "ALLOT"
 	+forth
 	+token here, add, dup
+!if WIDEDICT {
+	+literal _memtop
+	+token peek
+} else {
 	+literal MEMTOP
+}
 	+token ugreater
 	+qbranch_fwd allot_ok
 	+token xabortq
@@ -3017,7 +3171,12 @@ allot_ok:
 
 +header ~unused, ~unused_n, "UNUSED"
 	+forth
+!if WIDEDICT {
+	+literal _memtop
+	+token peek
+} else {
 	+literal MEMTOP
+}
 	+token here, sub, exit
 
 +header ~comma, ~comma_n, ","
@@ -3044,11 +3203,11 @@ allot_ok:
 	+code
 branch_c:
 	ldy #1
-	lda (_ri),y
+	+ldri
 	tax
 	dey
-	lda (_ri),y
-	+stax _ri
+	+ldri
+	+stax _ri		; branch targets stay within the same body/bank
 	jmp next
 
 ; Jump to the address if top of the stack is FALSE. Skip the address and
@@ -3071,7 +3230,7 @@ branch_c:
 	+code
 bbranch_c:
 	ldy #0
-	lda (_ri),y
+	+ldri
 	clc
 	adc _ri
 	sta _ri
@@ -3682,6 +3841,14 @@ xfp_lenok:
 	beq xfind_nomorewords
 }
 	sta _scratch
+!if WIDEDICT {
+	lda _rscratch		; NULL start NFA (empty wordlist): scanning
+	ora _rscratch+1		; from address 0 would walk zero-page garbage
+	bne xfp_nfaok		; (zp $00 = the bank register, nonzero now)
+	jmp xfind_nomorewords
+xfp_nfaok:
+}
+
 xfind_compare:
 !if FASTLOAD {
 ; Hit the boundary into the (large, static) core dictionary? Skip the slow
@@ -3763,6 +3930,7 @@ xfind_found:
 	+ldax _rscratch
 	+stax _dtop
 	jmp next
+
 
 !if FASTLOAD {
 ; hash_lookup: reached from xfind_compare when the linear near-list scan hits
@@ -4432,8 +4600,55 @@ closesource_2:
 ; ==============================================================================
 ; Colon definition and related words
 ; (CREATE) takes cstr,n and creates a raw header (NFA+LFA)
+!if WIDEDICT {
+; near bank nearly full? move allocation to the far bank (one-time switch)
+xcw_advcheck:
+	lda _dictbank
+	bne xcw_noadv
+	sec
+	lda _memtop
+	sbc _here
+	lda _memtop+1
+	sbc _here+1
+	cmp #>WD_HEADROOM
+	bcs xcw_noadv
+	lda _here		; remember where the near dictionary ends
+	sta _nearhere
+	lda _here+1
+	sta _nearhere+1
+	lda #FARBANK
+	sta _dictbank
+	lda #<FARBASE
+	sta _here
+	lda #>FARBASE
+	sta _here+1
+	lda #<FARTOP
+	sta _memtop
+	lda #>FARTOP
+	sta _memtop+1
+xcw_noadv:
+	rts
+
+; LFA diff, moved out of xcreate's body (the branch to create_error is
+; byte-relative and ran out of range with the WIDEDICT additions). Window
+; addresses are plain 16-bit, so the diff crosses the allocation switch
+; numerically with no special form.
+xcw_diffcalc:
+	sec
+	lda _here
+	sbc _latest
+	sta _wscratch
+	lda _here+1
+	sbc _latest+1
+	sta _wscratch+1
+	rts
+}
+
 +header ~xcreate, ~xcreate_n
 	+code
+!if WIDEDICT {
+	jsr xcw_advcheck	; may switch allocation to the far bank
+}
 
 ; check if we have available tokens
 	lda _hightoken+1
@@ -4443,6 +4658,7 @@ closesource_2:
 	+goforth
 	+branch_fwd create_error
 +:
+
 
 ; calculate contents for the new LFA
 ; Temporarily reloading _latest as it will be updated on the next step
@@ -4473,6 +4689,9 @@ closesource_2:
 	sta _wscratch+1
 	beq ++
 +:
+!if WIDEDICT {
+	jsr xcw_diffcalc	; LFA diff, or the $FE far-link marker
+} else {
 	sec
 	lda _here
 	sbc _latest
@@ -4480,6 +4699,7 @@ closesource_2:
 	lda _here+1
 	sbc _latest+1
 	sta _wscratch+1
+}
 ++:
 	
 	+ldax _here		; register the word as LATEST
@@ -4521,6 +4741,7 @@ xcreate_4:
 	sta (_here),y
 	iny
 	
+xcreate_hupd:
 	tya
 	clc				; update HERE
 	adc _here
@@ -4548,23 +4769,53 @@ xcreate_4:
 	lda _here+1
 	sta (_wscratch),y
 
+!if WIDEDICT {
+	clc			; TOKBANK[_hightoken] = current allocation bank
+	lda _hightoken
+	adc #<TOKBANK
+	sta _wscratch
+	lda _hightoken+1
+	adc #>TOKBANK
+	sta _wscratch+1
+	lda _dictbank
+	ldy #0
+	sta (_wscratch),y
+}
+
 	+dpop
 	jmp next
+
 
 +error_message ~create_error
 +header ~create, ~create_n, "CREATE"
 	+forth
+!if WIDEDICT {
+	; the pre-xcreate HERE capture (= the new NFA) goes stale when xcreate
+	; switches allocation banks - reveal via LATEST (xcreate sets it) instead
+	+token bl, word, count, xcreate
+	+literal JMP_INSTR
+	+token ccomma
+	+literal created
+	+token comma, latest, context, poke, exit
+} else {
 	+token here, bl, word, count, xcreate
 	+literal JMP_INSTR
 	+token ccomma
 	+literal created
 	+token comma, context, poke, exit
+}
 
 ; DOES> is a weird beast. It generates code that will modify the execution of the
 ; last defined word to jump to the definition word. It is also quite non-portable as it generates a low level instruction
 +header ~xcode, ~xcode_n		; (;CODE)
 	+forth
 	+token rfrom								; which is the address of the "call xdoes" instruction
+!if WIDEDICT {
+	+literal _bsp		; R> consumed the caller's frame - drop its
+	+token cpeek, oneminus	; bank-stack entry too (_bsp C@ 1- _bsp C!)
+	+literal _bsp
+	+token cpoke
+}
 	+token latest, count
 	+literal NAMEMASK
 	+token and_op, add, lfatocfa ;twoplus		; CFA of the last defined word
@@ -4706,7 +4957,11 @@ quit_c:
 xforget_vn:
 	+token dup, i, cells
 	+literal _vocsref
+!if WIDEDICT {
+	+token add, peek, uless
+} else {
 	+token add, peek, less
+}
 	+qbranch_fwd xforget_vnok
 	+token i
 	+literal _numvocs
@@ -4725,7 +4980,11 @@ xforget_wloop:
 	+literal _vocs
 	+token add, peek
 xforget_nw:
+!if WIDEDICT {
+	+token dup, tor, over, ugreater	; far NFAs are "negative" as signed
+} else {
 	+token dup, tor, over, greater
+}
 	+qbranch_fwd xforget_nwok
 	+token rfrom, nextword
 	+branch xforget_nw
@@ -4737,6 +4996,20 @@ xforget_nwok:
 	+address xforget_wloop
 xforget_wdone:
 
+!if WIDEDICT {
+	+literal _here		; forgotten back into the near bank? undo the
+	+token peek		; allocation switch
+	+literal FARBASE
+	+token uless
+	+qbranch_fwd xforget_stillfar
+	+token zero
+	+literal _dictbank
+	+token cpoke
+	+literal MEMTOP
+	+literal _memtop
+	+token poke
+xforget_stillfar:
+}
 	+token drop, exit
 
 xforget_error:
@@ -4827,7 +5100,7 @@ dpop_scratch_wscratch_dtopto_rscratch:
 	dec
 	ldx _rscratch
 	ldy _wscratch
-	mvn 0, 0		; bank 0 -> bank 0 (Phase 1: no far-bank dictionary yet)
+	mvn 0, 0		; bank 0 -> bank 0 ($A000+ goes via the window)
 !as
 !rs
 	sep #$30
@@ -5467,9 +5740,16 @@ includefile_2:
 	+qbranch_fwd included_1
 	+token twodrop, exit
 included_1:
+!if WIDEDICT {
+	; same stale-HERE hazard as CREATE: reveal the dummy via LATEST instead
+	+token twodup, xcreate			; create a dummy word with the same name as the included file
+	+literal RTS_INSTR
+	+token ccomma, compile, exit, latest, context, poke
+} else {
 	+token twodup, here, tor, xcreate	; create a dummy word with the same name as the included file
 	+literal RTS_INSTR
 	+token ccomma, compile, exit, rfrom, context, poke
+}
 	+token ro, openfile
 	+qbranch_fwd included_2
 	+token drop, exit

@@ -805,6 +805,9 @@ IMG_TOKUSER = TOKENS + ((forth_system + 1) << 1)
 imgsfx_dic: !text ".DIC"
 imgsfx_tok: !text ".TOK"
 imgsfx_var: !text ".VAR"
+!if WIDEDICT {
+imgsfx_di2: !text ".DI2"	; dictionary-extension slice [$A000..HERE)
+}
 
 ; copy the 61-byte dictionary-state zp block  (_here..7, _hightoken..54) <-> IMGBUF
 img_vars_save:
@@ -818,6 +821,18 @@ ivs2:	lda _hightoken,x
 	sta IMGBUF+7,x
 	dex
 	bpl ivs2
+!if WIDEDICT {
+	lda _dictbank		; +61: allocation bank, +62/63: current limit
+	sta IMGBUF+61
+	lda _memtop
+	sta IMGBUF+62
+	lda _memtop+1
+	sta IMGBUF+63
+	lda _nearhere		; +64/65: near-dict end (see SAVE-IMAGE)
+	sta IMGBUF+64
+	lda _nearhere+1
+	sta IMGBUF+65
+}
 	rts
 img_vars_load:
 	ldx #6
@@ -830,6 +845,18 @@ ivl2:	lda IMGBUF+7,x
 	sta _hightoken,x
 	dex
 	bpl ivl2
+!if WIDEDICT {
+	lda IMGBUF+61
+	sta _dictbank
+	lda IMGBUF+62
+	sta _memtop
+	lda IMGBUF+63
+	sta _memtop+1
+	lda IMGBUF+64
+	sta _nearhere
+	lda IMGBUF+65
+	sta _nearhere+1
+}
 	rts
 
 ; Copy the base name (data stack ( c-addr u )) into imgnam and remember its
@@ -896,6 +923,14 @@ img_name_tok:
 	lda #>imgsfx_tok
 	sta _rscratch+1
 	jmp img_name
+!if WIDEDICT {
+img_name_di2:
+	lda #<imgsfx_di2
+	sta _rscratch
+	lda #>imgsfx_di2
+	sta _rscratch+1
+	jmp img_name
+}
 
 img_setlfs_save:			; logical 1, device 8, secondary 0 (header = start addr)
 	lda #1
@@ -920,20 +955,38 @@ img_setlfs_load:			; logical 1, device 8, secondary 1 (load to header addr)
 	lda #>IMGBUF
 	sta _scratch+1
 	lda #<_scratch
+!if WIDEDICT {
+	ldx #<(IMGBUF+66)
+	ldy #>(IMGBUF+66)
+} else {
 	ldx #<(IMGBUF+61)
 	ldy #>(IMGBUF+61)
+}
 	jsr KSAVE
-	; ---- <name>.DIC : [IMG_DICT_START .. HERE) ----
+	; ---- <name>.DIC : [IMG_DICT_START .. near dict end) ----
 	jsr img_name_dic
 	jsr img_setlfs_save
 	lda #<IMG_DICT_START
 	sta _scratch
 	lda #>IMG_DICT_START
 	sta _scratch+1
+!if WIDEDICT {
+	lda _dictbank		; split dictionary: the near part stops at the
+	beq svi_dicnear		; recorded switch point, HERE is in the window
+	lda #<_scratch
+	ldx _nearhere
+	ldy _nearhere+1
+	jsr KSAVE
+	jmp svi_dicdone
+svi_dicnear:
+}
 	lda #<_scratch
 	ldx _here
 	ldy _here+1
 	jsr KSAVE
+!if WIDEDICT {
+svi_dicdone:
+}
 	; ---- <name>.TOK : [IMG_TOKUSER .. TOKENS + 2*hightoken) ----
 	jsr img_name_tok
 	jsr img_setlfs_save
@@ -961,6 +1014,24 @@ img_setlfs_load:			; logical 1, device 8, secondary 1 (load to header addr)
 	tay
 	lda #<_scratch
 	jsr KSAVE
+!if WIDEDICT {
+	; ---- <name>.DI2 : [FARBASE .. HERE) - only when the dictionary has
+	; crossed into the extension bank (KSAVE reads it through the window,
+	; which rests on FARBANK) ----
+	lda _dictbank
+	beq svi_nodi2
+	jsr img_name_di2
+	jsr img_setlfs_save
+	lda #<FARBASE
+	sta _scratch
+	lda #>FARBASE
+	sta _scratch+1
+	lda #<_scratch
+	ldx _here
+	ldy _here+1
+	jsr KSAVE
+svi_nodi2:
+}
 	jsr CLRCHN			; restore keyboard-in/screen-out after the file writes
 	+dpop				; drop ( c-addr u )
 	+dpop
@@ -990,11 +1061,37 @@ li_have:
 	lda #0
 	jsr KLOAD
 	; <name>.VAR -> IMGBUF (file header address)
+!if WIDEDICT {
+	lda #0			; defaults for images saved before the .DI2
+	sta IMGBUF+61		; format (61-byte .VAR): near-bank state
+	sta IMGBUF+64
+	sta IMGBUF+65
+	sta _ribank
+	lda #<MEMTOP
+	sta IMGBUF+62
+	lda #>MEMTOP
+	sta IMGBUF+63
+}
 	jsr img_name_var
 	jsr img_setlfs_load
 	lda #0
 	jsr KLOAD
 	jsr img_vars_load
+!if WIDEDICT {
+	; the image used the extension bank? pull the window slice back in
+	lda _dictbank
+	beq li_nodi2
+	jsr img_name_di2
+	jsr img_setlfs_load
+	lda #0
+	jsr KLOAD
+	bcc li_nodi2
+	jsr CLRCHN		; .DI2 missing: incomplete image -> false
+	lda #0
+	tax
+	jmp dpush_and_next
+li_nodi2:
+}
 	jsr CLRCHN			; restore keyboard-in/screen-out (KLOAD leaves it broken
 					; for the next console read - the "OPEN bug")
 	lda #$ff			; success -> true
@@ -1824,7 +1921,11 @@ edit_restore:
 	; a logical file open / the channels redirected, which breaks Forth's next
 	; console read (?STACK) and file OPEN/INCLUDED. (BASIC's own EDIT does nothing
 	; after the editor, but its main loop and READY path effectively reset I/O.)
+!if WIDEDICT {
+	lda #FARBANK			; the window must show the dict extension
+} else {
 	lda #0
+}
 	sta $00
 	+kcall $FFE7			; CLALL - close all files + restore default I/O (ROM-safe)
 !if FASTLOAD {
@@ -1855,6 +1956,10 @@ SMC_I2C_ADDR   = $42
 ; B@ ( bank off -- byte )   read a byte from banked RAM (off is 0..8191 into $A000)
 +header ~bfetch, ~bfetch_n, "B@"
 	+code
+!if WIDEDICT {
+	lda $00			; the window normally shows the dictionary
+	pha			; extension bank - restore it after
+}
 	ldy #2
 	lda (_dstack),y		; bank
 	sta $00				; select RAM bank
@@ -1870,6 +1975,10 @@ SMC_I2C_ADDR   = $42
 	+dpop				; drop off; _dtop is now the bank slot
 	pla
 	sta _dtop			; result
+!if WIDEDICT {
+	pla
+	sta $00
+}
 	lda #0
 	sta _dtop+1
 	jmp next
@@ -1877,6 +1986,10 @@ SMC_I2C_ADDR   = $42
 ; B! ( byte bank off -- )   store a byte into banked RAM (off is 0..8191)
 +header ~bstore, ~bstore_n, "B!"
 	+code
+!if WIDEDICT {
+	lda $00
+	pha
+}
 	ldy #2
 	lda (_dstack),y		; bank
 	sta $00
@@ -1890,6 +2003,10 @@ SMC_I2C_ADDR   = $42
 	lda (_dstack),y		; byte
 	ldy #0
 	sta ($02),y
+!if WIDEDICT {
+	pla
+	sta $00
+}
 	+dpop
 	+dpop
 	+dpop
@@ -2792,6 +2909,18 @@ irq_savevm:
 	sta irq_save,x
 	dex
 	bpl -
+!if WIDEDICT {
+	lda _ribank		; the IRQ can fire mid-far-word; the callback
+	sta irq_save_ribank	; itself starts on a home-bank token list
+	lda #0
+	sta _ribank
+	lda _bsp		; IRQPAUSE unwinds the callback's frames by
+	sta irq_save_bsp	; restoring pointers - the bank stack too
+	lda $00			; the IRQ may interrupt code that switched the
+	sta irq_save_bank	; window (KERNAL file I/O, B!) - the callback
+	lda #FARBANK		; needs the dictionary extension visible
+	sta $00
+}
 !if FPCORE {
 	lda fsp
 	sta irq_save_fsp
@@ -2806,6 +2935,14 @@ irq_restorevm:
 	sta _ri,x
 	dex
 	bpl -
+!if WIDEDICT {
+	lda irq_save_ribank
+	sta _ribank
+	lda irq_save_bsp
+	sta _bsp
+	lda irq_save_bank
+	sta $00
+}
 !if FPCORE {
 	lda irq_save_fsp
 	sta fsp
