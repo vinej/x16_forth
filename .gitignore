@@ -54,3 +54,7 @@ $RECYCLE.BIN/
 *.bak
 .vscode/
 .idea/
+
+# third-party X16 reference docs (local dev only, not for publishing)
+/doc/Commander X16 Programmer's Reference Guide.pdf
+/doc/X16 Reference - *
