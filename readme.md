@@ -126,9 +126,10 @@ S" (extended) SOURCE-ID	W/O			WRITE-FILE	WRITE-LINE
 FILE-STATUS	FLUSH-FILE	INCLUDE		REFILL (extended) RENAME-FILE	REQUIRE		REQUIRED S\" (extended)
 ```
 ### Floating-Point words
-Not supported in the generic (C64/F256) builds. The **Commander X16 build does
-have floating point** - it wraps the ROM's FP package. See the Floating point
-subsection under Commander X16 Extensions below.
+Not supported in the generic (C64/F256) builds. On the **Commander X16** floating
+point is available as a **loadable toolkit** (`toolkit/FLOAT.FTH`, over the ROM's
+FP package) rather than baked into the core. See the Floating point subsection
+under Commander X16 Extensions below.
 
 ### Local words
 Not supported and not planned. I find this set a very questionable addition to the standard.
@@ -264,68 +265,28 @@ Lastly, all assembler words except `CODE` reside in the `ASSEMBLER` wordlist, so
 
 ## Commander X16 Extensions
 
-There is a dedicated build target for the Commander X16 that adds native words for
-the X16-specific hardware: the VERA video chip, hardware sprites, the PSG and
-YM2151 (FM) audio, and binary LOAD/SAVE. These words are only present in the X16
-build; the plain C64/X16-compatible PRG (`makeprg.bat`) does not include them.
-
-* `makex16.bat` builds `forthx16.prg` (defines `X16 = 1`, which implies the C64
-  KERNAL-compatible core). The build files are `buildx16prg.asm`, `x16prims.asm`
-  (referenceable VERA primitives, placed above the token boundary) and `x16.asm`
-  (the higher-level words).
-* `testx16.bat` builds and launches the result in the X16 emulator.
-
+The Commander X16 builds add native words for the X16-specific hardware: the VERA
+video chip, hardware sprites, the PSG and YM2151 (FM) audio, tiles, the
+mouse/joystick, and binary LOAD/SAVE. These words are only present in the X16
+builds; the plain C64/F256 builds do not include them. (Floating point and the
+bitmap-graphics words are **not** baked in either - they now load from
+`toolkit/FLOAT.FTH` and `toolkit/GFX.FTH`; see *The `toolkit/` libraries* below.)
 The platform-identifying word is `X16` (instead of `C64`/`F256`).
 
-#### Cartridge build (ROM bank 32)
+Every buildable X16 variant lives in its own folder under
+**[`version/`](version/readme.md)**, each with a `build.asm`, `make.bat`,
+`test.bat` and `readme.md`. Run a folder's `make.bat` to build it (the binary
+lands in that folder) or `test.bat` to build **and** launch it in the emulator.
+The X16 variants:
 
-The X16 build can also be packaged as a cartridge that auto-boots from ROM bank 32:
+* **[`ForthX16_6502Prg`](version/ForthX16_6502Prg/readme.md)** / **[`ForthX16_816Prg`](version/ForthX16_816Prg/readme.md)** — the program builds (`.prg`, `LOAD`ed and `RUN` from BASIC), 6502 and 65816.
+* **[`ForthX16_6502Cart`](version/ForthX16_6502Cart/readme.md)** — an auto-booting cartridge. The KERNAL detects it by the PETSCII signature `CX16` at `$C000`/entry `$C004`; a small stub copies the Forth image into low RAM and starts it, so Forth runs from RAM exactly as the PRG does but boots straight from the cartridge with no loading.
+* **[`ForthX16_6502Bank9`](version/ForthX16_6502Bank9/readme.md)** / **[`ForthX16_816Bank9`](version/ForthX16_816Bank9/readme.md)** — the interpreter runs **in place from ROM bank 9**, freeing ~31 KB of low RAM for the dictionary. A bank at `$C000` can't call the KERNAL directly, so the build installs RAM bridge trampolines at cold start and reaches FP/audio via `jsrfar`. It replaces the demo bank and is launched with the BASIC **`TEST`** command. The full test suite (integer, FP, audio, strings, VERA, LOAD/SAVE, the ROM-mode `IRQ` callback) passes from ROM. Design notes: `doc/forth-in-rom-scope.md`.
+* **[`ForthX16_6502Bank32`](version/ForthX16_6502Bank32/readme.md)** / **[`ForthX16_816Bank32`](version/ForthX16_816Bank32/readme.md)** — the same run-from-ROM idea in ROM bank 32 (the MiSTer cartridge bank), started with `loader32`.
+* **[`ForthX16_816WideRom`](version/ForthX16_816WideRom/readme.md)** / **[`ForthX16_816WideRam`](version/ForthX16_816WideRam/readme.md)** / **[`ForthX16_816WideFar`](version/ForthX16_816WideFar/readme.md)** — the 65816 large-dictionary (`WIDEDICT`) builds, storing dictionary code (and, for `WideFar`, headers) in RAM/ROM banks.
 
-* `makex16crt.bat` builds `forthcart.bin` - a 16K ROM-bank image. It first builds
-  `forthx16.prg`, then wraps it with `x16cart.asm`.
-* `testx16crt.bat` builds and boots it: `x16emu -cartbin forthcart.bin`.
-
-The KERNAL detects a cartridge by the PETSCII signature `CX16` at `$C000` in ROM
-bank 32 and calls the entry point at `$C004`. Because bank 32 shares the
-`$C000-$FFFF` window with the KERNAL, `x16cart.asm` is a small loader stub that
-copies the Forth image into low RAM, switches to ROM bank 0, and starts the
-interpreter - so Forth runs from RAM exactly as the PRG does, but boots straight
-from the cartridge with no loading. The whole image fits in one 16K bank
-(currently ~9K, leaving ~7K for more words).
-
-#### Run-from-ROM build (v3, experimental)
-
-There is also a build that runs the interpreter **in place from an X16 ROM bank**
-(`$C000-$FFFF`, intended for bank `$09`), so the ~13.5 KB of interpreter code lives
-in ROM instead of low RAM - freeing that RAM for the user dictionary. This is
-different from the cartridge above, which copies itself to RAM.
-
-* `makex16rom.bat` builds `forthx16rom.bin`, a full 16 KB bank image
-  (`buildx16rom.asm` sets `X16ROM = 1`; it must be assembled with `--cpu 65c02`).
-
-Since a bank at `$C000` cannot call the KERNAL (`$FFxx`) directly - that window is
-the bank itself - the build installs a small set of RAM *bridge trampolines* at
-cold start and points the KERNAL symbols at them; FP/audio reach their banks by
-porting the KERNAL `jsrfar` into the bank; and the bank's CPU vectors point at the
-KERNAL's low-RAM IRQ handlers. The whole thing boots to `OK` and passes the full
-test suite from ROM (integer, floating point, audio, strings, VERA, LOAD/SAVE).
-
-Because it replaces the demo bank (`$09`), it is launched by the BASIC **`TEST`**
-command - the same one that used to run the demo. The bank starts with the 4-word
-vector table `TEST` expects; `TEST` copies the bank to RAM `$1000` and jumps into a
-small launcher there, which `jsrfar`s back into bank 9 to start Forth in place. So
-on a machine whose ROM has Forth in bank 9, you just type `TEST` at the READY
-prompt.
-
-To build a ready-to-run ROM: `makex16rom.bat` (produces `forthx16rom.bin`) then
-`makeromforth.bat`, which copies the pristine 16-bank ROM (`emulator\rom.bin.orig`)
-to `emulator\rom.bin` with bank `$09` patched to Forth. Launch the emulator from
-`emulator\` and type `TEST`. Forth cold-starts in place and reports ~31 KB free
-(all of low RAM, since the interpreter is in ROM), including a BASIC-style
-`NNNNN BYTES FREE` line at boot. Floating point/audio (via `jsrfar`), the `IRQ`
-Forth-callback (via a RAM CINV trampoline), VERA, and disk LOAD/SAVE all work from
-ROM; the full test suite passes. Design notes and status are in
-`doc/forth-in-rom-scope.md`.
+See **[version/readme.md](version/readme.md)** for the full table with image
+sizes and free-RAM figures for every version.
 
 Wherever it is reasonable the words mirror the corresponding X16 BASIC command,
 but follow Forth stack conventions. Arguments are pushed in the same
@@ -464,9 +425,12 @@ MWHEEL ( -- delta )       mouse wheel movement since last read (signed)
 ```
 
 ### Floating point
-The X16 build has floating point, implemented by calling the ROM's FP package
-(the X16 keeps its FP accumulator clear of Forth's zero page). Floats live on a
-dedicated float stack (shown as `F:` below).
+The X16 has floating point, implemented by calling the ROM's FP package (the X16
+keeps its FP accumulator clear of Forth's zero page). It is **not baked into the
+shipped builds** (`FPCORE=0`) - load it from the toolkit with `INCLUDE
+ASSEMBLER.FTH` then `INCLUDE FLOAT.FTH` (and `INCLUDE FPX.FTH` for the extended
+set) before using any float word or literal. Floats live on a dedicated float
+stack (shown as `F:` below).
 ```
 S>F  ( n -- ) ( F: -- r )     integer to float
 F>S  ( -- n ) ( F: r -- )     float to integer (non-negative)
@@ -489,10 +453,10 @@ hyperbolic `FSINH FCOSH FTANH`; inverse trig `FASIN FACOS FATAN2`; and
 Float **literals** can be typed directly at the interpreter, e.g. `3.14`, `1E3`,
 `-2.5E-2` — they are recognized and pushed to the float stack. (Inside a `:`
 definition use `S" ..." >FLOAT` or an `FCONSTANT`.)
-The FP defining words `FVARIABLE` and `FCONSTANT` are built into the X16 build.
-The BASIC math names `SQR SIN COS TAN ATN LOG EXP` are just aliases of the `F*`
-words, so to save ROM space they live in `toolkit/BASICMATH.FTH` — `INCLUDE
-BASICMATH.FTH` to get them, or use `FSQRT`/`FSIN`/… directly.
+The FP defining words `FVARIABLE` and `FCONSTANT` are provided by
+`toolkit/FLOAT.FTH`. The BASIC math names `SQR SIN COS TAN ATN LOG EXP` are just
+aliases of the `F*` words, so they live in `toolkit/FPX.FTH` — `INCLUDE FPX.FTH`
+to get them, or use `FSQRT`/`FSIN`/… directly.
 Example: `2 S>F FSQRT F.` prints `1.41421356`.
 
 ### System / dev
@@ -507,7 +471,7 @@ B@       ( bank off -- byte )   read a byte from banked RAM (off 0..8191)
 B!       ( byte bank off -- )   store a byte into banked RAM (off 0..8191)
 SLEEP    ( jiffies -- )  wait 'jiffies' 1/60-second ticks
 ```
-**Bulk RAM-bank I/O (65816 builds only):** the `816` builds add words to stream
+**Bulk RAM-bank I/O:** words to stream
 data between disk, RAM banks, and low RAM — handy for holding game levels in
 banks and pulling the active one into low RAM. All four preserve the `$A000`
 window register. `BANKLOAD ( c-addr u dev bank -- )` loads a file into a bank
@@ -554,8 +518,8 @@ The string / number-conversion functions
 — they are plain Forth over the pictured-numeric-output words, so they were moved
 out of the ROM core to make room for the filesystem words. They carry no trailing
 `$` (so the names are valid Forth); `NHEX`/`NBIN` take an `N` prefix because `HEX`
-and `BIN` are core words. `FVARIABLE`/`FCONSTANT` are built in; the BASIC math
-names (`SQR SIN COS TAN ATN LOG EXP`) are in `toolkit/FPX.FTH`.
+and `BIN` are core words. `FVARIABLE`/`FCONSTANT` are in `toolkit/FLOAT.FTH`; the
+BASIC math names (`SQR SIN COS TAN ATN LOG EXP`) are in `toolkit/FPX.FTH`.
 
 ### Binary LOAD / SAVE
 Filenames are Forth strings `( c-addr u )`, e.g. `S" DATA.BIN"`. `dev` is the
@@ -610,9 +574,9 @@ The interpreter will look for file `AUTORUN.FTH` and execute it if found.
 
 | Build | Started by | Toolkit image | Autorun file |
 |---|---|---|---|
-| Program (`forthx16.prg`) | `LOAD"FORTHX16.PRG",8` + `RUN` from BASIC | `TKPRG.DIC/.TOK/.VAR` | `AUTORUNPRG.FTH` |
-| ROM bank 9 (`forthx16rom.bin` in `rom.bin`) | `loader.prg` (or `TEST`) from BASIC | `TK9.DIC/.TOK/.VAR` | `AUTORUN9.FTH` |
-| ROM bank 32 cartridge (`boot2.rom`) | autoboots (`CX16` signature) | `TK32.DIC/.TOK/.VAR` | `AUTORUN32.FTH` |
+| Program (`ForthX16_816Prg.prg` / `ForthX16_6502Prg.prg`) | `LOAD"…",8` + `RUN` from BASIC | `TKPRG.DIC/.TOK/.VAR` | `AUTORUNPRG.FTH` |
+| ROM bank 9 (`ForthX16_*Bank9.bin` patched into `rom.bin`) | `TEST` from BASIC | `TK9.DIC/.TOK/.VAR` | `AUTORUN9.FTH` |
+| ROM bank 32 cartridge (`ForthX16_*Bank32.bin`) | `loader32` (or the autoboot `ForthX16_6502Cart.bin`) | `TK32.DIC/.TOK/.VAR` | `AUTORUN32.FTH` |
 
 Only the file literally named `AUTORUN.FTH` runs at boot, so copy the variant matching the build over it (e.g. for bank 9: `AUTORUN9.FTH` -> `AUTORUN.FTH`). The shipped `AUTORUN.FTH` is a copy of `AUTORUN32.FTH` (the cartridge case). Each variant just does `S" TKxx" LOAD-IMAGE DROP` and prints a `TOOLKIT READY` banner naming its target, so a mismatch is easy to spot. All three images bundle the same toolkit: `FPX BASICSTR PCMAUDIO ASSEMBLER DIRNAV`.
 
@@ -647,6 +611,7 @@ A few examples and benchmarks are in `other`.
 * `FPX.FTH` — extended FLOATING-EXT words plus the BASIC math aliases `SQR SIN COS TAN ATN LOG EXP` (also `F~ FSINH FASIN FPI` …). Load after `FLOAT.FTH`. X16 only.
 * `BASICSTR.FTH` — BASIC-style string words `NHEX NBIN STR VAL ASC CHR LEN LEFT RIGHT MID RPT`. Independent.
 * `PCMAUDIO.FTH` — PCM audio helpers `PCMCTRL PCMRATE PCM! PCMFULL?`. Independent. X16 only.
+* `GFX.FTH` — the bitmap-graphics words `GINIT GCLS PSET LINE FRAME RECT RING OVAL GTEXT CIRCLE FCIRCLE` + pen API. Moved out of the core by `GFXTOOLKIT=1` (frees ~513 bytes); over the core VERA primitives. Independent. X16 only.
 
 The floating-point load chain is therefore **`ASSEMBLER.FTH` → `FLOAT.FTH` → `FPX.FTH`**.
 
@@ -693,12 +658,15 @@ very different platforms the actual platform dependencies are easy to identify a
 These are required for any usable Forth system. I am already looking into inline assembler. Editor is
 a reasonable thing to have. Some parts of the Standard may be added through a toolkit expansion.
 Finally, there are also a lot of platform-specific things that would make the system a lot more usable.
-(On the X16 the string, BASIC-alias, and floating-point toolkits are now baked into the build.)
+(On the X16 the string, BASIC-alias, graphics, and floating-point words now ship as
+loadable `toolkit/` libraries rather than baked into the core - see *The `toolkit/`
+libraries* above.)
 
 ### Run from ROM (v3)
-Running ForthX16 in place from an X16 ROM bank (see the "Run-from-ROM build"
-section above and `doc/forth-in-rom-scope.md`) so the interpreter lives in ROM and
+Running ForthX16 in place from an X16 ROM bank (see the `Bank9` variants under
+Commander X16 Extensions above and `doc/forth-in-rom-scope.md`) so the interpreter lives in ROM and
 low RAM is freed for the user dictionary. Launched by the BASIC `TEST` command
 (replacing the demo), it passes the full test suite from ROM including the ROM-mode
-`IRQ` callback, reports ~31 KB free with the finalized RAM map, and is packaged with
-`makeromforth.bat`. (The FPGA ROM path is left unchanged.)
+`IRQ` callback, reports ~31 KB free with the finalized RAM map, and is built from
+the [`version/ForthX16_6502Bank9`](version/ForthX16_6502Bank9/readme.md) (and
+`ForthX16_816Bank9`) folder. (The FPGA ROM path is left unchanged.)

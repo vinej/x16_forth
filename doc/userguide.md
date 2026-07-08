@@ -223,7 +223,7 @@ let you build your own compiling words and data structures.
 
 # Section 2 — Word reference
 
-Every word built into TX16, grouped by topic. Each entry gives the **stack effect**, a one-line purpose, and a small example. Standard Forth 2012 words behave as in the standard; X16 words mirror the matching BASIC 2.0 command and generally take the same argument order.
+Every word available in TX16, grouped by topic. Each entry gives the **stack effect**, a one-line purpose, and a small example. Standard Forth 2012 words behave as in the standard; X16 words mirror the matching BASIC 2.0 command and generally take the same argument order. Some groups (floating point, bitmap graphics, the BASIC string/math aliases, PCM audio, the assembler) are **not baked into the core** — they load from `toolkit/` libraries; each such entry says so, and Section 7 lists them all.
 
 ## Index
 
@@ -772,10 +772,10 @@ S" HP50" LOAD-IMAGE DROP    HP              \ every boot after: ~1 s, ready to u
 ```
 
 Notes: the image is tied to the exact interpreter build (it stores absolute
-addresses and token numbers) — if you rebuild `forthx16.prg` **or** the bank-9
-`forthx16rom.bin`, regenerate the image. Call `LOAD-IMAGE` from the keyboard or
-as the **last** line of `AUTORUN.FTH`. Works in both the PRG build and the bank-9
-ROM build.
+addresses and token numbers) — if you rebuild the interpreter binary (e.g.
+`ForthX16_816Prg.prg` **or** a bank-9 `ForthX16_*Bank9.bin`), regenerate the
+image. Call `LOAD-IMAGE` from the keyboard or as the **last** line of
+`AUTORUN.FTH`. Works in both the PRG build and the bank-9 ROM build.
 
 ### Bundling several libraries into one image
 
@@ -787,10 +787,12 @@ The build is just "include everything, tidy up, save". Do it interactively, or
 put it in a temporary `AUTORUN.FTH` and boot once:
 
 ```
-S" FPX.FTH"      INCLUDED      \ each library, in dependency order
+S" ASSEMBLER.FTH" INCLUDED     \ each library, in dependency order
+S" FLOAT.FTH"    INCLUDED      \ FP base — needs ASSEMBLER first
+S" FPX.FTH"      INCLUDED      \ extended FP + BASIC math aliases — needs FLOAT
 S" BASICSTR.FTH" INCLUDED
 S" PCMAUDIO.FTH" INCLUDED
-S" ASSEMBLER.FTH" INCLUDED
+S" GFX.FTH"      INCLUDED      \ bitmap graphics (optional)
 ONLY FORTH DEFINITIONS         \ reset the search order (see rules)
 DECIMAL                        \ reset BASE
 S" TK" SAVE-IMAGE              \ -> TK.DIC  TK.TOK  TK.VAR
@@ -852,6 +854,11 @@ stack** (shown as `( F: … )`), stored as 5-byte values. Put an integer on the 
 stack with `S>F`, print with `F.`. Stack effects below show the FP stack; most
 also leave the data stack unchanged.
 
+> **Load it first.** Floating point is **not** baked into the shipped builds
+> (`FPCORE=0`). Before any float word or literal works, `INCLUDE ASSEMBLER.FTH`
+> then `INCLUDE FLOAT.FTH` (the base words below), and `INCLUDE FPX.FTH` for the
+> extended FLOATING-EXT set. See *Section 7 — Toolkit libraries*.
+
 - **`S>F`** ( n -- ) ( F: -- r ) — convert a signed integer to a float. `5 S>F F.` → `5`
 - **`F>S`** ( -- n ) ( F: r -- ) — convert a (non-negative) float to an integer.
 - **`>FLOAT`** ( c-addr u -- flag ) ( F: -- r | ) — parse a string to a float; flag true on success. `S" 3.14" >FLOAT`
@@ -892,15 +899,16 @@ More Forth-2012 FLOATING/FLOATING-EXT words live in **`toolkit/FPX.FTH`** (`INCL
 
 ## BASIC-alias and string toolkit
 
-Convenience words baked into the build that mirror X16 BASIC. The math ones share
-the corresponding FP word's body under a BASIC name.
+The file-I/O aliases are baked into the build and mirror X16 BASIC. The math ones
+share the corresponding FP word's body under a BASIC name.
 
 - **`OPEN`** ( c-addr u fam -- fileid ior ) — open a file (like `OPEN-FILE`).
 - **`CLOSE`** ( fileid -- ior ) — close a file.
 - **`LINPUT`** ( c-addr +n -- +n2 ) — read a line from the keyboard into a buffer.
 The BASIC math names below are **not** in the core — they only duplicated the
-`F*` words, so they were moved to `toolkit/BASICMATH.FTH` to save ROM space. Load
-them with `INCLUDE BASICMATH.FTH` (or just use `FSQRT`/`FSIN`/… directly):
+`F*` words, so they live in `toolkit/FPX.FTH` (with the extended FP set). Load
+them with `INCLUDE FPX.FTH` (after `FLOAT.FTH`; or just use `FSQRT`/`FSIN`/…
+directly):
 
 - **`SQR`** ( F: r -- sqrt ) — square root (BASIC name for `FSQRT`).
 - **`SIN`** ( F: r -- sin ), **`COS`** ( F: r -- cos ), **`TAN`** ( F: r -- tan ) — trig (= `FSIN`/`FCOS`/`FTAN`).
@@ -927,6 +935,9 @@ use an `N` prefix because `HEX` and `BIN` are core words (`HEX` sets BASE=16, `B
 - **`RIGHT`** ( c-addr u n -- c-addr2 n2 ) — last n characters.
 - **`MID`** ( c-addr u start len -- c-addr2 len2 ) — substring; `start` is 1-based. `S" HELLO" 2 3 MID TYPE` → `ELL`
 - **`RPT`** ( char n -- c-addr u ) — a character repeated n times (in PAD). `[CHAR] * 5 RPT TYPE` → `*****`
+The two float defining words come with the FP toolkit (`toolkit/FLOAT.FTH`), not
+`BASICSTR.FTH`:
+
 - **`FVARIABLE`** ( "name" -- ) — create a float variable (5 bytes); read/write with `F@`/`F!`.
 - **`FCONSTANT`** ( "name" -- ) ( F: r -- ) — create a word that pushes the float r. `3 S>F FCONSTANT THREE`
 
@@ -1153,8 +1164,8 @@ INCLUDE MORTGAGE.FTH        \ (or:  S" MORTGAGE.FTH" INCLUDED )
 SCHEDULE                    \ then: the full month-by-month table
 ```
 
-It needs the [floating-point words](#floating-point) (built into TX16), so no other
-library is required.
+It needs the [floating-point words](#floating-point), so load the FP toolkit first:
+`ASSEMBLER.FTH` → `FLOAT.FTH` (see Section 7).
 
 ## 4.1 The Canadian rule
 
