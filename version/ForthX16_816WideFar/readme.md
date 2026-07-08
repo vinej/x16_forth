@@ -27,3 +27,14 @@ Run `test.bat` — launches `x16emu ... -c816`. Define hundreds of colon words a
 
 > Images from this build carry an extra `<name>.TKB` file (the per-token bank
 > table) alongside the usual `.DIC/.TOK/.VAR` — needed to restore far dispatch.
+
+## Using RAM banks for your own data
+The dictionary claims code banks **top-down** (from the highest RAM bank toward
+bank 2), so the lower banks are free for your own data — read/write them with
+`B@ ( bank off -- byte )` / `B! ( byte bank off -- )` (`off` = 0..8191 into the
+`$A000` window; both save/restore the window register, so they are safe).
+`DATABANK ( -- bank )` returns the highest bank the dictionary is **not** yet
+using (0 if none) — a safe point to allocate downward from instead of
+hard-coding bank numbers. Caveats: banks 0–1 are the KERNAL's; the dictionary
+keeps growing downward, so grab your data banks **early** and don't let it grow
+into them; and `EDIT` (x16edit) uses banks 10+.
