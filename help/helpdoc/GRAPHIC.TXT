@@ -1,0 +1,28 @@
+=== GRAPHIC - X16 graphics ===
+
+Bitmap drawing in 320x240x256 mode.
+
+GINIT ( -- ) - enter 320x240x256 bitmap graphics mode.
+GCLS ( -- ) - clear the graphics screen.
+PSET ( x y color -- ) - set one pixel. 160 120 5 PSET
+LINE ( x1 y1 x2 y2 color -- ) - draw a line.
+FRAME ( x1 y1 x2 y2 color -- ) - rectangle outline.
+RECT ( x1 y1 x2 y2 color -- ) - filled rectangle. Fills VRAM directly with
+    hardware auto-increment (clipped to the 320x240 screen), so it is far
+    faster than the KERNAL per-pixel fill - good for clearing regions or
+    double-buffered redraws each frame.
+RING ( x1 y1 x2 y2 color -- ) - ellipse outline (inside the bounding box).
+OVAL ( x1 y1 x2 y2 color -- ) - filled ellipse.
+GTEXT ( x y color c-addr u -- ) - draw a string into the bitmap. 10 10 1 S"
+    HI" GTEXT
+CIRCLE ( x y r color -- ) - circle outline (centre x,y radius r).
+FCIRCLE ( x y r color -- ) - filled circle.
+
+Pen API (set the colour once with GCOLOR, then omit it):
+  n GCOLOR  then  PLOT DRAW BOX FBOX ELL FELL CIRC DISC SAY
+Low-level (draw straight to VRAM): BPSET BHLINE BVLINE BLINE BFILL BRECT BCLS.
+
+The GFX words are a toolkit: S" GFX.FTH" INCLUDED (or use SPLIT.FTH for a
+graphics-over-text split screen - see HELP SPLIT). For ANY 8bpp bitmap geometry
+(not just 320x240) the ASMGFX.FTH toolkit adds GMODE ( bank addr w h -- ) and
+uses inline-assembler + VERA FX fills (see HELP VERAFX).

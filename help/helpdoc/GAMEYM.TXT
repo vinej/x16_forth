@@ -1,0 +1,10 @@
+=== GAMEYM - "catch the dots" with FM audio (GAMEYM.FTH) ===
+
+The GAME.FTH "catch the dots" game with its sound switched from the VERA PSG to
+the YM2151 FM synth.  Load:  S" GAMEYM.FTH" INCLUDED   (core only)
+
+  PLAY       start the game (arrow keys to move, Start to quit)
+  SELFTEST   non-interactive single-frame check
+
+Only the audio section differs from GAME.FTH - it uses FMINIT / FMINST /
+FMNOTE / FMVOL (see HELP AUDIOFM). A demonstration of swapping a sound backend.

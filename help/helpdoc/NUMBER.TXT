@@ -1,0 +1,10 @@
+=== NUMBER - Number and text parsing ===
+
+>NUMBER ( ud addr len -- ud' addr' len' ) - accumulate digits into a double
+    until a non-digit.
+WORD ( c -- c-addr ) - parse the next c-delimited word into a counted string.
+    BL WORD
+PARSE ( c -- addr len ) - parse the input up to the next c (no leading skip).
+PARSE-NAME ( -- addr len ) - parse the next space-delimited name.
+FIND ( c-addr -- c-addr 0 | xt 1 | xt -1 ) - look up a counted-string name; 1
+    = immediate, -1 = normal.

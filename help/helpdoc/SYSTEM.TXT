@@ -1,0 +1,17 @@
+=== SYSTEM - System and environment ===
+
+ENVIRONMENT? ( addr len -- false | i*x true ) - query a system attribute.
+BYE ( -- ) - leave Forth (ROM build restarts the cold boot).
+VER ( -- n ) - version number, high byte x 256 + low. VER .
+X16 / C64 / F256 ( -- flag ) - build/platform flags (true for the current
+    target).
+USR ( i*x addr -- j*x ) - call machine code at addr (X16), passing/returning
+    the stack.
+RANDOM ( -- n ) - a 16-bit pseudo-random number (KERNAL entropy).
+RND ( u -- n ) - pseudo-random number in 0..u-1 (BASIC-style). 6 RND 1+  ->  a
+    die roll.
+IRQ ( xt -- ) - arm a Forth word to run once per 60 Hz frame; 0 IRQ disarms.
+    Callback must be short and stack-neutral. ' TICK IRQ
+FREE ( -- ) - print the free dictionary space. On the wide-dictionary builds
+  it shows the near + far (RAM-bank) pools; on all other builds, the single
+  low-RAM pool (the UNUSED value).

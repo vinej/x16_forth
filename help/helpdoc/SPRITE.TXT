@@ -1,0 +1,16 @@
+=== SPRITE - X16 sprites ===
+
+SPRITES-ON ( -- ) - enable the sprite layer.
+SPRITES-OFF ( -- ) - disable the sprite layer.
+SPRITE-IMAGE ( graphaddr sprite -- ) - point a sprite's image at VRAM
+    graphaddr (4bpp, 32-aligned).
+SPRITE-POS ( x y sprite -- ) - set a sprite's 12-bit position.
+SPRITE-GET ( sprite -- x y ) - read a sprite's position (inverse of
+    SPRITE-POS).
+SPRITE-SIZE ( width height sprite -- ) - size codes 0-3 = 8/16/32/64 pixels.
+SPRITE-Z ( z sprite -- ) - Z-depth 0=off, 1=behind, 2=between, 3=front.
+SPRITE-MOV ( num x y -- ) - set position (= BASIC MOVSPR num,x,y).
+SPRITE-MEM ( num bank addr -- ) - point a sprite's image at VRAM bank:addr (=
+    BASIC SPRMEM num,bank,addr).
+SPRITE ( num zdepth -- ) - set Z-depth and enable the sprite layer (BASIC
+    SPRITE num,zdepth).

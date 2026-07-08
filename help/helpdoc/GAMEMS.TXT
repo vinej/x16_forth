@@ -1,0 +1,10 @@
+=== GAMEMS - "catch the dots" with mouse + joystick (GAMEMS.FTH) ===
+
+A small 2D game: click the blue squares. A variant of GAME.FTH that adds mouse
+and joystick input.  Load:  S" GAMEMS.FTH" INCLUDED   (core only)
+
+  PLAY       start the game (mouse to click blue squares, or a joystick)
+  SELFTEST   non-interactive single-frame check
+
+Demonstrates the game-support primitives (HELP GAME), hardware sprites
+(HELP SPRITE) and the mouse/joystick words (HELP INPUT).

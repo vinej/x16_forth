@@ -2262,13 +2262,14 @@ db_ok:
 }
 }
 
-; --- Bulk RAM-bank I/O (all 65816 builds) ----------------------------------
+; --- Bulk RAM-bank I/O (all X16 builds) ------------------------------------
 ; Stream files straight into RAM banks and copy between a bank and low RAM.
 ; Ideal for game data: BANKLOAD all your levels into banks once, then BANK>MEM
 ; the active one into low RAM when needed. All four save/restore the $00 window
 ; register, so they are safe alongside the dictionary window. 'off' is 0..8191
 ; into the $A000 window; BANKLOAD and the two copies auto-advance across bank ends.
-!if NATIVE816 {
+; Plain 6502 (the $A000 window + KERNAL work on every X16 CPU), so all X16 builds.
+!if X16 {
 
 ; BANKLOAD ( c-addr u dev bank -- )   load a PRG file into RAM starting at
 ; bank:$A000; the KERNAL auto-advances the RAM bank across $BFFF, so a file
@@ -2418,7 +2419,7 @@ btm_d2:
 	dec _wscratch+1
 btm_dec:
 	dec _wscratch
-	bra btm_loop
+	jmp btm_loop
 btm_done:
 	pla
 	sta $00				; restore the window register
@@ -2481,7 +2482,7 @@ mtb_d2:
 	dec _wscratch+1
 mtb_dec:
 	dec _wscratch
-	bra mtb_loop
+	jmp mtb_loop
 mtb_done:
 	pla
 	sta $00				; restore the window register
@@ -4117,10 +4118,47 @@ fbit_done:
 ; VERA PCM FIFO. AUDIO_CTRL packs volume(0-3) / 16-bit(5) / stereo(4) and, on
 ; write, bit 7 resets the FIFO. Feed 8/16-bit signed sample bytes to PCM!.
 
-; The PCM register accessors PCMCTRL/PCMRATE/PCM!/PCMFULL? moved to
-; toolkit/PCMAUDIO.FTH to save ROM - they are one-line VERA-register C!/C@ words
-; (the audio regs at $9F3B-$9F3D are in the always-visible I/O page). Only the
-; streaming PCM-WRITE stays native (its tight loop matters for feed rate).
+; The one-shot PCM register accessors are native in every build (the audio regs
+; at $9F3B-$9F3D are in the always-visible I/O page, so they work in PRG and the
+; ROM/bank builds alike). ~86 bytes total; the old toolkit/PCMAUDIO.FTH is gone.
+
+; PCMCTRL ( n -- )   write AUDIO_CTRL (volume 0-15, format bits, bit7 = FIFO reset)
++header ~pcmctrl, ~pcmctrl_n, "PCMCTRL"
+	+code
+	lda _dtop
+	sta VERA_AUDIO_CTRL
+	+dpop
+	jmp next
+
+; PCMRATE ( n -- )   write AUDIO_RATE (0 = stop .. 128 = 48 kHz)
++header ~pcmrate, ~pcmrate_n, "PCMRATE"
+	+code
+	lda _dtop
+	sta VERA_AUDIO_RATE
+	+dpop
+	jmp next
+
+; PCM! ( byte -- )   push one sample byte into the FIFO (dropped if full)
++header ~pcmstore, ~pcmstore_n, "PCM!"
+	+code
+	lda _dtop
+	sta VERA_AUDIO_DATA
+	+dpop
+	jmp next
+
+; PCMFULL? ( -- flag )   true when the FIFO cannot accept more data (CTRL bit 7)
++header ~pcmfull, ~pcmfull_n, "PCMFULL?"
+	+code
+	lda VERA_AUDIO_CTRL
+	and #$80
+	beq pcmfull_no
+	lda #$ff
+	tax
+	jmp dpush_and_next
+pcmfull_no:
+	lda #0
+	tax
+	jmp dpush_and_next
 
 ; PCM-WRITE ( addr count -- )   blast count bytes from RAM into the FIFO. Meant
 ; for priming an (empty) 4 KB FIFO; it does not throttle, so excess bytes past a

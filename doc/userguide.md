@@ -198,6 +198,10 @@ let you build your own compiling words and data structures.
 - **Loading files:** put `.FTH`/`.FR` files on the SD card (or host FS in the
   emulator) and use `S" NAME.FTH" INCLUDED`. On boot, `AUTORUN.FTH` (if present)
   is loaded automatically.
+- **On-machine help:** copy the repo's `help/HELP` and `help/helpdoc/` folder to
+  device 8, then `INCLUDE HELP`. Type `HELP` for a list of topics and
+  `HELP <topic>` for one (e.g. `HELP STACK`, `HELP FLOAT`, `HELP AUDIOFM`). Each
+  topic is a plain-text file under `helpdoc/`, condensed from this guide.
 - **Free memory:** the boot banner prints `NNNNN BYTES FREE`; `UNUSED` pushes the
   bytes left for new definitions.
 - **Run from ROM:** in the ROM build (bank 9) Forth is launched by typing `TEST`
@@ -791,7 +795,6 @@ S" ASSEMBLER.FTH" INCLUDED     \ each library, in dependency order
 S" FLOAT.FTH"    INCLUDED      \ FP base — needs ASSEMBLER first
 S" FPX.FTH"      INCLUDED      \ extended FP + BASIC math aliases — needs FLOAT
 S" BASICSTR.FTH" INCLUDED
-S" PCMAUDIO.FTH" INCLUDED
 S" GFX.FTH"      INCLUDED      \ bitmap graphics (optional)
 ONLY FORTH DEFINITIONS         \ reset the search order (see rules)
 DECIMAL                        \ reset BASE
@@ -862,6 +865,7 @@ also leave the data stack unchanged.
 - **`S>F`** ( n -- ) ( F: -- r ) — convert a signed integer to a float. `5 S>F F.` → `5`
 - **`F>S`** ( -- n ) ( F: r -- ) — convert a (non-negative) float to an integer.
 - **`>FLOAT`** ( c-addr u -- flag ) ( F: -- r | ) — parse a string to a float; flag true on success. `S" 3.14" >FLOAT`
+- **`>FLOAT-VEC`** ( -- addr ) — address of the `>FLOAT` dispatch vector. `FLOAT.FTH`'s `FPHOOK` stores its parser xt here so float literals (`1.5`) work (advanced; re-run `FPHOOK` after `LOAD-IMAGE`).
 - **`F@`** ( f-addr -- ) ( F: -- r ) — fetch a 5-byte float from memory.
 - **`F!`** ( f-addr -- ) ( F: r -- ) — store the top float to memory.
 - **`F+`** ( F: r1 r2 -- r1+r2 ) — add.
@@ -981,12 +985,11 @@ Clock (battery RTC / system clock):
 Palette:
 - **`PAL!`** ( rgb index -- ) — set palette entry `index` (0-255) to a 12-bit `$RGB` colour. `$0F00 1 PAL!` (entry 1 = red).
 
-PCM audio (VERA FIFO). The one-shot register words live in `toolkit/PCMAUDIO.FTH`
-(`INCLUDE PCMAUDIO.FTH`); only the streaming `PCM-WRITE` is built in:
-- **`PCMCTRL`** ( n -- ) — *(toolkit)* write AUDIO_CTRL: volume 0-15, bit4 stereo, bit5 16-bit, bit7 (write) resets the FIFO.
-- **`PCMRATE`** ( n -- ) — *(toolkit)* sample rate (0 = stop … 128 = 48 kHz).
-- **`PCM!`** ( byte -- ) — *(toolkit)* push one sample byte into the FIFO (ignored when full).
-- **`PCMFULL?`** ( -- flag ) — *(toolkit)* true when the FIFO cannot accept more data.
+PCM audio (VERA FIFO). All PCM words are built in (native):
+- **`PCMCTRL`** ( n -- ) — write AUDIO_CTRL: volume 0-15, bit4 stereo, bit5 16-bit, bit7 (write) resets the FIFO.
+- **`PCMRATE`** ( n -- ) — sample rate (0 = stop … 128 = 48 kHz).
+- **`PCM!`** ( byte -- ) — push one sample byte into the FIFO (ignored when full).
+- **`PCMFULL?`** ( -- flag ) — true when the FIFO cannot accept more data.
 - **`PCM-WRITE`** ( addr count -- ) — blast `count` bytes from RAM into the FIFO (for priming an empty ≤4 KB FIFO; does not throttle). Native.
 
 VERA layers:
@@ -1013,6 +1016,15 @@ KERNAL bridge:
 Keyboard:
 - **`KEY?`** ( -- flag ) — true if a key is waiting (non-destructive queue peek).
 - **`GETKEY`** ( -- char ) — block until a key is pressed, then return its PETSCII code.
+
+I2C bus (SMC, RTC and other I2C devices):
+- **`I2CPEEK`** ( dev reg -- byte ) — read a byte from I2C device `dev`, register `reg`.
+- **`I2CPOKE`** ( dev reg val -- ) — write `val` to I2C device `dev`, register `reg`.
+
+Power / debug:
+- **`MONITOR`** ( -- ) — enter the built-in machine-language monitor (exit with `X`; it does **not** cleanly return to Forth — reset afterward).
+- **`RESET`** ( -- ) — hardware reset via the System Management Controller.
+- **`POWEROFF`** ( -- ) — power the machine off via the SMC.
 
 ---
 
@@ -1591,7 +1603,6 @@ be reachable, so copy the ones you want next to where you run). This is the
 | `FLOAT.FTH` | **Floating-point base words**: `S>F F>S F+ F- F* F/ FSQRT FSIN FCOS FTAN FATAN FLN FEXP FVARIABLE FCONSTANT F. F@ F! F< …` | **`ASSEMBLER.FTH` first** (it is built from `CODE` words) | X16 only |
 | `FPX.FTH` | Extended FLOATING/FLOATING-EXT + BASIC math aliases: `FPI FROT FSINCOS FLOG FALOG FLNP1 FEXPM1 FSINH FASIN FATAN2 F~`, and `SQR SIN COS TAN ATN LOG EXP` | after base FP (`FLOAT.FTH`) | X16 only |
 | `BASICSTR.FTH` | BASIC-style string words: `NHEX NBIN STR VAL ASC CHR LEN LEFT RIGHT MID RPT` | independent | X16 (portable Forth) |
-| `PCMAUDIO.FTH` | PCM audio streaming helpers: `PCMCTRL PCMRATE PCM! PCMFULL?` | independent | X16 only |
 | `GFX.FTH` | **Bitmap graphics**: `GINIT GCLS PSET LINE FRAME RECT RING OVAL GTEXT CIRCLE FCIRCLE` + a pen API. Integer, FP-free; over the core VERA primitives | independent | X16 only |
 | `VERAFX.FTH` | **VERA FX** (inline-assembler `CODE` words): `FX*` signed 16×16→32 multiply, `FX-FILL`/`FX-CLEAR` fast 32-bit-cache VRAM fill, `FX-DCSEL`/`FX-OFF` | **`ASSEMBLER.FTH` first** (built from `CODE` words) | X16 only |
 | `ASMGFX.FTH` | **Assembler + VERA FX bitmap graphics** — same vocabulary as `GFX.FTH` (`GINIT GCLS PSET LINE RECT OVAL …` + pen API) but the primitives are `CODE` words and fills use the VERA FX 32-bit cache; `GMODE ( bank addr w h -- )` makes it work with any 8bpp bitmap geometry, not just 320×240 | **`ASSEMBLER.FTH` first** | X16 only |
@@ -1613,7 +1624,8 @@ be reachable, so copy the ones you want next to where you run). This is the
 > words are no longer native" refers to.
 
 **The FP chain is therefore:** `ASSEMBLER.FTH` → `FLOAT.FTH` → `FPX.FTH`.
-`BASICSTR.FTH` and `PCMAUDIO.FTH` stand alone.
+`BASICSTR.FTH` stands alone. (The PCM audio words `PCMCTRL PCMRATE PCM!
+PCMFULL?` are built into the X16 core — no toolkit needed.)
 
 ## 7.2 The `other/` sample programs and what they need
 

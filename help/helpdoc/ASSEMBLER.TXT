@@ -1,0 +1,17 @@
+=== ASSEMBLER - inline 6502 assembler (ASSEMBLER.FTH) ===
+
+Define machine-code words with CODE ... END-CODE (Ragsdale FIG assembler).
+Load:  S" ASSEMBLER.FTH" INCLUDED
+
+  CODE name  <6502 opcodes, mnemonic-first, trailing comma>  NEXT JMP,  END-CODE
+
+Opcodes end in a comma (LDA, STA, INX, ...). Operand first, then an addressing
+mode word, then the opcode:
+  n # LDA,      immediate        addr LDA,     memory (zp/abs auto)
+  addr ,X LDA,  indexed X        addr ,Y LDA,  indexed Y
+  addr X) LDA,  (zp,X)           addr )Y LDA,  (zp),Y
+  addr ) JMP,   indirect         .A ROL,       accumulator
+Structured flow (comma!): BEGIN, UNTIL, IF, ELSE, THEN, with condition
+prefixes BEQ: BNE: BCC: BCS: BMI: BPL: BVC: BVS: (named for the branch taken).
+Registers: DTOP (TOS), N (scratch), POP/PUSH (pop/push a cell in A=lo X=hi),
+NEXT (end each word with NEXT JMP,). Full detail: user guide Section 6.

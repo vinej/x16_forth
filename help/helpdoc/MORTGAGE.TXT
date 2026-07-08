@@ -1,0 +1,15 @@
+=== MORTGAGE - Canadian mortgage calculator (MORTGAGE.FTH) ===
+
+Computes a fixed-rate monthly payment and prints a capital/interest
+amortization table, using the Canadian semi-annual-compounding rule.
+Load:  S" ASSEMBLER.FTH" INCLUDED  S" FLOAT.FTH" INCLUDED
+       S" MORTGAGE.FTH" INCLUDED
+
+  principal. years rateX100 MTG   set up a loan and show the monthly payment
+       e.g.  300000. 25 550 MTG   ( $300,000, 25 years, 5.50% )
+  SCHEDULE     print the full month-by-month table
+  YEARLY       print a year-by-year summary
+
+The principal takes a trailing dot (a double) so it can exceed 65535; the rate
+is x100 (550 = 5.50%). A worked floating-point / currency example - see user
+guide Section 4.

@@ -1,0 +1,20 @@
+=== STACK - data-stack manipulation ===
+
+DUP    ( x -- x x )          duplicate the top item.  5 DUP -> 5 5
+DROP   ( x -- )              discard the top.  1 2 DROP -> 1
+OVER   ( a b -- a b a )      copy the 2nd item to top.  1 2 OVER -> 1 2 1
+SWAP   ( a b -- b a )        exchange the top two.  1 2 SWAP -> 2 1
+NIP    ( a b -- b )          drop the second item.  1 2 NIP -> 2
+TUCK   ( a b -- b a b )      copy the top under the 2nd.  1 2 TUCK -> 2 1 2
+ROT    ( a b c -- b c a )    rotate 3rd item to top.  1 2 3 ROT -> 2 3 1
+-ROT   ( a b c -- c a b )    rotate top down to 3rd.  1 2 3 -ROT -> 3 1 2
+PICK   ( ..xu..x0 u -- ..xu ) copy the u-th item (0=top).  2 PICK copies NOS-1
+ROLL   ( ..xu..x0 u -- ..xu ) move the u-th item to top.  1 2 3 2 ROLL -> 2 3 1
+DEPTH  ( -- n )              number of items on the stack.
+2DROP  ( a b -- )            drop a pair.  1 2 3 2DROP -> 1
+2DUP   ( a b -- a b a b )    duplicate the top pair.  1 2 2DUP -> 1 2 1 2
+2SWAP  ( a b c d -- c d a b ) exchange the top two pairs.
+2OVER  ( a b c d -- a b c d a b ) copy the 2nd pair to top.
+2ROT   ( .. a b -- .. a b )  rotate the 3rd pair to top.
+?DUP   ( x -- x x | 0 )      duplicate only if non-zero.  5 ?DUP -> 5 5
+.S     ( -- )                print the whole stack unchanged.  1 2 .S -> <2> 1 2

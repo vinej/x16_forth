@@ -1,0 +1,16 @@
+=== WORDLIST - Wordlists and search order ===
+
+WORDS ( -- ) - list the words in the context wordlist.
+GET-ORDER ( -- wid_n .. wid_1 n ) - current search order.
+SET-ORDER ( wid_n .. wid_1 n -- ) - set the search order.
+GET-CURRENT ( -- wid ) - the wordlist new definitions go into.
+SET-CURRENT ( wid -- ) - set that wordlist.
+ALSO ( -- ) - duplicate the top of the search order.
+ONLY ( -- ) - reduce the search order to the minimal set.
+PREVIOUS ( -- ) - drop the top wordlist from the search order.
+ORDER ( -- ) - display the search order and current wordlist.
+DEFINITIONS ( -- ) - make the top of the search order the current wordlist.
+WORDLIST ( -- wid ) - create a new, empty wordlist.
+SEARCH-WORDLIST ( addr len wid -- 0 | xt 1 | xt -1 ) - search one wordlist.
+FORTH ( -- ) - put the Forth wordlist at the top of the search order.
+FORTH-WORDLIST ( -- wid ) - the wid of the main Forth wordlist.

@@ -1,0 +1,12 @@
+=== ASMIRQ - assembly VSYNC interrupt example (ASMIRQ.FTH) ===
+
+Shows a pure-assembly interrupt handler installed on the 60 Hz VERA VSYNC IRQ.
+Load:  S" ASSEMBLER.FTH" INCLUDED  S" ASMIRQ.FTH" INCLUDED
+
+  IRQ-DEMO   arm the assembly ISR - a counter advances in the interrupt
+  IRQ-TEST   self-check that the ISR ran
+
+Technique: a CODE word installed with  ['] MYCODE IRQ  becomes the per-frame
+handler (0 IRQ disarms). The callback runs on its own stacks, must be short and
+stack-neutral, and must save/restore any VERA address ports it touches.
+See user guide Section 6.3.

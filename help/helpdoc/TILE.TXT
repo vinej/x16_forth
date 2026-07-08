@@ -1,0 +1,17 @@
+=== TILE - tilemap cells & layer setup ===
+
+Read/write cells of the layer-1 tilemap (the text screen). Each cell is a
+screen/tile code plus a colour attribute; the address follows the current
+screen mode.
+
+  TILE  ( x y code attr -- )   write a tile cell
+  TDATA ( x y -- code )        read a cell's tile/screen code
+  TATTR ( x y -- attr )        read a cell's colour attribute (fg | bg<<4)
+
+VERA layer configuration (either layer 0 or 1):
+  LAYER-ON   ( layer -- )            enable a display layer
+  LAYER-OFF  ( layer -- )            disable a display layer
+  MAPBASE    ( layer bank addr -- )  set tile-map base (bank:addr, 512-aligned)
+  TILEBASE   ( layer bank addr -- )  set tile-data base (2 KB aligned)
+  LAYER-MODE ( layer cfg -- )        write the layer config byte (map size,
+                                     T256C, bitmap mode, colour depth)

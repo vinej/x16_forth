@@ -1,0 +1,6 @@
+=== CONSTANTS - Constants and literals ===
+
+0 ( -- 0 ), 1 ( -- 1 ), 2 ( -- 2 ), -1 ( -- -1 ) - fast common constants.
+TRUE ( -- -1 ) - canonical true flag.
+FALSE ( -- 0 ) - canonical false flag.
+BL ( -- 32 ) - the blank (space) character code. BL EMIT prints a space.

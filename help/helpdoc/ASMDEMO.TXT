@@ -1,0 +1,11 @@
+=== ASMDEMO - assembly vs Forth speed race (ASMDEMO.FTH) ===
+
+Demonstrates CODE words with a correctness check and a timed race against the
+equivalent pure-Forth version (assembly wins by roughly 80x).
+Load:  S" ASSEMBLER.FTH" INCLUDED  S" ASMDEMO.FTH" INCLUDED
+
+  ASMDEMO    run both versions of AFILLB (memory fill) and AXOR (xor a block),
+             verify they agree, then time them head to head.
+
+A good template for writing your own CODE words - see HELP ASSEMBLER and
+user guide Section 6.

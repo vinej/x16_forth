@@ -1,0 +1,29 @@
+=== GAME - Game support ===
+
+Fast primitives for 2D games (work in both PRG and ROM builds).
+
+VSYNC ( -- ) - wait for exactly one video frame (1/60 s). On first use it
+    hooks a tiny VERA-VSYNC interrupt handler that bumps a frame counter each
+    frame; VSYNC then waits for the next tick, so it is frame-locked (precise
+    60 Hz) and reliable inside a tight loop. Use it to pace a game loop and to
+    update VRAM tear-free. BEGIN  move-things  draw-things  VSYNC  AGAIN
+FRAMES ( -- n ) - the video frame counter (0..255, wraps), bumped once per
+    frame by the same handler VSYNC installs. Take deltas (byte subtraction
+    wraps correctly) for elapsed-frame timing, fixed-timestep catch-up, or
+    spotting dropped frames. FRAMES  ( ... work ... )  FRAMES SWAP - 255 AND
+    ( frames elapsed )
+VFILL ( value count -- ) - write the byte value to the VERA data port count
+    times (16-bit count), in a tight native loop - far faster than a V! loop
+    for clearing bitmaps/tilemaps. Set the start address first with VADDR. 0 0
+    VADDR  32 2000 VFILL (blank 2000 tiles).
+*. ( n1 n2 -- n3 ) - signed 8.8 fixed-point multiply, n3 = (n1*n2)>>8. Lets
+    sprites move at fractional speeds: keep positions in 8.8 (value x 256),
+    add a fixed-point velocity each frame, and use the integer part (256 / or
+    >>8) as the pixel coordinate. 384 512 *.  ->  768 (1.5 x 2.0 = 3.0).
+COLLIDE? ( ax ay aw ah bx by bw bh -- flag ) - axis-aligned bounding-box
+    overlap of box A (x,y,w,h) and box B; TRUE if they overlap (edge-touching
+    is not overlap). Coordinates are unsigned. sprite1xy sprite1wh sprite2xy
+    sprite2wh COLLIDE? IF ...hit... THEN
+
+For higher-level graphics (pixels, lines, shapes, a split screen with a text
+window) see the loadable SPLIT.FTH library in [Section 3](#section-3).

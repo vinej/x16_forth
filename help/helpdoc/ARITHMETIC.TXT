@@ -1,0 +1,34 @@
+=== ARITHMETIC - Arithmetic ===
+
++ ( n1 n2 -- n3 ) - add. 2 3 +  ->  5
+- ( n1 n2 -- n3 ) - subtract. 7 3 -  ->  4
+* ( n1 n2 -- n3 ) - multiply. 4 5 *  ->  20
+/ ( n1 n2 -- n3 ) - signed divide. 17 5 /  ->  3
+MOD ( n1 n2 -- rem ) - remainder. 17 5 MOD  ->  2
+/MOD ( n1 n2 -- rem quot ) - remainder and quotient. 17 5 /MOD  ->  2 3
+*/ ( n1 n2 n3 -- n ) - n1*n2/n3 with a double-precision intermediate (no
+    overflow). 10 3 4 */  ->  7
+*/MOD ( n1 n2 n3 -- rem quot ) - like */ but also the remainder.
+FM/MOD ( d n -- rem quot ) - floored division of a double by a single.
+SM/REM ( d n -- rem quot ) - symmetric (truncating) division of a double by a
+    single.
+UM/MOD ( ud u -- urem uquot ) - unsigned double / single.
+UD/MOD ( ud u -- urem udquot ) - unsigned double / single giving a double
+    quotient (mixed-precision helper).
+UM* ( u1 u2 -- ud ) - unsigned multiply to a double. 1000 1000 UM* D.  ->
+    1000000
+M* ( n1 n2 -- d ) - signed multiply to a double.
+UD* ( ud u -- ud ) - unsigned double x single (mixed-precision helper used by
+    number output).
+M*/ ( d n1 n2 -- d ) - d*n1/n2 with triple-precision intermediate.
+ABS ( n -- u ) - absolute value. -5 ABS  ->  5
+NEGATE ( n -- -n ) - negate. 5 NEGATE  ->  -5
+1+ ( n -- n+1 ). 9 1+  ->  10
+1- ( n -- n-1 ). 9 1-  ->  8
+2+ ( n -- n+2 ). 9 2+  ->  11
+2- ( n -- n-2 ). 9 2-  ->  7
+2* ( n -- n*2 ) - arithmetic shift left. 5 2*  ->  10
+2/ ( n -- n/2 ) - arithmetic shift right (keeps sign). -10 2/  ->  -5
+MAX ( n1 n2 -- n ) - larger. 3 9 MAX  ->  9
+MIN ( n1 n2 -- n ) - smaller. 3 9 MIN  ->  3
+SGN ( n -- -1|0|1 ) - sign of n (X16, mirrors BASIC SGN). -7 SGN  ->  -1

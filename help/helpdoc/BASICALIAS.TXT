@@ -1,0 +1,52 @@
+=== BASICALIAS - BASIC-alias and string toolkit ===
+
+The file-I/O aliases are baked into the build and mirror X16 BASIC. The math
+    ones
+share the corresponding FP word's body under a BASIC name.
+
+OPEN ( c-addr u fam -- fileid ior ) - open a file (like OPEN-FILE).
+CLOSE ( fileid -- ior ) - close a file.
+LINPUT ( c-addr +n -- +n2 ) - read a line from the keyboard into a buffer.
+The BASIC math names below are not in the core - they only duplicated the
+F* words, so they live in toolkit/FPX.FTH (with the extended FP set). Load
+them with INCLUDE FPX.FTH (after FLOAT.FTH; or just use FSQRT/FSIN/...
+directly):
+
+SQR ( F: r -- sqrt ) - square root (BASIC name for FSQRT).
+SIN ( F: r -- sin ), COS ( F: r -- cos ), TAN ( F: r -- tan ) - trig (=
+    FSIN/FCOS/FTAN).
+ATN ( F: r -- atan ) - arctangent (= FATAN).
+LOG ( F: r -- ln ) - natural logarithm (= FLN).
+EXP ( F: r -- e^r ) - exponential (= FEXP).
+
+The BASIC string / number-conversion words below were also moved out of the
+core (to make room for CD/DIR) into toolkit/BASICSTR.FTH - they are plain
+Forth over <# #S #>, >NUMBER, /STRING, FILL, MIN. Load them with
+INCLUDE BASICSTR.FTH:
+
+These carry no trailing $ (unlike BASIC) so the names are valid Forth;
+    NHEX/NBIN
+use an N prefix because HEX and BIN are core words (HEX sets BASE=16, BIN is
+    the file mode).
+
+NHEX ( u -- c-addr u ) - number as hexadecimal digits. 255 NHEX TYPE  ->  FF
+NBIN ( u -- c-addr u ) - number as binary digits. 5 NBIN TYPE  ->  101
+STR ( n -- c-addr u ) - signed number as a string (current base). -12 STR TYPE
+    ->  -12
+VAL ( c-addr u -- n ) - string to number (current base). S" 42" VAL .  ->  42
+ASC ( c-addr u -- code ) - code of the first character.
+CHR ( code -- c-addr 1 ) - one-character string (in PAD). 65 CHR TYPE  ->  A
+LEN ( c-addr u -- u ) - string length (returns the count).
+LEFT ( c-addr u n -- c-addr n2 ) - first n characters.
+RIGHT ( c-addr u n -- c-addr2 n2 ) - last n characters.
+MID ( c-addr u start len -- c-addr2 len2 ) - substring; start is 1-based. S"
+    HELLO" 2 3 MID TYPE  ->  ELL
+RPT ( char n -- c-addr u ) - a character repeated n times (in PAD). [CHAR] * 5
+    RPT TYPE  ->  *
+The two float defining words come with the FP toolkit (toolkit/FLOAT.FTH), not
+BASICSTR.FTH:
+
+FVARIABLE ( "name" -- ) - create a float variable (5 bytes); read/write with
+    F@/F!.
+FCONSTANT ( "name" -- ) ( F: r -- ) - create a word that pushes the float r. 3
+    S>F FCONSTANT THREE

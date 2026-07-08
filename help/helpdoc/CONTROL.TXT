@@ -1,0 +1,36 @@
+=== CONTROL - X16 system control ===
+
+EDIT ( c-addr u -- ) - open the named file in the built-in X16 text editor
+  (u=0 for a new buffer); edit, save (Ctrl-S), quit (Ctrl-Q), then
+  INCLUDE the file to compile it. Known limitation: the first keyboard line
+  right after quitting EDIT is still glitched (a swallowed RETURN - takes
+  several presses). This is now EDIT-specific: x16edit leaves more KERNAL
+    state
+  off than a plain file read, so the console-reader reset that fixed INCLUDED
+  doesn't fully cover it. Workaround: after EDIT, reset Forth (relaunch /
+  cold start), then INCLUDE the file. (Plain INCLUDED on its own is fine.)
+SETBANK ( bank -- ) - select the RAM bank visible at $A000-$BFFF.
+B@ ( bank off -- byte ) - read a byte from banked RAM (off = 0..8191 into
+    $A000).
+B! ( byte bank off -- ) - store a byte into banked RAM.
+SLEEP ( jiffies -- ) - wait jiffies 1/60-second ticks. 60 SLEEP waits ~1 s.
+MS ( u -- ) - wait ~u milliseconds (calibrated 8 MHz busy loop; approximate
+    but >= u ms). 1000 MS ~ 1 s.
+REBOOT ( -- ) - soft reboot through the reset vector.
+KEYMAP ( c-addr u -- ) - set the keyboard layout by name. S" en-us" KEYMAP
+
+--- clock (battery RTC / jiffy timer) ---
+TICKS   ( -- ud )      the 24-bit jiffy counter (1/60 s) as an unsigned double.
+TIME@   ( -- h m s )   read the wall-clock time.
+DATE@   ( -- y mo d )  read the date (y = full 4-digit year).
+SETTIME ( y mo d h m s -- )  set the clock.  2025 7 8 14 30 0 SETTIME
+
+--- I2C bus (SMC, RTC, and other I2C devices) ---
+I2CPEEK ( dev reg -- byte )   read a byte from I2C device dev, register reg.
+I2CPOKE ( dev reg val -- )    write val to I2C device dev, register reg.
+
+--- power / debug ---
+MONITOR  ( -- )   enter the built-in machine-language monitor (exit with X;
+                  it does NOT cleanly return - reset afterward).
+RESET    ( -- )   hardware reset via the System Management Controller.
+POWEROFF ( -- )   power the machine off via the SMC.

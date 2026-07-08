@@ -1,0 +1,31 @@
+=== FILE - Files ===
+
+File access methods combine with BIN: e.g. R/O BIN.
+
+INCLUDE ( "name" -- ) - load and interpret a file by name. INCLUDE GAME.FTH
+INCLUDED ( addr len -- ) - load and interpret the file named by a string. S"
+    GAME.FTH" INCLUDED
+INCLUDE-FILE ( fileid -- ) - interpret an already-open file.
+REQUIRE ( "name" -- ) / REQUIRED ( addr len -- ) - include a file only once.
+OPEN-FILE ( addr len fam -- fileid ior ) - open a file; ior 0 = success.
+CLOSE-FILE ( fileid -- ior ) - close a file.
+CREATE-FILE ( addr len fam -- fileid ior ) - create/overwrite a file.
+DELETE-FILE ( addr len -- ior ) - delete a file.
+RENAME-FILE ( a1 u1 a2 u2 -- ior ) - rename.
+RESIZE-FILE ( ud fileid -- ior ) - set a file's size.
+READ-FILE ( addr u fileid -- u2 ior ) - read up to u bytes.
+WRITE-FILE ( addr u fileid -- ior ) - write u bytes.
+READ-LINE ( addr u fileid -- u2 flag ior ) - read a line.
+WRITE-LINE ( addr u fileid -- ior ) - write a line + newline.
+FILE-POSITION ( fileid -- ud ior ) / REPOSITION-FILE ( ud fileid -- ior ) -
+    get/set position.
+FILE-SIZE ( fileid -- ud ior ) - size in bytes.
+FILE-STATUS ( addr len -- x ior ) - query a named file.
+FLUSH-FILE ( fileid -- ior ) - flush buffers.
+R/O ( -- fam ) read-only, W/O write-only, R/W read/write, BIN ( fam -- fam )
+    binary modifier.
+
+--- X16 directory navigation (device 8) ---
+CD  ( c-addr u -- )   change directory (sends "CD:<name>" to the DOS).
+                      S" .." CD goes up;  S" /" CD goes to the root.
+DIR ( -- )            list the current directory.

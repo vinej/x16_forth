@@ -1,0 +1,14 @@
+=== AUDIOYM - raw YM2151 register access ===
+
+Low-level access to the YM2151 FM chip's 256 registers. For the easy
+note-playing API use HELP AUDIOFM instead.
+
+  YM!     ( value reg -- )   write value to YM2151 register reg, directly.
+                             Always safe (writes the chip registers).
+  FMPOKE  ( value reg -- )   write a YM2151 register THROUGH the ROM audio
+                             API, so the driver's volume shadows stay in sync
+                             (use this if you also use FMVOL/FMNOTE).
+
+The YM2151 registers ($08 KEYON, $20+ per-channel, $60+ TL, ...) are in the
+YM2151 datasheet. Raw YM! is handy for effects the high-level API does not
+expose (e.g. LFO, per-operator envelopes).

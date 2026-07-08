@@ -1,0 +1,8 @@
+=== BITWISE - Bitwise ===
+
+AND ( x1 x2 -- x3 ) - bitwise AND. $0F $33 AND  ->  3 (in HEX)
+OR ( x1 x2 -- x3 ) - bitwise OR.
+XOR ( x1 x2 -- x3 ) - bitwise exclusive-OR.
+INVERT ( x -- ~x ) - one's complement (flip all bits). 0 INVERT  ->  -1
+LSHIFT ( x u -- x' ) - logical shift left by u bits. 1 4 LSHIFT  ->  16
+RSHIFT ( x u -- x' ) - logical shift right by u bits. 256 4 RSHIFT  ->  16

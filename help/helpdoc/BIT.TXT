@@ -1,0 +1,10 @@
+=== BIT - Bit and byte toolkit ===
+
+SPLIT ( n -- bh bl ) - split a cell into its high and low bytes. $1234 SPLIT
+    ->  $12 $34
+CATNIB ( nh nl -- byte ) - combine two nibbles: (nh<<4) | nl. $A $5 CATNIB  ->
+    $A5
+SBIT ( addr mask -- ) - set the masked bits of the byte at addr.
+CBIT ( addr mask -- ) - clear the masked bits of the byte at addr.
+FBIT ( flag addr mask -- ) - set the masked bits if flag is true, else clear
+    them.

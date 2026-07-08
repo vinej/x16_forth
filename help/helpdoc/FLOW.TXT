@@ -1,0 +1,38 @@
+=== FLOW - Control flow ===
+
+These are IMMEDIATE and used inside : definitions.
+
+IF ( flag -- ) - begin a conditional; runs to ELSE/THEN when flag is true.
+THEN ( -- ) - end an IF.
+ELSE ( -- ) - the false branch of IF.
+BEGIN ( -- ) - start of a loop.
+UNTIL ( flag -- ) - loop back to BEGIN until flag is true.
+AGAIN ( -- ) - loop back to BEGIN forever.
+WHILE ( flag -- ) - mid-test; falls through to after REPEAT when false.
+REPEAT ( -- ) - loop back to BEGIN (with WHILE).
+DO ( limit start -- ) - begin a counted loop. 10 0 DO I . LOOP
+?DO ( limit start -- ) - like DO but skips entirely if limit = start.
+LOOP ( -- ) - increment the index by 1 and test.
++LOOP ( n -- ) - increment the index by n and test. 10 0 DO I . 2 +LOOP
+UNLOOP ( -- ) - discard loop control (before an early EXIT).
+LEAVE ( -- ) - exit the innermost loop immediately.
+CASE / OF ( x -- ) / ENDOF / ENDCASE - multi-way branch. CASE 1 OF ." one"
+    ENDOF ." other" ENDCASE
+AHEAD ( -- ) - compile an unconditional forward branch (advanced).
+RECURSE ( -- ) - call the definition currently being compiled.
+EXIT ( -- ) - return from the current word.
+EXECUTE ( xt -- ) - call the word given by its xt. ' CR EXECUTE
+QUIT ( -- ) - empty the return stack and re-enter the interpreter (no
+    message).
+ABORT ( -- ) - clear both stacks and return to the interpreter.
+ABORT" ( flag "ccc\"" -- ) - if flag is true, print the message and ABORT. x
+    0= ABORT" zero!"
+CATCH ( i*x xt -- j*x 0 | i*x n ) - run xt; return 0 if it completes, or the
+    code n passed to THROW, with the stacks restored. The recoverable
+    alternative to ABORT. ' RISKY CATCH IF ." failed" THEN
+THROW ( k*x n -- k*x | i*x n ) - if n is non-zero, unwind to the nearest CATCH
+    and return n from it; 0 THROW does nothing. An uncaught THROW performs
+    ABORT.
+SP@ ( -- addr ), RP@ ( -- addr ) - fetch the data / return stack pointer (used
+    by CATCH).
+HANDLER ( -- addr ) - variable holding the current exception frame (0 = none).

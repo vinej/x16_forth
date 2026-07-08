@@ -1,0 +1,15 @@
+=== LOGIC - Comparison and logic ===
+
+Comparisons return TRUE (-1, all bits set) or FALSE (0).
+
+0= ( x -- flag ) - equal to zero? (also logical NOT). 0 0=  ->  -1
+0< ( n -- flag ) - negative? -3 0<  ->  -1
+0> ( n -- flag ) - positive?
+0<> ( x -- flag ) - non-zero?
+= ( a b -- flag ) - equal? 5 5 =  ->  -1
+<> ( a b -- flag ) - not equal?
+< ( n1 n2 -- flag ) - signed less-than. 3 9 <  ->  -1
+> ( n1 n2 -- flag ) - signed greater-than.
+U< ( u1 u2 -- flag ) - unsigned less-than.
+U> ( u1 u2 -- flag ) - unsigned greater-than.
+WITHIN ( n lo hi -- flag ) - is lo <= n < hi? 5 0 10 WITHIN  ->  -1

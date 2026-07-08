@@ -1,0 +1,11 @@
+=== TERMINAL - Terminal I/O ===
+
+EMIT ( c -- ) - output one character. 65 EMIT  ->  A
+CR ( -- ) - output a newline.
+SPACE ( -- ) - output one space.
+SPACES ( n -- ) - output n spaces.
+KEY ( -- c ) - wait for and return one keypress.
+ACCEPT ( addr n -- len ) - read an input line (max n chars) into addr; return
+    the count.
+.( ( "ccc)" -- ) - print a string immediately, even while interpreting. .(
+    hello)

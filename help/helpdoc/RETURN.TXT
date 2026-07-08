@@ -1,0 +1,11 @@
+=== RETURN - Return stack and loop index ===
+
+>R ( x -- ) (R: -- x) - move an item to the return stack.
+R> ( -- x ) (R: x -- ) - move it back.
+R@ ( -- x ) - copy the top of the return stack.
+RDROP (R: x -- ) - drop the top of the return stack.
+2>R ( x1 x2 -- ) - move a pair to the return stack.
+2R> ( -- x1 x2 ) - move a pair back.
+2R@ ( -- x1 x2 ) - copy a pair.
+I ( -- n ) - index of the innermost DO loop.
+J ( -- n ) - index of the next-outer DO loop.

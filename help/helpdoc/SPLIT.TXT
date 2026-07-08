@@ -1,0 +1,17 @@
+=== SPLIT - split-screen bitmap + text (SPLIT.FTH) ===
+
+Puts a 320x240 256-colour bitmap on VERA layer 0 and confines the text console
+to a few rows at the bottom (layer 1) - graphics on top, text below, no raster
+interrupt.  Load:  S" ASSEMBLER.FTH" INCLUDED  S" FLOAT.FTH" INCLUDED
+                   S" SPLIT.FTH" INCLUDED
+(Or use ASMSPLIT.FTH, which needs only ASSEMBLER.FTH -> ASMGFX.FTH, no FP.)
+
+  SPLIT-DEMO            see it in action
+  SPLITON / SPLITOFF   enter / leave the split
+  n TO SPLIT-ROWS      set the text-window height (before SPLITON)
+
+Drawing words (same as HELP GRAPHIC, work in the split AND full screen):
+  GCLS   x y c PSET   x1 y1 x2 y2 c LINE/FRAME/RECT/RING/OVAL
+  x y c c-addr u GTEXT    x y r c CIRCLE/FCIRCLE
+Pen API: n GCOLOR then PLOT DRAW BOX FBOX ELL FELL CIRC DISC SAY.
+Full detail: user guide Section 3.

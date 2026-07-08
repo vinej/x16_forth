@@ -1,0 +1,21 @@
+=== BANK - bulk RAM-bank I/O ===
+
+Stream files straight into the high-RAM banks ($A000-$BFFF window) and copy
+between a bank and low RAM - ideal for holding game levels/data in banks and
+pulling the active one into low RAM on demand. All four preserve the $00 bank
+register, so they are safe alongside the dictionary. 'off'/'boff' is 0..8191
+into the $A000 window; loads and copies auto-advance across bank boundaries.
+
+  BANKLOAD ( c-addr u dev bank -- )        load a PRG file into RAM starting at
+        bank:$A000. A file bigger than 8K spills into bank+1, bank+2, ...
+  BANKSAVE ( c-addr u dev bank off len -- ) save a 'len'-byte slice of a bank
+        (starting at bank:off) to a file.
+  BANK>MEM ( bank boff addr u -- )         copy u bytes from bank:boff to low
+        RAM at addr (fast).
+  MEM>BANK ( addr bank boff u -- )         copy u bytes from low RAM addr to
+        bank:boff (fast).
+  DATABANK ( -- bank )                     (wide-dictionary builds) the highest
+        RAM bank the dictionary is NOT using - a safe place for your data.
+
+These work in every X16 build (6502/65C02/816); DATABANK exists only on
+the wide-dictionary builds. See also HELP CONTROL for B@ / B! / SETBANK.

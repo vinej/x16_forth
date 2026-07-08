@@ -1,0 +1,24 @@
+=== LOADSAVE - X16 load and save ===
+
+dev is the device number (usually 8 for the SD card). Names are ( c-addr u )
+strings.
+
+LOAD ( c-addr u dev -- ) - load a PRG file to the address in its 2-byte
+    header.
+BLOAD ( c-addr u dev addr -- ) - load a PRG file, relocating it to addr.
+VLOAD ( c-addr u dev bank vaddr -- ) - load a file into VRAM (BASIC VLOAD
+    name,dev,bank,addr).
+SAVE ( c-addr u dev start end -- ) - save memory start..end as a PRG file
+    (BASIC BSAVE).
+BVLOAD ( c-addr u dev bank vaddr -- ) - load a headerless file straight into
+    VRAM.
+BVERIFY ( c-addr u dev addr -- flag ) - verify a headerless file against
+    memory; -1 = match.
+VSAVE ( c-addr u bank vaddr len -- ) - save len bytes of VRAM to a headerless
+    file on device 8 (inverse of BVLOAD).
+SPRSAVE ( c-addr u sprite -- ) - save a sprite's image pixel data to disk.
+SPRLOAD ( c-addr u sprite -- ) - load pixel data into a sprite's image area.
+TILESAVE ( c-addr u vaddr len -- ) - save len bytes of a bank-1 tileset.
+TILELOAD ( c-addr u vaddr -- ) - load a tileset into bank-1 VRAM at vaddr.
+TMAPSAVE ( c-addr u -- ) - save the layer-1 tilemap (self-sizing).
+TMAPLOAD ( c-addr u -- ) - load the layer-1 tilemap back to its VRAM address.

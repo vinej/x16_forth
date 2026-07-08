@@ -1,0 +1,39 @@
+\ HELP - ForthX16 (TX16) interactive help system.
+\ ---------------------------------------------------------------------------
+\ Load once:   INCLUDE HELP        ( or  S" HELP" INCLUDED )
+\ Then:        HELP                 list every help topic
+\              HELP STACK           show the STACK topic  (any topic name)
+\ The topic text lives in plain files helpdoc/<TOPIC>.TXT on device 8 (the
+\ folder you launched from, or the SD card). This loader stays tiny - the text
+\ is read from disk on demand, so it costs almost no dictionary space.
+\ ---------------------------------------------------------------------------
+
+DECIMAL
+
+CREATE h-line 128 ALLOT              \ one line of the help file
+CREATE h-name  48 ALLOT              \ built filename  helpdoc/<TOPIC>.TXT
+VARIABLE h-p                         \ write pointer into h-name
+
+: h+ ( c-addr u -- )                 \ append u bytes to h-name
+   DUP >R  h-p @ SWAP MOVE  R> h-p +! ;
+
+: h-show ( fileid -- )               \ TYPE the whole file, then close it
+   >R
+   BEGIN  h-line 128 R@ READ-LINE  DROP  WHILE   \ ( u2 flag ) drop ior
+      h-line SWAP TYPE CR
+   REPEAT
+   DROP  R> CLOSE-FILE DROP ;
+
+: HELP ( "topic" -- )
+   PARSE-NAME                        \ the word after HELP
+   DUP 0= IF 2DROP S" INDEX" THEN    \ bare HELP -> the topic list
+   h-name h-p !                      \ build  helpdoc/<TOPIC>.TXT
+   S" helpdoc/" h+
+   h+
+   S" .TXT" h+
+   h-name  h-p @ h-name -  R/O OPEN-FILE
+   IF   DROP  CR ." No help for that topic.  Type  HELP  for the list." CR
+   ELSE CR h-show
+   THEN ;
+
+CR .( HELP loaded - type  HELP  for the list of topics. ) CR

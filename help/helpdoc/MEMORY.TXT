@@ -1,0 +1,29 @@
+=== MEMORY - Memory ===
+
+Cells are 16-bit (2 bytes). Addresses are byte addresses.
+
+@ ( addr -- x ) - fetch a cell. X @
+! ( x addr -- ) - store a cell. 42 X !
+C@ ( addr -- c ) - fetch a byte.
+C! ( c addr -- ) - store a byte.
+2@ ( addr -- x1 x2 ) - fetch a double / two cells.
+2! ( x1 x2 addr -- ) - store two cells.
++! ( n addr -- ) - add n to the cell at addr. 1 X +!
+, ( x -- ) - compile a cell into the dictionary at HERE. CREATE T 1 , 2 , 3 ,
+C, ( c -- ) - compile a byte into the dictionary.
+HERE ( -- addr ) - next free dictionary address.
+ALLOT ( n -- ) - reserve n bytes of dictionary space. CREATE BUF 100 ALLOT
+UNUSED ( -- u ) - bytes of dictionary space remaining. UNUSED .
+PAD ( -- addr ) - address of a scratch buffer (not preserved across words).
+ERASE ( addr u -- ) - set u bytes to 0.
+FILL ( addr u c -- ) - set u bytes to character c.
+BLANK ( addr u -- ) - set u bytes to spaces.
+MOVE ( src dst u -- ) - copy u bytes, handling overlap correctly.
+CMOVE ( src dst u -- ) - copy u bytes low -> high.
+CMOVE> ( src dst u -- ) - copy u bytes high -> low.
+CELL+ ( addr -- addr+2 ) - advance one cell.
+CELLS ( n -- n*2 ) - n cells in bytes. 3 CELLS  ->  6
+CHAR+ ( addr -- addr+1 ) - advance one char.
+CHARS ( n -- n ) - n chars in bytes (1 byte/char here).
+ALIGN ( -- ) - align HERE (no-op on this byte-addressed CPU).
+ALIGNED ( addr -- addr ) - align an address (no-op here).

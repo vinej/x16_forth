@@ -1,0 +1,22 @@
+=== NUMERIC - Numeric output ===
+
+. ( n -- ) - print a signed number and a space. 42 .  ->  42
+U. ( u -- ) - print an unsigned number.
+.R ( n width -- ) - print n right-justified in a field. 5 4 .R  ->     5
+U.R ( u width -- ) - unsigned, right-justified.
+D. ( d -- ) - print a double. 1000000. D.  ->  1000000
+D.R ( d width -- ) - print a double right-justified.
+? ( addr -- ) - print the cell stored at addr. X ?
+<# ( -- ) - begin pictured numeric output.
+# ( ud -- ud' ) - convert one digit into the output.
+#S ( ud -- 0 0 ) - convert all remaining digits.
+#> ( ud -- addr len ) - end pictured output, leaving the string.
+HOLD ( c -- ) - insert a character into the pictured output.
+HOLDS ( addr len -- ) - insert a string into the pictured output.
+SIGN ( n -- ) - insert a - if n is negative.
+DECIMAL ( -- ) - set radix to 10.
+HEX ( -- ) - set radix to 16.
+BASE ( -- addr ) - variable holding the current radix. BASE @ .
+
+Pictured example (format with a decimal point): : .## ( n -- ) 0 <# # # [CHAR]
+    . HOLD #S #> TYPE ;  1234 .##  ->  12.34

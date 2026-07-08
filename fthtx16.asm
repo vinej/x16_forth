@@ -8171,6 +8171,16 @@ free_msg_code:
 	+string "bytes  code "
 free_msg_bytes:
 	+string "bytes"
+} else {
+; FREE ( -- )  print the free low-RAM dictionary space. On builds without the
+; RAM-bank far dictionary this is the single free pool (the UNUSED value).
++header ~free, ~free_n, "FREE"
+	+forth
+	+token unused, dot
+	+literal free_msg_free
+	+token count, type, cr, exit
+free_msg_free:
+	+string "bytes free"
 }
 
 +header ~words, ~words_n, "WORDS"

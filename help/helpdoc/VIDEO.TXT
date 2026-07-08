@@ -1,0 +1,26 @@
+=== VIDEO - X16 video, screen and cursor ===
+
+VERA is the X16's video chip. VPOKE/VPEEK do single random accesses; for bulk
+access set the address once with VADDR then stream with V!/V@.
+
+VPOKE ( bank addr value -- ) - write a byte to VRAM (BASIC VPOKE
+    bank,addr,value). 0 $1000 65 VPOKE
+VPEEK ( bank addr -- value ) - read a byte from VRAM (BASIC VPEEK(bank,addr)).
+VADDR ( bank addr -- ) - point the VERA data port at VRAM (auto-increment 1).
+    bank is the 17th address bit.
+V! ( byte -- ) - store a byte through the data port (address auto-increments).
+V@ ( -- byte ) - read a byte through the data port (address auto-increments).
+V!W ( w -- ) - store a 16-bit word through the data port, low byte first.
+SCREEN ( mode -- ) - set the video mode. 0=80x60, 1=80x30, 2=40x60, 3=40x30,
+    128=320x240x256. 0 SCREEN
+COLOR ( fg bg -- ) - set text foreground/background (0-15). 1 6 COLOR
+BORDER ( color -- ) - set the display border color (0-15).
+CLS ( -- ) - clear the text screen.
+LOCATE ( row col -- ) - move the text cursor (BASIC LOCATE row,col).
+CURSOR ( -- row col ) - read the cursor position (inverse of LOCATE).
+POS ( -- col ) - current cursor column.
+SCROLLX ( n -- ) - set layer-1 horizontal hardware scroll (0-4095).
+SCROLLY ( n -- ) - set layer-1 vertical hardware scroll (0-4095).
+TILE ( x y code attr -- ) - set a tile cell (BASIC TILE x,y,code,attr).
+TDATA ( x y -- code ) - read a tile's code (BASIC TDATA(x,y)).
+TATTR ( x y -- attr ) - read a tile's attribute (BASIC TATTR(x,y)).

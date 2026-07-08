@@ -1,0 +1,16 @@
+=== AUDIOPCM - PCM audio (VERA's 4 KB FIFO) ===
+
+Signed 8/16-bit PCM samples streamed through VERA's audio FIFO. All native.
+
+  PCMCTRL   ( n -- )        write AUDIO_CTRL: volume 0-15, bit4 stereo,
+                            bit5 16-bit, bit7 (on write) resets the FIFO.
+  PCMRATE   ( n -- )        sample rate: 0 = stop .. 128 = 48 kHz.
+  PCM!      ( byte -- )     push one sample byte (dropped if the FIFO is full).
+  PCMFULL?  ( -- flag )     true when the FIFO cannot accept more data.
+  PCM-WRITE ( addr count -- )  blast count bytes from RAM into the FIFO (for
+                            priming an empty <=4 KB FIFO; does not throttle).
+
+Typical paced feeder:
+  16 128 + PCMCTRL             \ volume 15, reset the FIFO
+  128 PCMRATE                  \ ~48 kHz
+  BEGIN  ...next-byte... PCMFULL? 0= WHILE  PCM!  REPEAT

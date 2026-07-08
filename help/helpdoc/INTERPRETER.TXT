@@ -1,0 +1,17 @@
+=== INTERPRETER - Interpreter and input source ===
+
+TIB ( -- addr ) - the terminal input buffer.
+#TIB ( -- addr ) - variable: number of characters in TIB.
+>IN ( -- addr ) - variable: current parse offset into the input.
+SOURCE ( -- addr len ) - the current input buffer and its length.
+SOURCE-ID ( -- 0 | -1 | fileid ) - 0 = keyboard, -1 = EVALUATE, else a file.
+REFILL ( -- flag ) - read the next input line; false at end.
+EVALUATE ( addr len -- ) - interpret a string as Forth. S" 2 3 +" EVALUATE .
+    ->  5
+SAVE-INPUT ( -- xn..x1 n ) - save the input position.
+RESTORE-INPUT ( xn..x1 n -- flag ) - restore a saved input position.
+CLOSE-SOURCE ( -- ) - close the current file input source (used by nested
+    INCLUDE).
+STATE ( -- addr ) - variable: non-zero while compiling.
+( ( "ccc)" -- ) - inline comment up to ). ( n -- n*2 )
+\ ( "line" -- ) - comment to end of line.

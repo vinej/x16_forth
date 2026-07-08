@@ -1,0 +1,21 @@
+=== DOUBLE - Double-cell math ===
+
+Doubles occupy two stack cells (low then high). Type a double literal with a
+    dot: 10.
+
+S>D ( n -- d ) - single to double (sign-extend). 5 S>D D.  ->  5
+D>S ( d -- n ) - double to single (drop high cell).
+DNEGATE ( d -- -d ) - negate a double.
+DABS ( d -- ud ) - absolute value of a double.
+M+ ( d n -- d ) - add a single to a double.
+D+ ( d1 d2 -- d3 ) - add doubles. 10. 20. D+ D.  ->  30
+D- ( d1 d2 -- d3 ) - subtract doubles.
+D2* ( d -- 2d ) - double a double.
+D2/ ( d -- d/2 ) - halve a double (arithmetic).
+D= ( d1 d2 -- flag ) - doubles equal?
+D< ( d1 d2 -- flag ) - signed double less-than.
+DU< ( ud1 ud2 -- flag ) - unsigned double less-than.
+D0= ( d -- flag ) - double is zero?
+D0< ( d -- flag ) - double is negative?
+DMAX ( d1 d2 -- d ) - larger double.
+DMIN ( d1 d2 -- d ) - smaller double.

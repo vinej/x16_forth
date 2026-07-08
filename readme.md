@@ -13,6 +13,8 @@ Forth TX16 (or ForthX16) is an enhanced port of the older project [Forth Model T
 The other — or rather the main — goal of the project was to create an interpreter as compliant with the Forth 2012 standard as possible.
 
 **New to Forth or this system?** See [doc/userguide.md](doc/userguide.md) for a tutorial and a full reference of every built-in word (with an alphabetical index).
+
+**On-machine help.** `INCLUDE HELP` (from the `help/` folder — copy `HELP` and the `helpdoc/` folder to device 8) gives an interactive help system built from the user guide: type `HELP` for the list of topics, then `HELP <topic>` (e.g. `HELP STACK`, `HELP AUDIOFM`, `HELP HP50`). The text is read from `helpdoc/*.TXT` on demand, so it costs almost no memory.
 ## Supported Platforms
 The original target platform was Commander X16. However, in the middle of developmente I've realized that the same code would run on Commodore 64 with reasonable effort. Thus C64 became a second platform. The third platform is quite different and it was added separately - [Foenix F256](https://c256foenix.com). It is also 6502-based (sort of), but not derived from C64, so console and file I/O are very different. More platforms may be coming.
 ## Prerequisites and Building
@@ -382,6 +384,16 @@ FMPLAY  ( c-addr u channel -- ) play a play-string (blocking)
 FMCHORD ( c-addr u channel -- ) play a chord string (blocking)
 FMPOKE  ( value reg -- )        write a YM2151 register via the API (shadow-tracked)
 ```
+PCM playback (VERA's 4 KB FIFO). All native:
+```
+PCMCTRL   ( n -- )        write AUDIO_CTRL (volume 0-15, bit4 stereo, bit5 16-bit,
+                          bit7 on write resets the FIFO)
+PCMRATE   ( n -- )        sample rate (0 = stop .. 128 = 48 kHz)
+PCM!      ( byte -- )     push one sample byte into the FIFO (dropped if full)
+PCMFULL?  ( -- flag )     true when the FIFO cannot accept more data
+PCM-WRITE ( addr count -- ) blast count bytes from RAM into the FIFO (no throttle;
+                          poll PCMFULL? for a paced feeder)
+```
 
 ### Tiles (layer-1 text screen)
 Read and write cells of the layer-1 tilemap. Each cell is a screen/tile code
@@ -483,9 +495,11 @@ a bank slice; `BANK>MEM ( bank boff addr u -- )` and `MEM>BANK ( addr bank boff 
 MS       ( u -- )        wait ~u milliseconds (calibrated 8 MHz busy loop)
 KEYMAP   ( c-addr u -- )  set the keyboard layout, e.g. S" en-us" KEYMAP
 REBOOT   ( -- )        soft reboot through the reset vector
-MS       ( u -- )        wait ~u milliseconds (calibrated 8 MHz busy loop)
-KEYMAP   ( c-addr u -- )  set the keyboard layout, e.g. S" en-us" KEYMAP
-REBOOT   ( -- )        soft reboot through the reset vector
+I2CPEEK  ( dev reg -- byte )  read a byte from I2C device dev, register reg
+I2CPOKE  ( dev reg val -- )   write a byte to I2C device dev, register reg
+MONITOR  ( -- )        enter the ML monitor (exit X; does not cleanly return)
+RESET    ( -- )        hardware reset via the SMC
+POWEROFF ( -- )        power off via the SMC
 
   -- game-support primitives --
 VSYNC    ( -- )        wait for the next video frame (frame-locked 60 Hz, via a
@@ -578,7 +592,7 @@ The interpreter will look for file `AUTORUN.FTH` and execute it if found.
 | ROM bank 9 (`ForthX16_*Bank9.bin` patched into `rom.bin`) | `TEST` from BASIC | `TK9.DIC/.TOK/.VAR` | `AUTORUN9.FTH` |
 | ROM bank 32 cartridge (`ForthX16_*Bank32.bin`) | `loader32` (or the autoboot `ForthX16_6502Cart.bin`) | `TK32.DIC/.TOK/.VAR` | `AUTORUN32.FTH` |
 
-Only the file literally named `AUTORUN.FTH` runs at boot, so copy the variant matching the build over it (e.g. for bank 9: `AUTORUN9.FTH` -> `AUTORUN.FTH`). The shipped `AUTORUN.FTH` is a copy of `AUTORUN32.FTH` (the cartridge case). Each variant just does `S" TKxx" LOAD-IMAGE DROP` and prints a `TOOLKIT READY` banner naming its target, so a mismatch is easy to spot. All three images bundle the same toolkit: `FPX BASICSTR PCMAUDIO ASSEMBLER DIRNAV`.
+Only the file literally named `AUTORUN.FTH` runs at boot, so copy the variant matching the build over it (e.g. for bank 9: `AUTORUN9.FTH` -> `AUTORUN.FTH`). The shipped `AUTORUN.FTH` is a copy of `AUTORUN32.FTH` (the cartridge case). Each variant just does `S" TKxx" LOAD-IMAGE DROP` and prints a `TOOLKIT READY` banner naming its target, so a mismatch is easy to spot. All three images bundle the same toolkit: `FPX BASICSTR ASSEMBLER DIRNAV`.
 
 A modified copy of Forth test suite is in `tests` - copy files from there to the file system of Commander X16 and start it with `INCLUDE RUNTESTS.FTH`. The current version should run all tests without errors. The runtime on the emulator is about 4 minutes on Commander X16 (and a LOT more on C64).
 
@@ -612,7 +626,6 @@ A few examples and benchmarks are in `other`.
 * `FLOAT.FTH` — the floating-point **base** words (`S>F F+ F- F* F/ FSIN FLN FEXP FVARIABLE FCONSTANT F.` …). **Floating point is no longer baked into the shipped builds** (`FPCORE=0`), so you must load this — after `ASSEMBLER.FTH` — before any float word or literal (`1.5`) works. (After `LOAD-IMAGE` of an image that bundles FP, run `FPHOOK` once.) X16 only.
 * `FPX.FTH` — extended FLOATING-EXT words plus the BASIC math aliases `SQR SIN COS TAN ATN LOG EXP` (also `F~ FSINH FASIN FPI` …). Load after `FLOAT.FTH`. X16 only.
 * `BASICSTR.FTH` — BASIC-style string words `NHEX NBIN STR VAL ASC CHR LEN LEFT RIGHT MID RPT`. Independent.
-* `PCMAUDIO.FTH` — PCM audio helpers `PCMCTRL PCMRATE PCM! PCMFULL?`. Independent. X16 only.
 * `GFX.FTH` — the bitmap-graphics words `GINIT GCLS PSET LINE FRAME RECT RING OVAL GTEXT CIRCLE FCIRCLE` + pen API. Moved out of the core by `GFXTOOLKIT=1` (frees ~513 bytes); over the core VERA primitives. Independent. X16 only.
 * `VERAFX.FTH` — VERA FX helpers as inline-assembler `CODE` words: `FX*` (signed 16×16→32 multiply), `FX-FILL`/`FX-CLEAR` (fast 32-bit-cache VRAM fill), `FX-DCSEL`/`FX-OFF`. **Load `ASSEMBLER.FTH` first** (built from `CODE` words). X16 only.
 * `ASMGFX.FTH` — an assembler + VERA FX rewrite of `GFX.FTH`: same drawing vocabulary (`GINIT GCLS PSET LINE FRAME RECT RING OVAL GTEXT` + pen API) with `CODE`-word primitives and VERA-FX 32-bit-cache fills. `GMODE ( bank addr w h -- )` makes it work with any 8bpp bitmap geometry (position/width/height), not just 320×240. **Load `ASSEMBLER.FTH` first**. X16 only.

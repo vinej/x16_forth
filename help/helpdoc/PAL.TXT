@@ -1,0 +1,9 @@
+=== PAL - VERA palette ===
+
+  PAL!  ( rgb index -- )   set palette entry index (0-255) to a 12-bit $RGB
+                           colour.  $0F00 1 PAL!   makes colour 1 pure red.
+
+VERA has 256 palette entries, each 12-bit ($0RGB: 4 bits red, green, blue).
+Entry 0 is the background/transparent colour. The default palette matches the
+C64/X16 16-colour set in entries 0-15. Reprogram entries to get custom colours
+for text, tiles, sprites or the bitmap.

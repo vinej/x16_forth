@@ -1,0 +1,25 @@
+=== DEFINING - Defining words ===
+
+New to these? The [advanced guide](advanceguide.md) explains them with worked
+examples and when-to-use notes - especially CREATE ... DOES> and VALUE/TO.
+
+: ( "name" -- ) - start a new definition (enter compile state). : SQ DUP * ;
+; ( -- ) - finish a definition (IMMEDIATE).
+:NONAME ( -- xt ) - start an unnamed definition; leaves its xt at ;.
+CREATE ( "name" -- ) - make a word that pushes its data-field address.
+VARIABLE ( "name" -- ) - create a 1-cell variable. VARIABLE X
+2VARIABLE ( "name" -- ) - create a 2-cell (double) variable.
+CONSTANT ( n "name" -- ) - create a constant. 10 CONSTANT TEN
+2CONSTANT ( d "name" -- ) - create a double constant.
+VALUE ( n "name" -- ) - create a value; read by name, change with TO. 5 VALUE
+    V
+2VALUE ( d "name" -- ) - create a double value.
+DEFER ( "name" -- ) - create a revectorable word. DEFER EMITTER
+BUFFER: ( n "name" -- ) - create an n-byte buffer word. 80 BUFFER: LINE
+DOES> ( -- ) - give a CREATEd word run-time behaviour. : CONST CREATE , DOES>
+    @ ;
+TO ( n "name" -- ) - store into a VALUE. 7 TO V
+IS ( xt "name" -- ) - set a DEFER's action. ' CR IS EMITTER
+ACTION-OF ( "name" -- xt ) - get a DEFER's current action.
+DEFER@ ( xt1 -- xt2 ) - fetch the action of a deferred word by xt.
+DEFER! ( xt2 xt1 -- ) - set the action of a deferred word by xt.

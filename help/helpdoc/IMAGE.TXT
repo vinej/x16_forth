@@ -1,0 +1,23 @@
+=== IMAGE - fast turnkey reload (SAVE-IMAGE / LOAD-IMAGE) ===
+
+Compiling a big library from source is slow (tens of seconds). Snapshot the
+compiled dictionary once, then reload it in ~1 second.
+
+  S" NAME" SAVE-IMAGE  ( c-addr u -- )   write NAME.DIC / NAME.TOK / NAME.VAR
+                                         (the compiled dictionary + token table
+                                         + state) to device 8.
+  S" NAME" LOAD-IMAGE  ( c-addr u -- flag )   reload them; flag TRUE if found.
+
+Bundle several libraries into one image: INCLUDE them all, tidy the search
+order, then one SAVE-IMAGE:
+  S" ASSEMBLER.FTH" INCLUDED   S" FLOAT.FTH" INCLUDED   S" FPX.FTH" INCLUDED
+  ONLY FORTH DEFINITIONS DECIMAL
+  S" TK" SAVE-IMAGE
+
+Auto-load at boot: make the last line of AUTORUN.FTH
+  S" TK" LOAD-IMAGE DROP        ( then  FPHOOK  if the image bundles FLOAT.FTH )
+
+RULES: an image is tied to the EXACT interpreter binary that made it - rebuild
+it whenever you rebuild the .prg / rom. It stores only Forth-level definitions
+(not machine code). Keep all parts (.DIC/.TOK/.VAR, plus per-bank slices on the
+wide builds) together. See the user guide for the full rules.

@@ -1,0 +1,16 @@
+=== STRING - Characters and strings ===
+
+S" ( "ccc\"" -- addr len ) - a string literal. S" hello" TYPE  ->  hello
+S\" ( "ccc\"" -- addr len ) - string literal with escapes: \n \t \" \\ \e etc.
+." ( "ccc\"" -- ) - print a literal string when the word runs. : HI ." hello"
+    ;
+C" ( "ccc\"" -- c-addr ) - a counted-string literal.
+COUNT ( c-addr -- addr len ) - convert a counted string to address/length.
+TYPE ( addr len -- ) - print a string. S" hi" TYPE
+COMPARE ( a1 u1 a2 u2 -- n ) - compare two strings; -1/0/1.
+/STRING ( addr len n -- addr+n len-n ) - remove n characters from the front.
+PLACE ( addr len dst -- ) - store a string as a counted string at dst.
++PLACE ( addr len dst -- ) - append a string to the counted string at dst.
+CHAR ( "c" -- n ) - code of the next character (interpreting). CHAR A  ->  65
+[CHAR] ( "c" -- ) - compile the code of the next character (in a definition).
+    [CHAR] *

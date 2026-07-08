@@ -1,0 +1,9 @@
+=== SPREDIT - VERA hardware-sprite editor (SPREDIT.FTH) ===
+
+An interactive editor for 4bpp VERA hardware sprites (image data in bank-1
+VRAM).  Load:  S" SPREDIT.FTH" INCLUDED   (core only)
+
+  SPED    start the interactive sprite editor
+
+Draw the sprite pixel by pixel, pick colours, and save the image so a game can
+load it with SPRLOAD / SPRITE-MEM. See HELP SPRITE and HELP LOADSAVE.

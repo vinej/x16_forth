@@ -1,0 +1,13 @@
+=== HP50 - HP-50g-style RPN calculator (HP50.FTH) ===
+
+A typed-stack RPN scientific calculator with a numbered-level display.
+Load:  S" ASSEMBLER.FTH" INCLUDED  S" FLOAT.FTH" INCLUDED
+       S" FPX.FTH" INCLUDED        S" HP50.FTH" INCLUDED
+Start:  HP        Quit:  OFF
+
+Types: reals; 32-bit integers with BIN/OCT/DEC/HEX + AND OR XOR NOT;
+complex (re,im): + - * / CONJ RE IM ARG ABS R->C C->R;
+lists [ 1 2 3 ]: SIZE GET, + concatenates; vectors: DOT V+ V- NORM CROSS;
+matrices: DET TRN M*.  Variables: STO RCL PURGE CLVAR (a bare name recalls).
+Functions: SIN COS TAN ASIN ACOS ATAN LN EXP LOG ALOG ^ SQRT, DEG/RAD,
+STD/FIX. Full detail: user guide Section 5.

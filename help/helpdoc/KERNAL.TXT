@@ -1,0 +1,13 @@
+=== KERNAL - call any KERNAL / ROM routine ===
+
+  SYSCALL ( a x y addr -- a' x' y' )   call the routine at addr in KERNAL bank
+     0 with .A/.X/.Y loaded, returning the callee's .A/.X/.Y. Reaches the whole
+     KERNAL API (GRAPH_*, console_*, MEMTOP, ...). ROM-safe (routes via jsrfar).
+     Example:  65 0 0 $FFD2 SYSCALL   prints "A" (CHROUT).
+
+  CHARSET ( n -- )   activate a built-in 8x8 charset: 1 = ISO, 2 = PET
+     upper/graphics, 3 = PET upper/lower, ... 12 = Katakana.
+
+Common KERNAL entry points for SYSCALL: CHROUT $FFD2, CHRIN $FFCF,
+GETIN $FFE4, PLOT $FFF0, SCREEN_MODE $FF5F. See the X16 Programmer's
+Reference for the full jump table.

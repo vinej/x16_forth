@@ -1,0 +1,10 @@
+=== KEYBOARD - keyboard input ===
+
+  KEY    ( -- char )   wait for a key, return its code (standard Forth; echoes).
+  KEY?   ( -- flag )   true if a key is waiting (non-destructive peek).
+  GETKEY ( -- char )   block until a key is pressed, return its PETSCII code.
+  KEYMAP ( c-addr u -- )   set the keyboard layout.  S" en-us" KEYMAP
+  CHARSET ( n -- )     select an 8x8 charset (see HELP KERNAL).
+
+Poll without blocking:
+  : POLL  KEY? IF GETKEY ... THEN ;

@@ -1,0 +1,9 @@
+=== SNDEDIT - PSG/FM song step-sequencer editor (SNDEDIT.FTH) ===
+
+An interactive step-sequencer for writing short songs on the VERA PSG or the
+YM2151 FM synth, with save/reload so games can play them back.
+Load:  S" SNDEDIT.FTH" INCLUDED   (core only)
+
+A note is packed as octave<<4 | semitone. Edit steps in a grid, audition with
+the play word, and save/reload the song file for use in a game. See the file
+header and HELP AUDIOFM for the underlying sound words.
