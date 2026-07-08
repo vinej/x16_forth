@@ -29,6 +29,28 @@ Three folders are **git-ignored** and are **not** part of the GitHub download. A
 
 The [Foenix F256 IDE](https://github.com/Trinity-11/FoenixIDE) can test the F256 build; there is no scripted support — install it and point its "SD card" at the binary.
 
+### Where each version's binary lands
+Each version's release binary is written **into its own folder**, named after the folder. So after you build one (below), its binary is:
+
+| Version folder | Release binary |
+|---|---|
+| `version/ForthC64_6502Prg/` | `ForthC64_6502Prg.prg` |
+| `version/ForthC64_6502Cart/` | `ForthC64_6502Cart.crt` |
+| `version/ForthC64_6502Disk/` | `ForthC64_6502Disk.d64` |
+| `version/ForthF256_6502Prg/` | `ForthF256_6502Prg.pgz` |
+| `version/ForthX16_6502Prg/` | `ForthX16_6502Prg.prg` |
+| `version/ForthX16_6502Bank9/` | `ForthX16_6502Bank9.bin` (whole 256 KB ROM, Forth in bank 9) |
+| `version/ForthX16_6502Bank32/` | `ForthX16_6502Bank32.bin` (16 KB bank-32 image) |
+| `version/ForthX16_6502Cart/` | `ForthX16_6502Cart.bin` |
+| `version/ForthX16_816Prg/` | `ForthX16_816Prg.prg` |
+| `version/ForthX16_816Bank9/` | `ForthX16_816Bank9.bin` (whole 256 KB ROM, Forth in bank 9) |
+| `version/ForthX16_816Bank32/` | `ForthX16_816Bank32.bin` (16 KB bank-32 image) |
+| `version/ForthX16_816WideRom/` | `ForthX16_816WideRom.prg` |
+| `version/ForthX16_816WideRam/` | `ForthX16_816WideRam.prg` |
+| `version/ForthX16_816WideFar/` | `ForthX16_816WideFar.prg` |
+
+These binaries are **git-ignored** (not in the GitHub download) — build them yourself with each folder's `make.bat`.
+
 ### Building a version
 Every buildable version lives in its own folder under **[`version/`](version/readme.md)**, each with a `build.asm`, `make.bat`, `test.bat`, and its own `readme.md`. To build one, run its `make.bat` (the release binary is written into that folder); to build **and** launch it in the right emulator, run its `test.bat`. See **[version/readme.md](version/readme.md)** for the full list (C64 PRG/cart, F256, X16 6502 PRG/bank-9/bank-32/cart, and the X16 65816 plain and wide-dictionary builds) and the prerequisites above.
 ## The Language Support
