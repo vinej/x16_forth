@@ -16,20 +16,19 @@ The other — or rather the main — goal of the project was to create an interp
 ## Supported Platforms
 The original target platform was Commander X16. However, in the middle of developmente I've realized that the same code would run on Commodore 64 with reasonable effort. Thus C64 became a second platform. The third platform is quite different and it was added separately - [Foenix F256](https://c256foenix.com). It is also 6502-based (sort of), but not derived from C64, so console and file I/O are very different. More platforms may be coming.
 ## Prerequisites and Building
-The instructions below are for Windows-based systems. It should not be difficult to modify them to other platforms as long as ACME assembler is available there.
-[ACME assembler](https://sourceforge.net/projects/acme-crossass/files/win32/) is used to build the interpreter from the source. It is expected to be places in a subfolder ASM in the project folder.
-Optionally, platform emulators can be used for testing. Scripts assume [VICE](https://vice-emu.sourceforge.io/) for C64 and the [official X16 emulator](https://cx16forum.com/forum/viewtopic.php?t=8443) for Commander X16. These should be placed in subfolders VICE and X16 correspondingly. [Foenix F256 IDE](https://github.com/Trinity-11/FoenixIDE) can be used to test that platform, but there is no special support for it in the scripts. Just install the IDE and point the "SD card" to the location of the binaries.
+The instructions below are for Windows-based systems. It should not be difficult to modify them to other platforms as long as the ACME assembler is available there.
 
-* `makeprg.bat` will build PRG compatible with both C64 and X16
-* `makecart.bat` will build cartridge image for C64
-* `makediskc64.bat` builds a disk image for C64. It can be used on X16, but there is not much point
-* `makef256.bat` build PGZ executable for F256
+### Tools you must supply yourself (not in this repo / not on GitHub)
+Three folders are **git-ignored** and are **not** part of the GitHub download. After cloning, place them in the project root yourself:
 
-* `testcart.bat` will build and load the cartridge in VICE
-* `testdiskc64.bat` tests the disk image in VICE as well
-* `testprg.bat` will build and start PRG file in X16 emulator
+* `asm/` — the [ACME assembler](https://sourceforge.net/projects/acme-crossass/files/win32/) (`asm/acme.exe`). Required to build every version.
+* `emulator/` — the [official Commander X16 emulator](https://github.com/X16Community/x16-emulator/releases) (`emulator/x16emu.exe` + `emulator/rom.bin`). Required to test the X16 versions.
+* `vice/` — [VICE](https://vice-emu.sourceforge.io/) (`vice/bin/x64sc.exe`, `cartconv.exe`). Required to build/test the C64 versions.
 
-There are pre-build binaries in the `binary` folder.
+The [Foenix F256 IDE](https://github.com/Trinity-11/FoenixIDE) can test the F256 build; there is no scripted support — install it and point its "SD card" at the binary.
+
+### Building a version
+Every buildable version lives in its own folder under **[`version/`](version/readme.md)**, each with a `build.asm`, `make.bat`, `test.bat`, and its own `readme.md`. To build one, run its `make.bat` (the release binary is written into that folder); to build **and** launch it in the right emulator, run its `test.bat`. See **[version/readme.md](version/readme.md)** for the full list (C64 PRG/cart, F256, X16 6502 PRG/bank-9/bank-32/cart, and the X16 65816 plain and wide-dictionary builds) and the prerequisites above.
 ## The Language Support
 
 This implementation closely follows the Forth 2012 Standard. The following describes the list
@@ -620,6 +619,29 @@ A few examples and benchmarks are in `other`.
 **`HP50.FTH`** is an HP-50g-style RPN scientific calculator: a typed value stack, an HP-style numbered-level display, and a small object system. Types: reals; exact 32-bit integers with BIN/OCT/DEC/HEX bases and bitwise `AND OR XOR NOT`; complex numbers `(re,im)` (`+ - * / CONJ RE IM ARG ABS R->C C->R`); and lists `[ 1 2 3 ]` (`SIZE GET`, `+` concatenates) which double as vectors (`DOT V+ V- NORM CROSS`) and matrices (`DET TRN M*`). It also has named user variables (`STO RCL PURGE CLVAR`, and a bare name recalls) that persist across `CLEAR`. Plus the usual scientific functions (`SIN COS TAN ASIN ACOS ATAN LN EXP LOG ALOG ^ SQRT`, DEG/RAD, STD/FIX) and an RPN command parser - `INCLUDE HP50.FTH` then `HP` (`OFF` quits), with `HP50TEST.FTH` self-checking it (78 tests).
 
 **Compiled-image snapshot.** Because compiling a large library from source is slow (~30s, dominated by the per-word dictionary search), two native words snapshot the compiled dictionary for a ~1s reload. `S" NAME" SAVE-IMAGE` ( c-addr u -- ) writes the dictionary bytes, the user token-table slice, and the dictionary-state pointers to three device-8 files named `NAME.DIC`/`NAME.TOK`/`NAME.VAR`; `S" NAME" LOAD-IMAGE` ( c-addr u -- flag ) restores them (it is native so it can safely replace the dictionary). They are generic (work for any compiled `.FTH`) and work in the PRG, bank-9 ROM and bank-32 cartridge builds. One image can bundle **several** libraries at once - `INCLUDE` them all, finish with `ONLY FORTH DEFINITIONS DECIMAL`, then one `SAVE-IMAGE`; make `S" NAME" LOAD-IMAGE DROP` the last line of `AUTORUN.FTH` to auto-load the whole toolkit at boot. The image is tied to the exact interpreter build (rebuild it if you rebuild the `.prg`/`rom.bin`). See the user guide ("Bundling several libraries into one image") for the full rules.
+
+**More `other/` samples.** `GAMEMS.FTH` is `GAME` with mouse + joystick added (click the blue squares); `SNDEDIT.FTH` is a PSG/FM song step-sequencer editor (save/reload songs for games); `SPREDIT.FTH` is a VERA hardware-sprite editor (4bpp). `ASMTEST.FTH` / `ASMDEMO.FTH` / `ASMIRQ.FTH` are the assembler test-suite / demo / VSYNC-interrupt example (see the Assembler section).
+
+**The `toolkit/` libraries (loading without an image).** A number of words that used to be built in now live in `toolkit/` library files you `INCLUDE` when you want them (this is part of what shrank the ROM/cart image). Load one with `S" NAME.FTH" INCLUDED` from device 8:
+
+* `ASSEMBLER.FTH` — the inline 6502/65C02 assembler (`CODE`/`END-CODE`). Load it first; needed by any `CODE`-word program **and** by `FLOAT.FTH`. Generic (all platforms).
+* `FLOAT.FTH` — the floating-point **base** words (`S>F F+ F- F* F/ FSIN FLN FEXP FVARIABLE FCONSTANT F.` …). **Floating point is no longer baked into the shipped builds** (`FPCORE=0`), so you must load this — after `ASSEMBLER.FTH` — before any float word or literal (`1.5`) works. (After `LOAD-IMAGE` of an image that bundles FP, run `FPHOOK` once.) X16 only.
+* `FPX.FTH` — extended FLOATING-EXT words plus the BASIC math aliases `SQR SIN COS TAN ATN LOG EXP` (also `F~ FSINH FASIN FPI` …). Load after `FLOAT.FTH`. X16 only.
+* `BASICSTR.FTH` — BASIC-style string words `NHEX NBIN STR VAL ASC CHR LEN LEFT RIGHT MID RPT`. Independent.
+* `PCMAUDIO.FTH` — PCM audio helpers `PCMCTRL PCMRATE PCM! PCMFULL?`. Independent. X16 only.
+
+The floating-point load chain is therefore **`ASSEMBLER.FTH` → `FLOAT.FTH` → `FPX.FTH`**.
+
+**`other/` sample dependencies** — `INCLUDE` the listed libraries *before* the sample (the X16 hardware words a sample uses — sprites, audio, VERA — are built in; only these toolkit libraries are not):
+
+| Sample(s) | Load first |
+|---|---|
+| `BENCH` · `ERASTO` · `RC4TEST` · `GAME` · `GAMEYM` · `GAMEMS` · `SNDEDIT` · `SPREDIT` | *nothing (core only)* |
+| `ASMTEST` · `ASMDEMO` · `ASMIRQ` | `ASSEMBLER.FTH` |
+| `MORTGAGE` · `SPLIT` | `ASSEMBLER.FTH` → `FLOAT.FTH` |
+| `HP50` · `HP50TEST` | `ASSEMBLER.FTH` → `FLOAT.FTH` → `FPX.FTH` |
+
+Full per-file details and a from-source example are in the user guide, **Section 7 — Toolkit libraries and sample programs**.
 
 ## Known Issues
 

@@ -1542,7 +1542,7 @@ VERA address ports it uses (the foreground may be mid-transfer).
 
 ## 6.4 Learning by example
 
-Three self-checking files in `toolkit/` (load `ASSEMBLER.FTH` first):
+Three self-checking files in `other/` (load `ASSEMBLER.FTH` first):
 
 - **`ASMTEST.FTH`** — 28 assertions covering every addressing mode, the 16-bit
   ALU idioms, `PUSH`/`POP`, and the control words. Run it after any change.
@@ -1551,6 +1551,74 @@ Three self-checking files in `toolkit/` (load `ASSEMBLER.FTH` first):
   (`ASMDEMO` runs both; assembly wins by ~80×).
 - **`ASMIRQ.FTH`** — an assembly VSYNC interrupt handler (`IRQ-DEMO` shows a
   counter advancing in the interrupt; `IRQ-TEST` self-checks it).
+
+# Section 7 — Toolkit libraries and sample programs
+
+The interpreter core is deliberately small, so a number of words that used to be
+built in now live in **`toolkit/` library files** that you `INCLUDE` when you
+want them. The example programs in **`other/`** then build on those libraries.
+This section lists both and — importantly — which library each example needs.
+
+## 7.1 The `toolkit/` libraries
+
+Load a library with `S" NAME.FTH" INCLUDED` (device 8 / HostFS — the file has to
+be reachable, so copy the ones you want next to where you run). This is the
+"without an image" path; alternatively bundle them once into a `TK` image (see
+"Turnkey compiled image" above and the `version/readme.md` recipe) for a
+~1-second reload.
+
+| Library | Provides | Load order / needs | Platform |
+|---|---|---|---|
+| `ASSEMBLER.FTH` | Inline 6502/65C02 assembler: `CODE` / `END-CODE`, all opcodes, structured `IF,` `BEGIN,` `UNTIL,` … (Section 6) | none — load it first | all |
+| `FLOAT.FTH` | **Floating-point base words**: `S>F F>S F+ F- F* F/ FSQRT FSIN FCOS FTAN FATAN FLN FEXP FVARIABLE FCONSTANT F. F@ F! F< …` | **`ASSEMBLER.FTH` first** (it is built from `CODE` words) | X16 only |
+| `FPX.FTH` | Extended FLOATING/FLOATING-EXT + BASIC math aliases: `FPI FROT FSINCOS FLOG FALOG FLNP1 FEXPM1 FSINH FASIN FATAN2 F~`, and `SQR SIN COS TAN ATN LOG EXP` | after base FP (`FLOAT.FTH`) | X16 only |
+| `BASICSTR.FTH` | BASIC-style string words: `NHEX NBIN STR VAL ASC CHR LEN LEFT RIGHT MID RPT` | independent | X16 (portable Forth) |
+| `PCMAUDIO.FTH` | PCM audio streaming helpers: `PCMCTRL PCMRATE PCM! PCMFULL?` | independent | X16 only |
+
+> **Why floating point needs loading.** The shipped builds assemble with
+> `FPCORE = 0`, which means **FP is *not* baked into the core** — the core keeps
+> only a deferred `>FLOAT` hook. So to use any float word (or a float literal
+> like `1.5`) you must `INCLUDE ASSEMBLER.FTH` then `INCLUDE FLOAT.FTH`, and
+> `INCLUDE FPX.FTH` for the extended set. (After a `LOAD-IMAGE` of an image that
+> bundles the FP toolkit, run `FPHOOK` once to re-arm the float-literal parser —
+> put it right after `LOAD-IMAGE DROP` in `AUTORUN.FTH`.) This is what "some
+> words are no longer native" refers to.
+
+**The FP chain is therefore:** `ASSEMBLER.FTH` → `FLOAT.FTH` → `FPX.FTH`.
+`BASICSTR.FTH` and `PCMAUDIO.FTH` stand alone.
+
+## 7.2 The `other/` sample programs and what they need
+
+`INCLUDE` the listed libraries **before** the sample. Anything marked *core only*
+runs on a bare interpreter (the X16 hardware words it may use — sprites, audio,
+VERA — are built in; it is only the toolkit libraries below that are not).
+
+| Sample | What it is | Load first |
+|---|---|---|
+| `BENCH.FTH` | Prime-count benchmark (old, near-unchanged) | *core only* |
+| `ERASTO.FTH` | Sieve-of-Eratosthenes benchmark | *core only* |
+| `RC4TEST.FTH` | RC4 cipher sample (from the Wikipedia Forth page) | *core only* |
+| `GAME.FTH` | "Catch the dots" game — sprites, `VSYNC`, `COLLIDE?`, `VFILL`, `JOY`, `RND`, PSG audio | *core only* |
+| `GAMEYM.FTH` | `GAME` with the audio switched to the YM2151 FM synth | *core only* |
+| `GAMEMS.FTH` | `GAME` variant adding mouse + joystick (click the blue squares) | *core only* |
+| `SNDEDIT.FTH` | PSG/FM song step-sequencer editor (save/reload songs for games) | *core only* |
+| `SPREDIT.FTH` | VERA hardware-sprite editor (4bpp, bank-1 VRAM) | *core only* |
+| `ASMTEST.FTH` | 28-case self-checking test suite for the assembler | `ASSEMBLER.FTH` |
+| `ASMDEMO.FTH` | Assembly `AFILLB`/`AXOR` with a correctness check + speed race vs Forth | `ASSEMBLER.FTH` |
+| `ASMIRQ.FTH` | Assembly VSYNC interrupt-handler example | `ASSEMBLER.FTH` |
+| `MORTGAGE.FTH` | Canadian mortgage calculator + amortization table (floating point) | `ASSEMBLER.FTH` → `FLOAT.FTH` |
+| `SPLIT.FTH` | Split-screen bitmap + text graphics library (Section 3); uses FP for circle math | `ASSEMBLER.FTH` → `FLOAT.FTH` |
+| `HP50.FTH` | HP-50g-style RPN scientific calculator (reals, integers, complex, lists, matrices, `STO`/`RCL`) | `ASSEMBLER.FTH` → `FLOAT.FTH` → `FPX.FTH` |
+| `HP50TEST.FTH` | 78 self-checks for `HP50.FTH` (load `HP50.FTH` first) | `ASSEMBLER.FTH` → `FLOAT.FTH` → `FPX.FTH` |
+
+Example — running the calculator from source (no image):
+```
+S" ASSEMBLER.FTH" INCLUDED
+S" FLOAT.FTH"     INCLUDED
+S" FPX.FTH"       INCLUDED
+S" HP50.FTH"      INCLUDED
+HP        \ start it ( OFF quits )
+```
 
 *Generated for ForthX16 / TX16 2.0. See also `readme.md`, `doc/forth-in-rom-scope.md`,
 and the self-checking examples in `tests-X16/`.*
