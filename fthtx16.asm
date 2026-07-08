@@ -6926,18 +6926,22 @@ includefile_2:
 	+forth
 	+token twodup, filestatus, nip
 	+qbranch_fwd included_1
+!if CART = 0 {
 	; missing file: report "<name> ?" (the word-not-found convention)
 	; instead of vanishing silently - a typo'd INCLUDE showed nothing at all
 	+token twodup, type
 	+literal inc_msg_notfound
 	+token count, type, cr
+}
 	+token twodrop, exit
 included_1:
+!if CART = 0 {
 	+literal inc_msg_load			; progress: "Loading <name>, compiling"
-	+token count, type			; (all builds - a banner-less file used
-	+token twodup, type			; to load with a blank screen on the
-	+literal inc_msg_comp			; non-WIDEDICT builds)
-	+token count, type
+	+token count, type			; (every build EXCEPT the 8K C64 cart,
+	+token twodup, type			; which is full to the byte - a banner-
+	+literal inc_msg_comp			; less file used to load with a blank
+	+token count, type			; screen on the non-WIDEDICT builds)
+}
 !if WIDEDICT {
 	; same stale-HERE hazard as CREATE: reveal the dummy via LATEST instead
 	+token twodup, xcreate			; create a dummy word with the same name as the included file
@@ -6963,15 +6967,19 @@ included_1:
 	+token drop, exit
 included_2:
 	+token includefile
+!if CART = 0 {
 	+token cr				; the compiling line completes when done
+}
 	+token exit
 
+!if CART = 0 {
 inc_msg_load:
 	+string "Loading "
 inc_msg_comp:
 	+string ", compiling ..."
 inc_msg_notfound:
 	+string " ?"
+}
 
 +header ~required, ~required_n, "REQUIRED"
 	+forth
