@@ -596,6 +596,8 @@ A few examples and benchmarks are in `other`.
 
 **`SPLIT.FTH`** is a split-screen helper library for the X16: it puts a 320x240 bitmap on VERA layer 0 and confines the text console to a window on layer 1 (composited on top), giving a graphics-top / text-bottom screen with no raster interrupt - `INCLUDE SPLIT.FTH` then `SPLIT-DEMO`; `SPLITON`/`SPLITOFF` enter/leave it (`SPLIT-ROWS` sets the text-window height). It also provides the full bitmap-graphics vocabulary as direct-to-VERA words that work in BOTH the split and normal `GINIT` full-screen mode (both use the same $0000 bitmap): `GCLS PSET LINE FRAME RECT RING OVAL GTEXT`, radius circles `CIRCLE`/`FCIRCLE` (same names/signatures as the KERNAL GRAPH words, which they redefine), plus low-level `BPSET BHLINE BVLINE BLINE BFILL BRECT BCLS`. A persistent-pen API avoids repeating the colour: `n GCOLOR` then `PLOT DRAW BOX FBOX ELL FELL CIRC DISC SAY`.
 
+**`ASMSPLIT.FTH`** is the same split screen built on the **`ASMGFX.FTH`** toolkit instead of SPLIT's own inline words: the drawing primitives are inline-assembler `CODE` words and the fills use the VERA FX 32-bit cache, and because ASMGFX's `RING` is integer it needs **no floating point** (load `ASSEMBLER.FTH` → `ASMGFX.FTH` → `ASMSPLIT.FTH`, then `SPLIT-DEMO`).
+
 **`MORTGAGE.FTH`** is a Canadian mortgage calculator: it uses the semi-annual-compounding rule (`i = (1+j/2)^(1/6)-1`) and the floating-point words to compute the monthly payment and print a full capital/interest amortization grid - `INCLUDE MORTGAGE.FTH` then `300000. 25 550 MTG` ($300k, 25 yr, 5.50%; principal takes a trailing dot so it can exceed 16 bits, rate is x100), then `SCHEDULE` for the month-by-month table or `YEARLY` for a yearly one. It doubles as a worked example of building a power function from `FLN`/`FEXP` and printing money to the cent past `F>S`'s 65535 limit via a 32-bit double and pictured numeric output.
 
 **`HP50.FTH`** is an HP-50g-style RPN scientific calculator: a typed value stack, an HP-style numbered-level display, and a small object system. Types: reals; exact 32-bit integers with BIN/OCT/DEC/HEX bases and bitwise `AND OR XOR NOT`; complex numbers `(re,im)` (`+ - * / CONJ RE IM ARG ABS R->C C->R`); and lists `[ 1 2 3 ]` (`SIZE GET`, `+` concatenates) which double as vectors (`DOT V+ V- NORM CROSS`) and matrices (`DET TRN M*`). It also has named user variables (`STO RCL PURGE CLVAR`, and a bare name recalls) that persist across `CLEAR`. Plus the usual scientific functions (`SIN COS TAN ASIN ACOS ATAN LN EXP LOG ALOG ^ SQRT`, DEG/RAD, STD/FIX) and an RPN command parser - `INCLUDE HP50.FTH` then `HP` (`OFF` quits), with `HP50TEST.FTH` self-checking it (78 tests).
@@ -623,6 +625,7 @@ The floating-point load chain is therefore **`ASSEMBLER.FTH` → `FLOAT.FTH` →
 |---|---|
 | `BENCH` · `ERASTO` · `RC4TEST` · `GAME` · `GAMEYM` · `GAMEMS` · `SNDEDIT` · `SPREDIT` | *nothing (core only)* |
 | `ASMTEST` · `ASMDEMO` · `ASMIRQ` | `ASSEMBLER.FTH` |
+| `ASMSPLIT` | `ASSEMBLER.FTH` → `ASMGFX.FTH` |
 | `MORTGAGE` · `SPLIT` | `ASSEMBLER.FTH` → `FLOAT.FTH` |
 | `HP50` · `HP50TEST` | `ASSEMBLER.FTH` → `FLOAT.FTH` → `FPX.FTH` |
 

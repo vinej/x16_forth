@@ -1636,6 +1636,7 @@ VERA — are built in; it is only the toolkit libraries below that are not).
 | `ASMIRQ.FTH` | Assembly VSYNC interrupt-handler example | `ASSEMBLER.FTH` |
 | `MORTGAGE.FTH` | Canadian mortgage calculator + amortization table (floating point) | `ASSEMBLER.FTH` → `FLOAT.FTH` |
 | `SPLIT.FTH` | Split-screen bitmap + text graphics library (Section 3); uses FP for circle math | `ASSEMBLER.FTH` → `FLOAT.FTH` |
+| `ASMSPLIT.FTH` | Same split-screen as `SPLIT.FTH`, but drawing via the `ASMGFX.FTH` toolkit (`CODE` primitives + VERA FX fills); integer `RING`, so **no floating point** | `ASSEMBLER.FTH` → `ASMGFX.FTH` |
 | `HP50.FTH` | HP-50g-style RPN scientific calculator (reals, integers, complex, lists, matrices, `STO`/`RCL`) | `ASSEMBLER.FTH` → `FLOAT.FTH` → `FPX.FTH` |
 | `HP50TEST.FTH` | 78 self-checks for `HP50.FTH` (load `HP50.FTH` first) | `ASSEMBLER.FTH` → `FLOAT.FTH` → `FPX.FTH` |
 
