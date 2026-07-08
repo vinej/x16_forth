@@ -1,5 +1,6 @@
 === ARITHMETIC - Arithmetic ===
 
+. ( -- n ) - pop  a number from stack and show a number. 2 3 + . ->  5
 + ( n1 n2 -- n3 ) - add. 2 3 +  ->  5
 - ( n1 n2 -- n3 ) - subtract. 7 3 -  ->  4
 * ( n1 n2 -- n3 ) - multiply. 4 5 *  ->  20

@@ -14,3 +14,5 @@ SPRITE-MEM ( num bank addr -- ) - point a sprite's image at VRAM bank:addr (=
     BASIC SPRMEM num,bank,addr).
 SPRITE ( num zdepth -- ) - set Z-depth and enable the sprite layer (BASIC
     SPRITE num,zdepth).
+SPRSAVE ( c-addr u sprite -- ) - save a sprite's image pixel data to disk.
+SPRLOAD ( c-addr u sprite -- ) - load pixel data into a sprite's image area.

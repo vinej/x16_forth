@@ -38,6 +38,9 @@ Each version's release binary is written **into its own folder**, named after th
 | `version/ForthC64_6502Cart/` | `ForthC64_6502Cart.crt` |
 | `version/ForthC64_6502Disk/` | `ForthC64_6502Disk.d64` |
 | `version/ForthF256_6502Prg/` | `ForthF256_6502Prg.pgz` |
+
+| X16 Version folder (slow as now) | Release binary |
+|---|---|
 | `version/ForthX16_6502Prg/` | `ForthX16_6502Prg.prg` |
 | `version/ForthX16_6502Bank9/` | `ForthX16_6502Bank9.bin` (whole 256 KB ROM — **not in the repo**, see below) |
 | `version/ForthX16_6502Bank32/` | `ForthX16_6502Bank32.bin` (16 KB bank-32 image) |
@@ -45,6 +48,9 @@ Each version's release binary is written **into its own folder**, named after th
 | `version/ForthX16_816Prg/` | `ForthX16_816Prg.prg` |
 | `version/ForthX16_816Bank9/` | `ForthX16_816Bank9.bin` (whole 256 KB ROM — **not in the repo**, see below) |
 | `version/ForthX16_816Bank32/` | `ForthX16_816Bank32.bin` (16 KB bank-32 image) |
+
+| X16 Experimental Version folder (slow as now) | Release binary |
+|---|---|
 | `version/ForthX16_816WideRom/` | `ForthX16_816WideRom.prg` |
 | `version/ForthX16_816WideRam/` | `ForthX16_816WideRam.prg` |
 | `version/ForthX16_816WideFar/` | `ForthX16_816WideFar.prg` |
@@ -341,7 +347,7 @@ SCROLLY ( n -- )     set the layer-1 hardware vertical scroll (0-4095)
 ```
 
 ### Bitmap graphics
-These words live in the **`GFX.FTH` toolkit**, not the core — `INCLUDE GFX.FTH`
+These words live in the **`GFX.FTH` toolkit** or the **`ASMGFX.FTH` toolkit** (need assembler toolkit to be loaded before), not the core — `INCLUDE GFX.FTH` 
 to use them (the X16 builds assemble with `GFXTOOLKIT=1`, which keeps the ~513
 bytes of graphics out of every ROM/image so the ROM builds have room for the
 bank-I/O words and future features). Enter graphics mode with `GINIT` first

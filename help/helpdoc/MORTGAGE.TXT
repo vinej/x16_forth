@@ -10,6 +10,6 @@ Load:  S" ASSEMBLER.FTH" INCLUDED  S" FLOAT.FTH" INCLUDED
   SCHEDULE     print the full month-by-month table
   YEARLY       print a year-by-year summary
 
-The principal takes a trailing dot (a double) so it can exceed 65535; the rate
+--> The principal takes a trailing dot (a double) so it can exceed 65535; the rate
 is x100 (550 = 5.50%). A worked floating-point / currency example - see user
 guide Section 4.

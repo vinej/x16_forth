@@ -1082,14 +1082,23 @@ cold_fhvb:
 !if WD_ROMBANKS {
 	lda #FARBANK		; resting state: the RAM window shows the
 	sta $00			; bank-2 data extension; ROM window = KERNAL
-	lda $FFEE		; capture the KERNAL's native-mode IRQ/NMI
-	sta kirq_vec		; handlers (bank 0 is mapped here) - the
-	lda $FFEF		; per-bank vector tails route through them
+	php			; capture the KERNAL's native-mode IRQ/NMI
+	sei			; handlers - the per-bank vector tails route
+	lda $01			; through them. The vectors MUST be read from
+	pha			; ROM bank 0: a PRG is entered from BASIC with
+	lda #0			; bank 4 mapped, and every bank has its own
+	sta $01			; vector bytes at $FFEA/$FFEE.
+	lda $FFEE
+	sta kirq_vec
+	lda $FFEF
 	sta kirq_vec+1
 	lda $FFEA
 	sta knmi_vec
 	lda $FFEB
 	sta knmi_vec+1
+	pla
+	sta $01
+	plp
 } else {
 	lda #0			; RAM mode: the $00 window is dynamic (code
 	sta $00			; banks); no bank-2 data extension
@@ -5283,7 +5292,13 @@ ccw_ev:
 ; bank, then enter the captured KERNAL handler with a FAKE return frame so
 ; its RTI lands in wd_irqret, which restores the bank and RTIs for real.
 ; Native-mode frames: entry pushed [PB PCH PCL P]; RTI pops [P PCL PCH PB].
+; An interrupt INHERITS the interrupted code's register widths, and the fused
+; 816 primitives run 16-bit-A sections (rep #$20) - so force 8-bit A before
+; the first pha or `lda #0` eats the next opcode byte as an immediate. Only
+; A: sep #$10 would zero XH/YH before the KERNAL handler could save them.
+; The real P (and widths) come back via the final RTI's hardware frame.
 wd_irqshim:
+	sep #$20		; 8-bit A - this shim is 8-bit code
 	pha
 	lda $01
 	pha			; saved bank (restored by wd_irqret)
@@ -5294,9 +5309,10 @@ wd_irqshim:
 	pha
 	lda #<wd_irqret
 	pha
-	php			; P (I is already set)
+	php			; P (I is already set; M=1 so wd_irqret is 8-bit)
 	jmp (kirq_vec)
 wd_nmishim:
+	sep #$20		; 8-bit A (same width trap as wd_irqshim)
 	pha
 	lda $01
 	pha

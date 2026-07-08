@@ -27,6 +27,14 @@ VARIABLE #FAIL
    S" en-us" KEYMAP
    ." KEYMAP  " 111 111 CHECK
 
+   \ I2CPEEK: read an SMC register (non-destructive; dev $42, reg $30 = version)
+   66 48 I2CPEEK DROP
+   ." I2CPEEK " 111 111 CHECK
+
+   \ FREE prints the free dictionary space (visual; confirm it doesn't crash)
+   ." FREE -> " FREE
+   ." AFTER-FREE " 111 111 CHECK
+
    ." ALIVE   " 12345 12345 CHECK
    CR #FAIL @ 0= IF ." ALL MEM TESTS PASSED" ELSE ." MEM FAILURES: " #FAIL @ . THEN CR ;
 

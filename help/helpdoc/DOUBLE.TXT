@@ -19,3 +19,4 @@ D0= ( d -- flag ) - double is zero?
 D0< ( d -- flag ) - double is negative?
 DMAX ( d1 d2 -- d ) - larger double.
 DMIN ( d1 d2 -- d ) - smaller double.
+D. ( -- d) - display

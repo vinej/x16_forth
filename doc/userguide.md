@@ -308,7 +308,7 @@ Click a word to jump to its category section (words are also findable with your 
 - **`.S`** ( -- ) — print the whole stack without changing it. `1 2 .S` → `<2> 1 2`
 
 ## Arithmetic
-
+- **`.`** ( -- n ) — pop a number from stack and show it `2 3 + .` → `5`
 - **`+`** ( n1 n2 -- n3 ) — add. `2 3 +` → `5`
 - **`-`** ( n1 n2 -- n3 ) — subtract. `7 3 -` → `4`
 - **`*`** ( n1 n2 -- n3 ) — multiply. `4 5 *` → `20`
@@ -341,6 +341,7 @@ Click a word to jump to its category section (words are also findable with your 
 
 Doubles occupy two stack cells (low then high). Type a double literal with a dot: `10.`
 
+- **`D.`** ( -- d ) — pop a double from stack and show it. `12. 13. D+ D.` → `25`
 - **`S>D`** ( n -- d ) — single to double (sign-extend). `5 S>D D.` → `5`
 - **`D>S`** ( d -- n ) — double to single (drop high cell).
 - **`DNEGATE`** ( d -- -d ) — negate a double.

@@ -28,8 +28,18 @@ extension words (only present in the X16 build, forthx16.prg):
                   Needs a host file RAW.BIN with bytes 10,20,30,40 present.
 * X16SYS.FTH    - self-checking test of USR (calls a small ML routine).
                   (MONITOR is interactive - run it and exit with X.)
-* X16MEM.FTH    - self-checking test of SETBANK, I2CPEEK, SLEEP, KEYMAP.
+* X16MEM.FTH    - self-checking test of SETBANK, I2CPEEK, SLEEP, KEYMAP, FREE.
                   (I2CPOKE and RESET/REBOOT/POWEROFF reset/alter the machine.)
+                  NOTE: skip on the WideRam/WideFar/WideRom builds - SETBANK
+                  repoints the $A000 RAM-bank window that the wide dictionary
+                  itself lives in, which corrupts the running interpreter.
+* X16FX.FTH     - self-checking test of the VERA FX helpers (FX-DCSEL and the
+                  signed 16x16->32 hardware multiply FX-MULT / FX*).
+* X16BANK.FTH   - self-checking test of the banked-RAM words (MEM>BANK,
+                  BANK>MEM, B@, B!). Same wide-build caveat as X16MEM: these
+                  drive the $A000 window and must not be run on the Wide builds.
+* X16PCM.FTH    - self-checking test of the native PCM words (PCMCTRL, PCMRATE,
+                  PCM!, PCMFULL?, PCM-WRITE) - checks the FIFO fill/reset state.
 * X16STRT.FTH   - self-checking test of the string functions now baked into
                   the X16 build (HEX$ BIN$ STR$ VAL ASC CHR$ LEN LEFT$ RIGHT$
                   MID$ RPT$), formerly toolkit/X16STR.FTH.
