@@ -45,6 +45,7 @@ and **is** in the repo.
 |---|---|---|---|
 | [ForthC64_6502Prg](ForthC64_6502Prg/readme.md) | C64 · 6502 | `ForthC64_6502Prg.prg` | VICE `x64sc` |
 | [ForthC64_6502Cart](ForthC64_6502Cart/readme.md) | C64 cartridge · 6502 | `ForthC64_6502Cart.crt` | VICE `-cartcrt` |
+| [ForthC64_6502Disk](ForthC64_6502Disk/readme.md) | C64 disk image · 6502 | `ForthC64_6502Disk.d64` | VICE `x64sc` |
 | [ForthF256_6502Prg](ForthF256_6502Prg/readme.md) | Foenix F256 · 65C02 | `ForthF256_6502Prg.pgz` | Foenix IDE (manual) |
 | [ForthX16_6502Prg](ForthX16_6502Prg/readme.md) | Commander X16 · 6502 | `ForthX16_6502Prg.prg` | `x16emu` |
 | [ForthX16_6502Bank9](ForthX16_6502Bank9/readme.md) | X16 ROM bank 9 · 65C02 | `ForthX16_6502Bank9.bin` | `x16emu` (ROM patch, `TEST`) |

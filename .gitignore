@@ -40,6 +40,7 @@ version/**/*.bin
 version/**/*.crt
 version/**/*.rom
 version/**/*.pgz
+version/**/*.d64
 version/**/*.tmp
 
 # ─── OS / editor junk ───────────────────────────────────────────────────
