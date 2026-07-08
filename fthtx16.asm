@@ -6926,14 +6926,19 @@ includefile_2:
 	+forth
 	+token twodup, filestatus, nip
 	+qbranch_fwd included_1
+	; missing file: report "<name> ?" (the word-not-found convention)
+	; instead of vanishing silently - a typo'd INCLUDE showed nothing at all
+	+token twodup, type
+	+literal inc_msg_notfound
+	+token count, type, cr
 	+token twodrop, exit
 included_1:
-!if WIDEDICT {
 	+literal inc_msg_load			; progress: "Loading <name>, compiling"
+	+token count, type			; (all builds - a banner-less file used
+	+token twodup, type			; to load with a blank screen on the
+	+literal inc_msg_comp			; non-WIDEDICT builds)
 	+token count, type
-	+token twodup, type
-	+literal inc_msg_comp
-	+token count, type
+!if WIDEDICT {
 	; same stale-HERE hazard as CREATE: reveal the dummy via LATEST instead
 	+token twodup, xcreate			; create a dummy word with the same name as the included file
 	+literal RTS_INSTR
@@ -6958,17 +6963,15 @@ included_1:
 	+token drop, exit
 included_2:
 	+token includefile
-!if WIDEDICT {
 	+token cr				; the compiling line completes when done
-}
 	+token exit
 
-!if WIDEDICT {
 inc_msg_load:
 	+string "Loading "
 inc_msg_comp:
 	+string ", compiling ..."
-}
+inc_msg_notfound:
+	+string " ?"
 
 +header ~required, ~required_n, "REQUIRED"
 	+forth
