@@ -1594,6 +1594,7 @@ be reachable, so copy the ones you want next to where you run). This is the
 | `PCMAUDIO.FTH` | PCM audio streaming helpers: `PCMCTRL PCMRATE PCM! PCMFULL?` | independent | X16 only |
 | `GFX.FTH` | **Bitmap graphics**: `GINIT GCLS PSET LINE FRAME RECT RING OVAL GTEXT CIRCLE FCIRCLE` + a pen API. Integer, FP-free; over the core VERA primitives | independent | X16 only |
 | `VERAFX.FTH` | **VERA FX** (inline-assembler `CODE` words): `FX*` signed 16×16→32 multiply, `FX-FILL`/`FX-CLEAR` fast 32-bit-cache VRAM fill, `FX-DCSEL`/`FX-OFF` | **`ASSEMBLER.FTH` first** (built from `CODE` words) | X16 only |
+| `ASMGFX.FTH` | **Assembler + VERA FX bitmap graphics** — same vocabulary as `GFX.FTH` (`GINIT GCLS PSET LINE RECT OVAL …` + pen API) but the primitives are `CODE` words and fills use the VERA FX 32-bit cache; `GMODE ( bank addr w h -- )` makes it work with any 8bpp bitmap geometry, not just 320×240 | **`ASSEMBLER.FTH` first** | X16 only |
 
 > **Why graphics needs loading.** The X16 builds assemble with `GFXTOOLKIT = 1`,
 > which moves the bitmap-graphics words OUT of the core into `GFX.FTH` (frees
