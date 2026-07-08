@@ -356,8 +356,13 @@ SCROLLY ( n -- )     set the layer-1 hardware vertical scroll (0-4095)
 ```
 
 ### Bitmap graphics
-Enter graphics mode with `GINIT` first (320x240, 256 colors). Coordinates are
-0-319 (x) by 0-239 (y). The rectangle/oval words take two corner points.
+These words live in the **`GFX.FTH` toolkit**, not the core — `INCLUDE GFX.FTH`
+to use them (the X16 builds assemble with `GFXTOOLKIT=1`, which keeps the ~513
+bytes of graphics out of every ROM/image so the ROM builds have room for the
+bank-I/O words and future features). Enter graphics mode with `GINIT` first
+(320x240, 256 colors). Coordinates are 0-319 (x) by 0-239 (y). The
+rectangle/oval words take two corner points. (`SPLIT.FTH` provides the same
+vocabulary for a graphics-over-text split screen.)
 ```
 GINIT ( -- )                     enter 320x240x256 graphics mode
 GCLS  ( -- )                     clear the graphics screen
@@ -501,6 +506,19 @@ SETBANK  ( bank -- )   select the RAM bank visible at $A000-$BFFF
 B@       ( bank off -- byte )   read a byte from banked RAM (off 0..8191)
 B!       ( byte bank off -- )   store a byte into banked RAM (off 0..8191)
 SLEEP    ( jiffies -- )  wait 'jiffies' 1/60-second ticks
+```
+**Bulk RAM-bank I/O (65816 builds only):** the `816` builds add words to stream
+data between disk, RAM banks, and low RAM — handy for holding game levels in
+banks and pulling the active one into low RAM. All four preserve the `$A000`
+window register. `BANKLOAD ( c-addr u dev bank -- )` loads a file into a bank
+(spanning banks for files >8K); `BANKSAVE ( c-addr u dev bank off len -- )` saves
+a bank slice; `BANK>MEM ( bank boff addr u -- )` and `MEM>BANK ( addr bank boff u
+-- )` fast-copy between a bank and low RAM. On the wide-dictionary builds
+`DATABANK ( -- bank )` reports the highest bank the dictionary is not using.
+```
+MS       ( u -- )        wait ~u milliseconds (calibrated 8 MHz busy loop)
+KEYMAP   ( c-addr u -- )  set the keyboard layout, e.g. S" en-us" KEYMAP
+REBOOT   ( -- )        soft reboot through the reset vector
 MS       ( u -- )        wait ~u milliseconds (calibrated 8 MHz busy loop)
 KEYMAP   ( c-addr u -- )  set the keyboard layout, e.g. S" en-us" KEYMAP
 REBOOT   ( -- )        soft reboot through the reset vector

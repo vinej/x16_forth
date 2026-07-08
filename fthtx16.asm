@@ -117,6 +117,20 @@ FASTLOAD = 0
 }
 }
 
+; GFXTOOLKIT: the X16 bitmap-graphics words (GINIT GCLS PSET LINE FRAME RECT
+; RING OVAL GTEXT) live in a loadable toolkit (INCLUDE GFX.FTH) instead of the
+; core. Frees ~513 bytes in every X16 build - room for the bank-I/O words and
+; future features, especially in the tight ROM/cart builds. DEFAULT 1 for X16
+; (build with GFXTOOLKIT=0 to bake graphics back into the core the old way).
+!ifndef GFXTOOLKIT {
+!if X16 {
+GFXTOOLKIT = 1
+} else {
+GFXTOOLKIT = 0
+}
+}
+!if GFXTOOLKIT != 0 and X16 = 0 { !error "GFXTOOLKIT requires X16" }
+
 ; WIDEDICT: 65C816 Phase 2 - dictionary beyond 64KB (MiSTer flat-RAM core).
 ; Requires NATIVE816. Design: token ids and the 2-byte TOKENS offsets stay
 ; exactly as they are (the NEXT dispatch hot path is untouched); a parallel

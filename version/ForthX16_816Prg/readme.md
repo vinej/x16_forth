@@ -15,7 +15,10 @@ with a 65C816 CPU), as a PRG.
 The 65816 native-mode X16 build. Same feature set as `ForthX16_6502Prg`, but the
 inner interpreter and primitives use 65816 native (16-bit) instructions. This is
 the **baseline** for the three "wide dictionary" builds
-(`ForthX16_816WideRom` / `WideRam` / `WideFar`).
+(`ForthX16_816WideRom` / `WideRam` / `WideFar`) and the two 65816 ROM builds
+(`ForthX16_816Bank9` / `Bank32`). As a 65816 build it also has the bank-I/O words
+(`BANKLOAD`/`BANKSAVE`/`BANK>MEM`/`MEM>BANK`) built in. Bitmap graphics are a
+toolkit here too (`INCLUDE GFX.FTH`).
 
 ## Build
 Run `make.bat` — assembles `build.asm` (`--cpu 65816`) to `ForthX16_816Prg.prg`.

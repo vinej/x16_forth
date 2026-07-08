@@ -1574,6 +1574,14 @@ be reachable, so copy the ones you want next to where you run). This is the
 | `FPX.FTH` | Extended FLOATING/FLOATING-EXT + BASIC math aliases: `FPI FROT FSINCOS FLOG FALOG FLNP1 FEXPM1 FSINH FASIN FATAN2 F~`, and `SQR SIN COS TAN ATN LOG EXP` | after base FP (`FLOAT.FTH`) | X16 only |
 | `BASICSTR.FTH` | BASIC-style string words: `NHEX NBIN STR VAL ASC CHR LEN LEFT RIGHT MID RPT` | independent | X16 (portable Forth) |
 | `PCMAUDIO.FTH` | PCM audio streaming helpers: `PCMCTRL PCMRATE PCM! PCMFULL?` | independent | X16 only |
+| `GFX.FTH` | **Bitmap graphics**: `GINIT GCLS PSET LINE FRAME RECT RING OVAL GTEXT CIRCLE FCIRCLE` + a pen API. Integer, FP-free; over the core VERA primitives | independent | X16 only |
+
+> **Why graphics needs loading.** The X16 builds assemble with `GFXTOOLKIT = 1`,
+> which moves the bitmap-graphics words OUT of the core into `GFX.FTH` (frees
+> ~513 bytes in every X16 build). So `INCLUDE GFX.FTH` before using `GINIT`,
+> `PSET`, `RECT`, etc. (The VERA primitives they build on — `VADDR V! V@ VFILL
+> ISQRT` — stay in the core.) `SPLIT.FTH` provides the same vocabulary for a
+> graphics-over-text split screen. Build with `GFXTOOLKIT=0` to bake graphics in.
 
 > **Why floating point needs loading.** The shipped builds assemble with
 > `FPCORE = 0`, which means **FP is *not* baked into the core** — the core keeps

@@ -1508,6 +1508,11 @@ g_convps:
 +
 	rts
 
+; --- X16 bitmap graphics (GINIT GCLS PSET LINE FRAME RECT RING OVAL GTEXT).
+; With GFXTOOLKIT=1 these move to a loadable toolkit (GFX.FTH / SPLIT.FTH),
+; freeing ~513 bytes of core. VERA primitives they build on (VADDR/V!/VFILL/
+; ISQRT) stay in the core, so the toolkit versions can reuse them.
+!if GFXTOOLKIT = 0 {
 ; GINIT ( -- )   enter 320x240x256 bitmap graphics mode
 +header ~ginit, ~ginit_n, "GINIT"
 	+code
@@ -1780,6 +1785,7 @@ gtext_loop:
 	bne gtext_loop
 gtext_done:
 	jmp next
+}	; GFXTOOLKIT = 0
 
 ; ==============================================================================
 ; Input devices - joystick/gamepad and mouse (KERNAL)
@@ -2229,6 +2235,262 @@ SMC_I2C_ADDR   = $42
 	+dpop
 	+dpop
 	jmp next
+
+; DATABANK ( -- bank )   the highest RAM bank NOT yet used by the dictionary,
+; which grows top-down - a safe place to start putting your own data with
+; B@/B!. Returns 0 if none is free (the dictionary has reached the floor).
+; NOTE: the dictionary keeps growing downward, so grab your data banks early
+; and don't let it grow down into them. (WIDEDICT RAM-bank builds only.)
+!if WIDEDICT {
+!if WD_ROMBANKS = 0 {
++header ~databank, ~databank_n, "DATABANK"
+	+code
+	lda _codebank		; dict's lowest claimed bank (0 = none claimed yet)
+	beq db_top
+	sec
+	sbc #1			; highest free = _codebank - 1
+	bcs db_floor		; carry set (no borrow) - skip the _codetop load
+db_top:
+	lda _codetop		; nothing far yet -> the top usable RAM bank
+db_floor:
+	cmp #CBANK_FLOOR
+	bcs db_ok
+	lda #0			; below the floor -> no free data bank
+db_ok:
+	ldx #0
+	jmp dpush_and_next
+}
+}
+
+; --- Bulk RAM-bank I/O (all 65816 builds) ----------------------------------
+; Stream files straight into RAM banks and copy between a bank and low RAM.
+; Ideal for game data: BANKLOAD all your levels into banks once, then BANK>MEM
+; the active one into low RAM when needed. All four save/restore the $00 window
+; register, so they are safe alongside the dictionary window. 'off' is 0..8191
+; into the $A000 window; BANKLOAD and the two copies auto-advance across bank ends.
+!if NATIVE816 {
+
+; BANKLOAD ( c-addr u dev bank -- )   load a PRG file into RAM starting at
+; bank:$A000; the KERNAL auto-advances the RAM bank across $BFFF, so a file
+; bigger than 8K spills into bank+1, bank+2, ...
++header ~bankload, ~bankload_n, "BANKLOAD"
+	+code
+	lda _dtop			; bank
+	sta _scratch
+	+dpop
+	lda _dtop			; device
+	sta _wscratch
+	+dpop
+	lda _dtop			; name length
+	sta _wscratch+1
+	+dpop
+	+ldax _dtop			; name address
+	pha
+	txa
+	tay
+	pla
+	tax
+	lda _wscratch+1
+	jsr SETNAM
+	lda #1
+	ldx _wscratch
+	ldy #0				; secondary 0 -> load to X/Y (skip 2-byte header)
+	jsr SETLFS
+	lda $00
+	pha				; save the window register (dict resting bank)
+	lda _scratch
+	sta $00				; select the target RAM bank
+	lda #0				; 0 = load
+	ldx #<$A000
+	ldy #>$A000			; load into the $A000 window
+	jsr KLOAD
+	pla
+	sta $00				; restore the window register
+	+dpop
+	jmp next
+
+; BANKSAVE ( c-addr u dev bank off len -- )   save len bytes from bank:off
+; ($A000+off) to a PRG file. One bank per call: off+len must be <= 8192.
++header ~banksave, ~banksave_n, "BANKSAVE"
+	+code
+	ldy #2
+	lda (_dstack),y			; off lo
+	sta _scratch			; start = $A000 + off  (SAVE reads start via this zp ptr)
+	iny
+	lda (_dstack),y			; off hi
+	clc
+	adc #$A0
+	sta _scratch+1
+	clc
+	lda _dtop			; len lo (top of stack is in _dtop)
+	adc _scratch
+	sta _rscratch			; end = start + len
+	lda _dtop+1			; len hi
+	adc _scratch+1
+	sta _rscratch+1
+	lda $00
+	pha				; save the window register
+	ldy #4
+	lda (_dstack),y			; bank
+	sta $00
+	ldy #6
+	lda (_dstack),y			; device
+	sta _wscratch
+	ldy #8
+	lda (_dstack),y			; name length
+	sta _wscratch+1
+	ldy #10
+	lda (_dstack),y			; name address lo
+	tax
+	ldy #11
+	lda (_dstack),y			; name address hi
+	tay
+	lda _wscratch+1
+	jsr SETNAM
+	lda #1
+	ldx _wscratch
+	ldy #0
+	jsr SETLFS
+	lda #<_scratch			; A = zp ptr to the start address
+	ldx _rscratch			; end low
+	ldy _rscratch+1			; end high
+	jsr KSAVE
+	pla
+	sta $00				; restore the window register
+	+dpop
+	+dpop
+	+dpop
+	+dpop
+	+dpop
+	+dpop
+	jmp next
+
+; BANK>MEM ( bank boff addr u -- )   fast copy u bytes from bank:boff (through
+; the $A000 window) to low-RAM addr, auto-advancing across bank boundaries.
++header ~banktomem, ~banktomem_n, "BANK>MEM"
+	+code
+	ldy #4
+	lda (_dstack),y			; boff lo -> src
+	sta $02
+	iny
+	lda (_dstack),y			; boff hi
+	clc
+	adc #$A0			; src = $A000 + boff
+	sta $03
+	ldy #2
+	lda (_dstack),y			; addr lo -> dest
+	sta $04
+	iny
+	lda (_dstack),y			; addr hi
+	sta $05
+	lda _dtop			; u lo -> count (top of stack is in _dtop)
+	sta _wscratch
+	lda _dtop+1			; u hi
+	sta _wscratch+1
+	lda $00
+	pha				; save the window register
+	ldy #6
+	lda (_dstack),y			; bank -> select
+	sta $00
+	ldy #0
+btm_loop:
+	lda _wscratch
+	ora _wscratch+1
+	beq btm_done
+	lda ($02),y			; src byte (window)
+	sta ($04),y			; dest byte (low RAM)
+	inc $02
+	bne btm_s2
+	inc $03
+	lda $03
+	cmp #$C0			; crossed $BFFF? -> next bank, wrap to $A000
+	bne btm_s2
+	lda #$A0
+	sta $03
+	inc $00
+btm_s2:
+	inc $04
+	bne btm_d2
+	inc $05
+btm_d2:
+	lda _wscratch
+	bne btm_dec
+	dec _wscratch+1
+btm_dec:
+	dec _wscratch
+	bra btm_loop
+btm_done:
+	pla
+	sta $00				; restore the window register
+	+dpop
+	+dpop
+	+dpop
+	+dpop
+	jmp next
+
+; MEM>BANK ( addr bank boff u -- )   fast copy u bytes from low-RAM addr to
+; bank:boff (through the $A000 window), auto-advancing across bank boundaries.
++header ~memtobank, ~memtobank_n, "MEM>BANK"
+	+code
+	ldy #6
+	lda (_dstack),y			; addr lo -> src (low RAM)
+	sta $02
+	iny
+	lda (_dstack),y			; addr hi
+	sta $03
+	ldy #2
+	lda (_dstack),y			; boff lo -> dest
+	sta $04
+	iny
+	lda (_dstack),y			; boff hi
+	clc
+	adc #$A0			; dest = $A000 + boff
+	sta $05
+	lda _dtop			; u lo -> count (top of stack is in _dtop)
+	sta _wscratch
+	lda _dtop+1			; u hi
+	sta _wscratch+1
+	lda $00
+	pha				; save the window register
+	ldy #4
+	lda (_dstack),y			; bank -> select
+	sta $00
+	ldy #0
+mtb_loop:
+	lda _wscratch
+	ora _wscratch+1
+	beq mtb_done
+	lda ($02),y			; src byte (low RAM)
+	sta ($04),y			; dest byte (window)
+	inc $02
+	bne mtb_s2
+	inc $03
+mtb_s2:
+	inc $04
+	bne mtb_d2
+	inc $05
+	lda $05
+	cmp #$C0			; crossed $BFFF? -> next bank, wrap to $A000
+	bne mtb_d2
+	lda #$A0
+	sta $05
+	inc $00
+mtb_d2:
+	lda _wscratch
+	bne mtb_dec
+	dec _wscratch+1
+mtb_dec:
+	dec _wscratch
+	bra mtb_loop
+mtb_done:
+	pla
+	sta $00				; restore the window register
+	+dpop
+	+dpop
+	+dpop
+	+dpop
+	jmp next
+}
 
 ; I2CPOKE/I2CPEEK were removed to save ROM: rarely used, and they called the
 ; KERNAL I2C routines ($FEC6/$FEC9) directly, which is unreachable from the

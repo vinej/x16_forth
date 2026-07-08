@@ -52,9 +52,41 @@ and **is** in the repo.
 | [ForthX16_6502Bank32](ForthX16_6502Bank32/readme.md) | X16 ROM bank 32 · 65C02 | `ForthX16_6502Bank32.bin` | `x16emu -cartbin` + `loader32` |
 | [ForthX16_6502Cart](ForthX16_6502Cart/readme.md) | X16 autoboot cart · 6502 | `ForthX16_6502Cart.bin` | `x16emu -cartbin` (autoboots) |
 | [ForthX16_816Prg](ForthX16_816Prg/readme.md) | X16 · 65816 native | `ForthX16_816Prg.prg` | `x16emu -c816` |
+| [ForthX16_816Bank9](ForthX16_816Bank9/readme.md) | X16 ROM bank 9 · 65816 | `ForthX16_816Bank9.bin` | `x16emu -c816` (ROM patch, `TEST`) |
+| [ForthX16_816Bank32](ForthX16_816Bank32/readme.md) | X16 ROM bank 32 · 65816 | `ForthX16_816Bank32.bin` | `x16emu -c816 -cartbin` + `loader32` |
 | [ForthX16_816WideRom](ForthX16_816WideRom/readme.md) | X16 · 65816, wide dict in ROM banks | `ForthX16_816WideRom.prg` | `x16emu -c816` (real MiSTer) |
 | [ForthX16_816WideRam](ForthX16_816WideRam/readme.md) | X16 · 65816, wide dict in RAM banks | `ForthX16_816WideRam.prg` | `x16emu -c816` |
 | [ForthX16_816WideFar](ForthX16_816WideFar/readme.md) | X16 · 65816, wide dict + far headers | `ForthX16_816WideFar.prg` | `x16emu -c816` |
+
+### Size & memory reference
+
+`Size` = the interpreter image (the code); `Free` = low-RAM dictionary/data
+space the interpreter reports at boot ("`NNNNN BYTES FREE`"). All X16 figures are
+with the default `GFXTOOLKIT=1` (graphics moved to `GFX.FTH`). ROM/cart builds
+put the code in a bank, so almost all low RAM is free.
+
+| Folder | Description | Free (bytes) | Size (bytes) | Where code / data live |
+|---|---|--:|--:|---|
+| ForthC64_6502Prg | C64 program | — | 8151 | code+data in low RAM (C64 $0801+) |
+| ForthC64_6502Cart | C64 8K cartridge | — | 8192 | code in cart ROM, data in RAM |
+| ForthC64_6502Disk | C64 program on a .d64 | — | 8151¹ | code+data in low RAM (loaded from disk) |
+| ForthF256_6502Prg | Foenix F256 .pgz | — | 8709 | code+data in F256 RAM |
+| ForthX16_6502Prg | X16 program, 6502 | **16860** | 14798 | code+data in low RAM ($0801+) |
+| ForthX16_6502Bank9 | X16 in ROM bank 9, 65C02 | **30887** | 16384² | **code in ROM bank 9**, data+dict in low RAM |
+| ForthX16_6502Bank32 | X16 in ROM bank 32, 65C02 | ~30887 | 16384 | **code in ROM bank 32**, data+dict in low RAM |
+| ForthX16_6502Cart | X16 autoboot cart, 6502 | ~16860 | 16384 | code copied to low RAM $0801, data in RAM |
+| ForthX16_816Prg | X16 program, 65816 | **16449** | 15209 | code+data in low RAM |
+| ForthX16_816Bank9 | X16 in ROM bank 9, 65816 | **30887** | 16384² | **code in ROM bank 9**, data+dict low RAM, **+ all high-RAM banks free for data** |
+| ForthX16_816Bank32 | X16 in ROM bank 32, 65816 | ~30887 | 16384 | **code in ROM bank 32**, data+dict low RAM, **+ all high-RAM banks** |
+| ForthX16_816WideRom | X16, wide dict in ROM banks | 13128 ³ | 16697 | code low RAM; **dictionary code in 16K ROM banks 33+** ($C000 window) |
+| ForthX16_816WideRam | X16, wide dict in RAM banks | 12970 ³ | 16855 | code low RAM; **dict bodies in 8K RAM banks** ($A000 window) |
+| ForthX16_816WideFar | X16, wide dict + far headers | 12108 ³ | 17689 | code low RAM; **dict headers+bodies in 8K RAM banks** |
+
+¹ interpreter code; the `.d64` disk image itself is 174848 bytes (it also carries
+the test suite + toolkits). ² the interpreter fills one 16K ROM bank; the `Bank9`
+**release file** is the whole 256 KB ROM (pristine ROM + this bank). ³ the *near*
+free — the wide builds also grow the dictionary into RAM/ROM banks well beyond
+this. C64/F256 boot-free is platform-specific and not measured here.
 
 **X16 6502 vs 65816.** The `6502` X16 builds run on the stock CPU; the `816`
 builds need a 65C816 (a MiSTer core, or `x16emu -c816`). The three **Wide** builds
@@ -62,10 +94,20 @@ add the 65816 `WIDEDICT` large dictionary — `WideRam`/`WideFar` store code (an
 for `WideFar`, headers) in 8 KB RAM banks and are emulator-testable; `WideRom`
 stores code in 16 KB ROM banks and is meant for real MiSTer hardware.
 
-**Bank32 vs Cart.** `ForthX16_6502Bank32` runs the interpreter *in place* in ROM
-bank 32 and is launched from BASIC with `loader32`; `ForthX16_6502Cart` is an
-*auto-booting* cartridge that copies the PRG into RAM and starts it with no
-loader.
+**`Bank9` / `Bank32` (65C02 and 65816).** These run the interpreter *in place*
+from an X16 ROM bank, freeing ~31 KB of low RAM. `Bank9` replaces the demo bank
+and is started with `TEST`; `Bank32` uses the MiSTer cartridge bank and is
+started with `loader32`. The **816** ones additionally have the bank-I/O words
+(`BANKLOAD`/`BANK>MEM`/…) built in, so every high-RAM bank is usable for data.
+`ForthX16_6502Cart` is a different thing — an *auto-booting* cartridge that
+copies the PRG into RAM and starts it with no loader.
+
+**Graphics are a toolkit (all X16 builds).** The bitmap-graphics words
+(`GINIT`/`PSET`/`LINE`/`RECT`/`OVAL`/`GTEXT`/…) are **not** baked into the X16
+builds anymore — that saves ~513 bytes everywhere (which is what lets the ROM
+builds carry the bank words). `INCLUDE GFX.FTH` (in `toolkit/`) to get them, or
+bundle it into a `TK` image (below). Build with `GFXTOOLKIT=0` to bake them back
+into the core the old way.
 
 ---
 
@@ -88,9 +130,10 @@ one-line `AUTORUN.FTH` then loads that snapshot automatically at boot.
 1. **Make the source files reachable.** `SAVE-IMAGE` / `LOAD-IMAGE` and `INCLUDE`
    all use device 8 = HostFS (the folder you launch the emulator from) or the
    SD-card image. Put the toolkit `.FTH` files there — from `toolkit/`:
-   `FPX.FTH`, `BASICSTR.FTH`, `PCMAUDIO.FTH`, `ASSEMBLER.FTH` (add `FLOAT.FTH`
-   for the full FLOATING/FLOATING-EXT set). On the **C64/F256** versions only
-   `ASSEMBLER.FTH` applies — the others use X16-only words.
+   `FPX.FTH`, `BASICSTR.FTH`, `PCMAUDIO.FTH`, `ASSEMBLER.FTH`, `GFX.FTH` (add
+   `FLOAT.FTH` for the full FLOATING/FLOATING-EXT set). `GFX.FTH` gives back the
+   bitmap-graphics words that are no longer in the core. On the **C64/F256**
+   versions only `ASSEMBLER.FTH` applies — the others use X16-only words.
 
 2. **Launch the version** (run its `test.bat`) and at the `OK` prompt `INCLUDE`
    each library:
@@ -99,6 +142,7 @@ one-line `AUTORUN.FTH` then loads that snapshot automatically at boot.
    S" BASICSTR.FTH" INCLUDED
    S" PCMAUDIO.FTH" INCLUDED
    S" ASSEMBLER.FTH" INCLUDED
+   S" GFX.FTH" INCLUDED
    ```
 
 3. **Reset the search order.** `ASSEMBLER.FTH` ends with `ONLY`, so without this

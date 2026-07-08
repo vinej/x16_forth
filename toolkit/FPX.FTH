@@ -1,6 +1,6 @@
 \ FPX.FTH - extra floating-point words for ForthX16 (Forth 2012 FLOATING /
 \ FLOATING-EXT). They all compose the built-in FP primitives, so they live in
-\ this toolkit rather than the ROM core.  INCLUDE FPX.FTH
+\ this toolkit rather than into the float.fth toolkit.  INCLUDE FPX.FTH
 \ Floats are the 5-byte packed BASIC format; ~9 significant digits.
 
 \ --- constants -------------------------------------------------------------

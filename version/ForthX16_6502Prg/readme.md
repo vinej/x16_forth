@@ -11,10 +11,11 @@ Forth TX16 for the **Commander X16** as a loadable **PRG** (stock 6502).
 | Source used | `fthtx16.asm` + `x16prims.asm` + `x16.asm` + `fileio_c64.asm` |
 
 ## What it is
-The standard Commander X16 build. Includes the full X16 extension word set:
-VERA video & bitmap graphics, hardware sprites, PSG and YM2151 (FM) audio,
-floating point (via the ROM FP package), and binary LOAD/SAVE. Platform word is
-`X16`.
+The standard Commander X16 build. Includes the X16 extension word set: VERA
+video, hardware sprites, PSG and YM2151 (FM) audio, and binary LOAD/SAVE.
+Platform word is `X16`. Two feature sets are **loadable toolkits**, not baked in:
+**bitmap graphics** (`INCLUDE GFX.FTH` — `GINIT`/`PSET`/`RECT`/…) and **floating
+point** (`INCLUDE ASSEMBLER.FTH` then `FLOAT.FTH`), which keeps the core small.
 
 ## Build
 Run `make.bat` — assembles `build.asm` to `ForthX16_6502Prg.prg` in this folder.

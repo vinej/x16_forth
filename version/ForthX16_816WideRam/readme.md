@@ -38,3 +38,22 @@ using (0 if none) — a safe point to allocate downward from instead of
 hard-coding bank numbers. Caveats: banks 0–1 are the KERNAL's; the dictionary
 keeps growing downward, so grab your data banks **early** and don't let it grow
 into them; and `EDIT` (x16edit) uses banks 10+.
+
+**Bulk & disk I/O for banks.** Beyond byte-at-a-time `B@`/`B!` (all four
+save/restore the window register, so they are safe alongside the dictionary):
+- `BANK>MEM ( bank boff addr u -- )` — fast copy `u` bytes from `bank:boff` to
+  low-RAM `addr`, auto-advancing across bank boundaries. Pull the active game
+  level into low RAM with this.
+- `MEM>BANK ( addr bank boff u -- )` — the reverse (stage/compute into a bank).
+- `BANKLOAD ( c-addr u dev bank -- )` — load a PRG file straight into `bank`
+  (the KERNAL spills a file bigger than 8K into the following banks). Load all
+  your levels into banks once at start-up.
+- `BANKSAVE ( c-addr u dev bank off len -- )` — save `len` bytes of `bank:off`
+  to a PRG file (one bank per call — `off+len` must be ≤ 8192).
+
+Sketch — levels in banks, activated on demand:
+```
+S" LEVEL1" 8 20 BANKLOAD          \ file -> bank 20 (spills to 21,22... if >8K)
+S" LEVEL2" 8 23 BANKLOAD          \ file -> bank 23
+20 0 LEVELBUF 8192 BANK>MEM       \ when needed: bank 20 -> low-RAM LEVELBUF
+```
