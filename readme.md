@@ -612,6 +612,7 @@ A few examples and benchmarks are in `other`.
 * `BASICSTR.FTH` — BASIC-style string words `NHEX NBIN STR VAL ASC CHR LEN LEFT RIGHT MID RPT`. Independent.
 * `PCMAUDIO.FTH` — PCM audio helpers `PCMCTRL PCMRATE PCM! PCMFULL?`. Independent. X16 only.
 * `GFX.FTH` — the bitmap-graphics words `GINIT GCLS PSET LINE FRAME RECT RING OVAL GTEXT CIRCLE FCIRCLE` + pen API. Moved out of the core by `GFXTOOLKIT=1` (frees ~513 bytes); over the core VERA primitives. Independent. X16 only.
+* `VERAFX.FTH` — VERA FX helpers as inline-assembler `CODE` words: `FX*` (signed 16×16→32 multiply), `FX-FILL`/`FX-CLEAR` (fast 32-bit-cache VRAM fill), `FX-DCSEL`/`FX-OFF`. **Load `ASSEMBLER.FTH` first** (built from `CODE` words). X16 only.
 
 The floating-point load chain is therefore **`ASSEMBLER.FTH` → `FLOAT.FTH` → `FPX.FTH`**.
 

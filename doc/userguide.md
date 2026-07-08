@@ -999,6 +999,13 @@ VERA FX:
 - **`DCSEL`** ( n -- ) — select the DCSEL register bank (0-63) so FX registers at `$9F29-$9F2C` can be reached with `C!`/`C@`.
 - **`FX-MULT`** ( a b -- lo hi ) — signed 16×16→32-bit product via VERA's hardware multiplier; result is `( low-cell high-cell )`. `1000 1000 FX-MULT SWAP . .` → `16960 15` (= 1,000,000).
 
+For more VERA FX from Forth there is the **`toolkit/VERAFX.FTH`** library (`INCLUDE
+ASSEMBLER.FTH` then `INCLUDE VERAFX.FTH`): `FX*` ( n1 n2 -- d ) signed multiply
+returning a double, `FX-FILL` ( byte vbank vaddr count -- ) fast 32-bit-cache VRAM
+fill (~4× a byte loop), `FX-CLEAR` ( vbank vaddr count -- ), and the low-level
+`FX-DCSEL` / `FX-OFF` plumbing to reach the line/polygon/affine helpers yourself.
+See Section 7.
+
 KERNAL bridge:
 - **`SYSCALL`** ( a x y addr -- a' x' y' ) — call the routine at `addr` in KERNAL bank 0 with `.A/.X/.Y` loaded, returning the callee's `.A/.X/.Y`. Reaches the whole KERNAL API (`GRAPH_*`, `console_*`, `MEMTOP`, …). `65 0 0 $FFD2 SYSCALL` prints "A" (CHROUT).
 - **`CHARSET`** ( n -- ) — activate a built-in 8×8 charset (1 = ISO, 2 = PET upper/graphics, 3 = PET upper/lower, … 12 = Katakana; see Appendix I of the reference guide).
@@ -1586,6 +1593,7 @@ be reachable, so copy the ones you want next to where you run). This is the
 | `BASICSTR.FTH` | BASIC-style string words: `NHEX NBIN STR VAL ASC CHR LEN LEFT RIGHT MID RPT` | independent | X16 (portable Forth) |
 | `PCMAUDIO.FTH` | PCM audio streaming helpers: `PCMCTRL PCMRATE PCM! PCMFULL?` | independent | X16 only |
 | `GFX.FTH` | **Bitmap graphics**: `GINIT GCLS PSET LINE FRAME RECT RING OVAL GTEXT CIRCLE FCIRCLE` + a pen API. Integer, FP-free; over the core VERA primitives | independent | X16 only |
+| `VERAFX.FTH` | **VERA FX** (inline-assembler `CODE` words): `FX*` signed 16×16→32 multiply, `FX-FILL`/`FX-CLEAR` fast 32-bit-cache VRAM fill, `FX-DCSEL`/`FX-OFF` | **`ASSEMBLER.FTH` first** (built from `CODE` words) | X16 only |
 
 > **Why graphics needs loading.** The X16 builds assemble with `GFXTOOLKIT = 1`,
 > which moves the bitmap-graphics words OUT of the core into `GFX.FTH` (frees
