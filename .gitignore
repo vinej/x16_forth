@@ -30,17 +30,14 @@ asm/
 /forthx16816wf.prg
 # symbols.txt is a deliberately committed build artifact — do NOT ignore it.
 
-# ─── version/<name>/ regenerated binaries + build working files ──────────
-# Each version rebuilds its binary via its make.bat, so the outputs are not
-# tracked; ROM patch bases (e.g. r49.bin) must not go to GitHub. The four
-# source files (build.asm / make.bat / test.bat / readme.md) are NOT ignored.
-# (Remove these lines if you prefer to commit the release binaries in-repo.)
-version/**/*.prg
-version/**/*.bin
-version/**/*.crt
-version/**/*.rom
-version/**/*.pgz
-version/**/*.d64
+# ─── version/<name>/ build working files ─────────────────────────────────
+# The release binaries ARE committed (many users can't build them). But the
+# copyrighted Commander X16 ROM must NEVER go to GitHub: the 256 KB Bank9
+# images embed the pristine KERNAL/BASIC ROM, and r49.bin IS that ROM base.
+version/**/r49.bin
+version/ForthX16_6502Bank9/ForthX16_6502Bank9.bin
+version/ForthX16_816Bank9/ForthX16_816Bank9.bin
+version/**/_*.bin
 version/**/*.tmp
 
 # ─── OS / editor junk ───────────────────────────────────────────────────

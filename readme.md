@@ -39,17 +39,17 @@ Each version's release binary is written **into its own folder**, named after th
 | `version/ForthC64_6502Disk/` | `ForthC64_6502Disk.d64` |
 | `version/ForthF256_6502Prg/` | `ForthF256_6502Prg.pgz` |
 | `version/ForthX16_6502Prg/` | `ForthX16_6502Prg.prg` |
-| `version/ForthX16_6502Bank9/` | `ForthX16_6502Bank9.bin` (whole 256 KB ROM, Forth in bank 9) |
+| `version/ForthX16_6502Bank9/` | `ForthX16_6502Bank9.bin` (whole 256 KB ROM — **not in the repo**, see below) |
 | `version/ForthX16_6502Bank32/` | `ForthX16_6502Bank32.bin` (16 KB bank-32 image) |
 | `version/ForthX16_6502Cart/` | `ForthX16_6502Cart.bin` |
 | `version/ForthX16_816Prg/` | `ForthX16_816Prg.prg` |
-| `version/ForthX16_816Bank9/` | `ForthX16_816Bank9.bin` (whole 256 KB ROM, Forth in bank 9) |
+| `version/ForthX16_816Bank9/` | `ForthX16_816Bank9.bin` (whole 256 KB ROM — **not in the repo**, see below) |
 | `version/ForthX16_816Bank32/` | `ForthX16_816Bank32.bin` (16 KB bank-32 image) |
 | `version/ForthX16_816WideRom/` | `ForthX16_816WideRom.prg` |
 | `version/ForthX16_816WideRam/` | `ForthX16_816WideRam.prg` |
 | `version/ForthX16_816WideFar/` | `ForthX16_816WideFar.prg` |
 
-These binaries are **git-ignored** (not in the GitHub download) — build them yourself with each folder's `make.bat`.
+These release binaries **are committed to the repo** so you can just download and run them — **except the two `Bank9` `.bin` files**. Each of those is the whole 256 KB ROM and embeds the copyrighted Commander X16 KERNAL/BASIC ROM, so they are git-ignored; build them yourself (their `make.bat` splices the Forth bank into a pristine `r49.bin` you supply — see the Bank9 folder's readme). Everything else — the C64/F256 programs, the X16 PRG/Cart/Bank32 and wide-dictionary builds — is Forth code only and safe to redistribute.
 
 ### Building a version
 Every buildable version lives in its own folder under **[`version/`](version/readme.md)**, each with a `build.asm`, `make.bat`, `test.bat`, and its own `readme.md`. To build one, run its `make.bat` (the release binary is written into that folder); to build **and** launch it in the right emulator, run its `test.bat`. See **[version/readme.md](version/readme.md)** for the full list (C64 PRG/cart, F256, X16 6502 PRG/bank-9/bank-32/cart, and the X16 65816 plain and wide-dictionary builds) and the prerequisites above.
