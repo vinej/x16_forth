@@ -9,5 +9,5 @@ pushd "%~dp0..\.."
 echo.
 echo At the BASIC READY prompt type:   TEST     (starts Forth in ROM bank 9)
 echo.
-.\emulator\x16emu.exe -rom "version\ForthX16_6502Bank9\ForthX16_6502Bank9.bin" -run
+.\emulator\x16emu.exe -rom "version\ForthX16_6502Bank9\ForthX16_6502Bank9.bin" -run -sdcard "sdcard\sdcard.img"
 popd

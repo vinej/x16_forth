@@ -7,5 +7,5 @@ rem of the ROM-bank wide dictionary, run this .prg on the MiSTer X16 core.
 call "%~dp0make.bat"
 if errorlevel 1 exit /b 1
 pushd "%~dp0..\.."
-.\emulator\x16emu.exe -rom .\emulator\rom.bin -prg "version\ForthX16_816WideRom\ForthX16_816WideRom.prg" -run -c816
+.\emulator\x16emu.exe -rom .\emulator\rom.bin -prg "version\ForthX16_816WideRom\ForthX16_816WideRom.prg" -run -c816 -sdcard "sdcard\sdcard.img"
 popd

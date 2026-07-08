@@ -1,65 +1,34 @@
-=== FLOAT - Floating point ===
+=== FLOAT - Floating point (toolkit) ===
 
-TX16 wraps the X16 ROM's floating-point unit. Floats live on a separate FP
-stack (shown as ( F: ... )), stored as 5-byte values. Put an integer on the FP
-stack with S>F, print with F.. Stack effects below show the FP stack; most
-also leave the data stack unchanged.
+Floats live on a separate FP stack ( F: ... ), stored as 5-byte values.
+NOT baked in: INCLUDE ASSEMBLER.FTH then FLOAT.FTH (base words below), then
+FPX.FTH for the extended set. Float literals (1.5, -2.5E-2) then work too.
 
-Load it first. Floating point is not baked into the shipped builds
-(FPCORE=0). Before any float word or literal works, INCLUDE ASSEMBLER.FTH
-then INCLUDE FLOAT.FTH (the base words below), and INCLUDE FPX.FTH for the
-extended FLOATING-EXT set. See *Section 7 - Toolkit libraries*.
+S>F    ( n -- ) ( F: -- r )   signed integer -> float.  5 S>F F. -> 5
+F>S    ( -- n ) ( F: r -- )   (non-negative) float -> integer.
+>FLOAT ( c-addr u -- flag )   parse a string to a float.  S" 3.14" >FLOAT
+F@ F!  ( f-addr -- )          fetch / store a 5-byte float in memory.
+F+ F- F* F/  ( F: a b -- c )  add / subtract / multiply / divide.
+FSQRT  ( F: r -- sqrt )       square root.
+FNEGATE FABS ( F: r -- r' )   negate / absolute value.
+FPOW  F**  ( F: x y -- x^y )  power via exp(y*ln x), x>0.  2 S>F 10 S>F FPOW
+FMAX FMIN ( F: a b -- r )     larger / smaller of two floats.
+FSIN FCOS FTAN ( F: r -- r' ) trig (radians).
+FATAN  ( F: r -- atan )       arctangent.
+FLN FEXP ( F: r -- r' )       natural log / exponential.
+F0= F0< F< ( -- flag )        compare:  r=0,  r<0,  r1<r2.
+FDROP FDUP FSWAP FOVER        float-stack shuffles.
+F.     ( F: r -- )            print top float.  2 S>F FSQRT F. -> 1.41421356
+FVARIABLE FCONSTANT           create a float variable / constant (5 bytes).
+ISQRT  ( u -- m )             integer floor sqrt, native (no FP-stack use).
+>FLOAT-VEC ( -- addr )        the >FLOAT hook cell (FPHOOK sets it; advanced).
 
-S>F ( n -- ) ( F: -- r ) - convert a signed integer to a float. 5 S>F F.  ->
-    5
-F>S ( -- n ) ( F: r -- ) - convert a (non-negative) float to an integer.
->FLOAT ( c-addr u -- flag ) ( F: -- r | ) - parse a string to a float; flag
-    true on success. S" 3.14" >FLOAT
-F@ ( f-addr -- ) ( F: -- r ) - fetch a 5-byte float from memory.
-F! ( f-addr -- ) ( F: r -- ) - store the top float to memory.
-F+ ( F: r1 r2 -- r1+r2 ) - add.
-F- ( F: r1 r2 -- r1-r2 ) - subtract.
-F* ( F: r1 r2 -- r1*r2 ) - multiply.
-F/ ( F: r1 r2 -- r1/r2 ) - divide.
-FSQRT ( F: r -- sqrt ) - square root.
-FNEGATE ( F: r -- -r ) - negate.
-FABS ( F: r -- |r| ) - absolute value.
-FPOW ( F: x y -- x^y ) - raise to a power, via exp(y*ln x) (needs x > 0). 2
-    S>F 10 S>F FPOW F.  ->  1024
-F** ( F: x y -- x^y ) - the standard name (alias) for FPOW.
-FMAX ( F: r1 r2 -- r ), FMIN ( F: r1 r2 -- r ) - larger / smaller of two
-    floats.
-F~ ( F: r1 r2 r3 -- ) ( -- flag ) - approximate compare (r3>0 absolute, =0
-    exact, <0 relative). *In toolkit/FPX.FTH - INCLUDE FPX.FTH.*
-
-More Forth-2012 FLOATING/FLOATING-EXT words live in toolkit/FPX.FTH (INCLUDE
-    FPX.FTH), built on the primitives above:
-Constants: FPI (pi), FPI2 (pi/2), FLN10 (ln 10).
-Memory/size: FLOAT+ ( a -- a+5 ), FLOATS ( n -- 5n ), FALIGN/FALIGNED (no-ops
-    here).
-Shuffles: FROT ( r1 r2 r3 -- r2 r3 r1 ), FSINCOS ( r -- sin cos ).
-Log/exp: FLOG (log10), FALOG (10^r), FLNP1 (ln 1+r), FEXPM1 (e^r-1).
-Hyperbolic: FSINH, FCOSH, FTANH.
-Inverse trig: FASIN, FACOS (undefined at |r|=1), FATAN2 ( y x -- angle )
-    full-quadrant.
-FDROP ( F: r -- ) - drop the top float.
-FDUP ( F: r -- r r ) - duplicate.
-FSWAP ( F: r1 r2 -- r2 r1 ) - swap.
-FOVER ( F: r1 r2 -- r1 r2 r1 ) - copy the second float.
-F. ( F: r -- ) - print the top float and a space. 2 S>F FSQRT F.  ->
-    1.41421356
-FSIN ( F: r -- sin ), FCOS ( F: r -- cos ), FTAN ( F: r -- tan ) - trig
-    (radians).
-FATAN ( F: r -- atan ) - arctangent.
-FLN ( F: r -- ln ) - natural logarithm.
-FEXP ( F: r -- e^r ) - exponential.
-F0= ( F: r -- ) ( -- flag ) - true if r = 0.
-F0< ( F: r -- ) ( -- flag ) - true if r < 0.
-F< ( F: r1 r2 -- ) ( -- flag ) - true if r1 < r2.
-ISQRT ( u -- m ) - integer floor square root of an unsigned value, native (no
-    floating point, so it does not disturb the FP stack and is fast enough to
-    call per scanline). 144 ISQRT .  ->  12
-
->FLOAT-VEC ( -- addr ) - address of the >FLOAT dispatch vector. FLOAT.FTH's
-  FPHOOK stores its string->float parser xt here so float literals (1.5) work;
-  advanced use only. Re-run FPHOOK after LOAD-IMAGE.
+FPX.FTH extended set (INCLUDE after FLOAT.FTH):
+ FPI FPI2 FLN10               constants pi, pi/2, ln 10.
+ FLOAT+ FLOATS FALIGN FALIGNED  sizing for 5-byte floats.
+ FROT FSINCOS                 float ROT / sin+cos at once.
+ FLOG FALOG FLNP1 FEXPM1      log10, 10^r, ln(1+r), e^r-1.
+ FSINH FCOSH FTANH            hyperbolic.
+ FASIN FACOS FATAN2           inverse trig (FATAN2 = full-quadrant y x).
+ F~     ( F: a b tol -- ) ( -- flag )   approximate compare.
+ SQR SIN COS TAN ATN LOG EXP  BASIC math aliases (= FSQRT FSIN FCOS ...).

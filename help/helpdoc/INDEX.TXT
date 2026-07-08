@@ -1,62 +1,54 @@
-========================  ForthX16 HELP  ========================
-Type   HELP <topic>   e.g.  HELP STACK
-
-CORE FORTH
-  STACK       data-stack juggling (DUP DROP SWAP ROT ...)
-  ARITHMETIC  + - * / MOD */ ABS MIN MAX ...
-  DOUBLE      double-cell (32-bit) math  D+ D. 2CONSTANT ...
-  LOGIC       comparison & flags  =  <  >  0=  AND OR ...
-  BITWISE     AND OR XOR INVERT LSHIFT RSHIFT
-  CONSTANTS   0 1 2 -1 BL TRUE FALSE literals
-  MEMORY      @ ! C@ C! MOVE FILL ALLOT HERE ...
-  NUMERIC     pictured numeric output  <# # #S #> HOLD SIGN
-  NUMBER      number/text parsing  >NUMBER WORD PARSE
-  STRING      COUNT TYPE COMPARE /STRING CMOVE ...
-  TERMINAL    KEY EMIT CR SPACE TYPE ACCEPT
-  INTERPRETER EVALUATE SOURCE REFILL STATE ...
-  DEFINING    : ; CREATE DOES> VARIABLE CONSTANT VALUE DEFER
-  DICTIONAY   ' ['] POSTPONE IMMEDIATE LITERAL MARKER
-  FLOW        IF ELSE THEN BEGIN DO LOOP CASE CATCH ...
-  RETURN      >R R> R@ I J  (return stack & loop index)
-  WORDLIST    FORTH-WORDLIST ORDER ALSO ONLY DEFINITIONS
-  FILE        OPEN-FILE READ-LINE INCLUDE R/O W/O  CD DIR
-  STRUCTURE   BEGIN-STRUCTURE FIELD: +FIELD  (records)
-  SYSTEM      BYE VER ENVIRONMENT? UNUSED IRQ
-
-COMMANDER X16 HARDWARE
-  VIDEO       SCREEN COLOR BORDER CLS LOCATE VPOKE V! ...
-  SPRITE      SPRITE SPRITE-POS SPRITE-IMAGE MOVSPR ...
-  GRAPHIC     GINIT PSET LINE RECT OVAL GTEXT (GFX toolkit)
-  TILE        TILE TDATA TATTR  (layer-1 tilemap cells)
-  PAL         PAL!  (palette entry)
-  GAME        VSYNC FRAMES VFILL COLLIDE? *.  RND
-  INPUT       JOY MOUSE MX MY MB MWHEEL
-  KEYBOARD    KEY? GETKEY CHARSET KEYMAP
-  AUDIOFM     YM2151 FM voices  FMINIT FMNOTE FMINST ...
-  AUDIOYM     raw YM2151 register access  YM! FMPOKE
-  AUDIOPCM    PCM FIFO  PCMCTRL PCMRATE PCM! PCM-WRITE
-  VERAFX      VERA FX  DCSEL FX-MULT  (+ VERAFX toolkit)
-  LOADSAVE    LOAD SAVE VLOAD VSAVE BLOAD SPRSAVE ...
-  BANK        bulk RAM-bank I/O  BANKLOAD BANK>MEM ...  (816 only)
-  IMAGE       SAVE-IMAGE LOAD-IMAGE  (fast turnkey reload)
-  KERNAL      SYSCALL  (call any KERNAL routine)
-  CONTROL     EDIT SETBANK B@ B! SLEEP MS REBOOT + clock,
-              I2CPEEK/POKE, MONITOR RESET POWEROFF
-
-FLOATING POINT & TOOLKIT WORDS
-  FLOAT       S>F F+ F* FSQRT FSIN F. ...   (FLOAT.FTH)
-  BASICALIAS  NHEX STR VAL LEFT MID ...     (BASICSTR.FTH)
-  BIT         SPLIT CATNIB SBIT CBIT FBIT
-  ASSEMBLER   inline 6502 assembler  CODE ... END-CODE
-
-SAMPLE PROGRAMS  (in other/)
-  SPLIT       split-screen bitmap + text
-  MORTGAGE    Canadian mortgage calculator
-  HP50        HP-50g-style RPN calculator
-  ASMIRQ      assembly VSYNC interrupt demo
-  ASMDEMO     assembly vs Forth speed race
-  SNDEDIT     PSG/FM song step-sequencer editor
-  SPREDIT     VERA hardware-sprite editor
-  GAMEMS      "catch the dots" + mouse/joystick
-  GAMEYM      "catch the dots" with FM audio
-==================================================================
+======================  ForthX16 HELP  ======================
+Type  HELP <topic>   e.g.  HELP STACK
+ STACK       data-stack juggling (DUP DROP SWAP ROT ...)
+ ARITHMETIC  + - * / MOD */ ABS MIN MAX ...
+ DOUBLE      double-cell (32-bit) math  D+ D. 2CONSTANT ...
+ LOGIC       comparison & flags  =  <  >  0=  AND OR ...
+ BITWISE     AND OR XOR INVERT LSHIFT RSHIFT
+ CONSTANTS   0 1 2 -1 BL TRUE FALSE literals
+ MEMORY      @ ! C@ C! MOVE FILL ALLOT HERE ...
+ NUMERIC     pictured numeric output  <# # #S #> HOLD SIGN
+ NUMBER      number/text parsing  >NUMBER WORD PARSE
+ STRING      COUNT TYPE COMPARE /STRING CMOVE ...
+ TERMINAL    KEY EMIT CR SPACE TYPE ACCEPT
+ INTERPRETER EVALUATE SOURCE REFILL STATE ...
+ DEFINING    : ; CREATE DOES> VARIABLE CONSTANT VALUE DEFER
+ DICTIONAY   ' ['] POSTPONE IMMEDIATE LITERAL MARKER
+ FLOW        IF ELSE THEN BEGIN DO LOOP CASE CATCH ...
+ RETURN      >R R> R@ I J  (return stack & loop index)
+ WORDLIST    FORTH-WORDLIST ORDER ALSO ONLY DEFINITIONS
+ FILE        OPEN-FILE READ-LINE INCLUDE R/O W/O  CD DIR
+ STRUCTURE   BEGIN-STRUCTURE FIELD: +FIELD  (records)
+ SYSTEM      BYE VER ENVIRONMENT? UNUSED IRQ FREE
+ VIDEO       SCREEN COLOR BORDER CLS LOCATE VPOKE V! ...
+ SPRITE      SPRITE SPRITE-POS SPRITE-IMAGE MOVSPR ...
+ GRAPHIC     GINIT PSET LINE RECT OVAL GTEXT + pen API
+ TILE        TILE TDATA TATTR  (layer-1 tilemap cells)
+ PAL         PAL!  (palette entry)
+ GAME        VSYNC FRAMES VFILL COLLIDE? *.  RND
+ INPUT       JOY MOUSE MX MY MB MWHEEL
+ KEYBOARD    KEY? GETKEY CHARSET KEYMAP
+ AUDIOFM     PSG & YM2151 FM  FMINIT FMNOTE PSGNOTE ...
+ AUDIOYM     raw YM2151 register access  YM! FMPOKE
+ AUDIOPCM    PCM FIFO  PCMCTRL PCMRATE PCM! PCM-WRITE
+ VERAFX      VERA FX  DCSEL FX-MULT  (+ VERAFX toolkit)
+ LOADSAVE    LOAD SAVE VLOAD VSAVE BLOAD SPRSAVE ...
+ BANK        bulk RAM-bank I/O  BANKLOAD BANK>MEM ...
+ IMAGE       SAVE-IMAGE LOAD-IMAGE  (fast turnkey reload)
+ KERNAL      SYSCALL  (call any KERNAL routine)
+ CONTROL     EDIT SETBANK B@ B! SLEEP MS REBOOT clock I2C ...
+ FLOAT       S>F F+ F* FSQRT FSIN F. ...   (FLOAT.FTH)
+ BASICALIAS  NHEX STR VAL LEFT MID ...     (BASICSTR.FTH)
+ BIT         SPLIT CATNIB SBIT CBIT FBIT
+ ASSEMBLER   inline 6502 assembler  CODE ... END-CODE
+ TOOLKIT     build the TK.* fast-load image + AUTORUN.FTH
+ SPLIT       split-screen bitmap + text
+ MORTGAGE    Canadian mortgage calculator
+ HP50        HP-50g-style RPN calculator
+ ASMIRQ      assembly VSYNC interrupt demo
+ ASMDEMO     assembly vs Forth speed race
+ SNDEDIT     PSG/FM song step-sequencer editor
+ SPREDIT     VERA hardware-sprite editor
+ GAMEMS      "catch the dots" + mouse/joystick
+ GAMEYM      "catch the dots" with FM audio
+==============================================================

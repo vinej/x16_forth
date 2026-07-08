@@ -1,0 +1,33 @@
+=== TOOLKIT - build the TK.* fast-load image + AUTORUN.FTH ===
+
+Compiling the toolkit from source at every boot is slow (tens of seconds).
+Snapshot the compiled dictionary once with SAVE-IMAGE, then reload it in ~1 s
+(see HELP IMAGE for SAVE-IMAGE / LOAD-IMAGE).
+
+1. The toolkit .FTH files must be on device 8 (they ship on the SD card).
+2. INCLUDE them in dependency order (ASSEMBLER first; FLOAT before FPX;
+   ASMGFX is the assembler + VERA-FX graphics toolkit - use it, not GFX.FTH):
+     S" ASSEMBLER.FTH" INCLUDED
+     S" FLOAT.FTH"     INCLUDED
+     S" FPX.FTH"       INCLUDED
+     S" BASICSTR.FTH"  INCLUDED
+     S" VERAFX.FTH"    INCLUDED
+     S" ASMGFX.FTH"    INCLUDED
+3. Reset the search order (ASSEMBLER.FTH leaves it at ONLY):
+     ONLY FORTH DEFINITIONS DECIMAL
+4. Take the snapshot:
+     S" TK" SAVE-IMAGE            \ writes TK.DIC  TK.TOK  TK.VAR
+
+Auto-load at boot - put these two lines in AUTORUN.FTH:
+     S" TK" LOAD-IMAGE DROP
+     FPHOOK                       \ re-arm float literals (FLOAT.FTH is bundled)
+
+NOTES
+* An image is tied to the EXACT interpreter binary that built it - rebuild the
+  TK.* set whenever you rebuild the .prg / ROM (a stale image corrupts the
+  dictionary).
+* Keep TK.DIC / TK.TOK / TK.VAR together. The wide-dictionary builds also write
+  per-bank code slices TK.C00, TK.C01, ... (and TK.TKB on WideFar) - keep those
+  too; the image only reloads with every part present.
+* Name several images per build (TKPRG / TK9 / TK32) and copy the matching
+  AUTORUN over AUTORUN.FTH if you keep more than one around.

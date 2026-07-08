@@ -39,6 +39,18 @@ and **is** in the repo.
 - **`readme.md`** — what the version is, its platform/CPU, the source files and
   build flags it uses, the release binary name, and how to test it.
 
+### The bundled SD card (X16 test.bats)
+
+Every X16 `test.bat` launches with **`-sdcard sdcard\sdcard.img`**, a ready-made
+35 MB FAT32 card so device 8 is stocked with all the `toolkit/` and `other/`
+`.FTH` files, the `HELP` system (loader + `helpdoc/` topics), the ROM-bank-32
+`LOADER`/`LOADER32`, and an `AUTORUN.FTH` that loads `HELP` and prints a hint. So
+after any X16 build boots you can immediately `S" ASSEMBLER.FTH" INCLUDED`,
+`INCLUDE HELP` (already loaded — just type `HELP`), `DIR`, etc. Rebuild the image
+with **`python sdcard/make_sdcard.py`** (needs `pip install pyfatfs`); 35 MB is the
+smallest spec-valid FAT32 (the X16 KERNAL is FAT32-only). Verified on the PRG,
+Wide and 65C02 bank-9 builds.
+
 ## The versions
 
 | Folder | Platform / CPU | Release binary | Test with |

@@ -8,5 +8,5 @@ pushd "%~dp0..\.."
 echo.
 echo At the BASIC READY prompt type:   LOAD"LOADER32",8 : RUN   (or SYS 2064)
 echo.
-.\emulator\x16emu.exe -c816 -rom .\emulator\rom.bin -cartbin "version\ForthX16_816Bank32\ForthX16_816Bank32.bin"
+.\emulator\x16emu.exe -c816 -rom .\emulator\rom.bin -cartbin "version\ForthX16_816Bank32\ForthX16_816Bank32.bin" -sdcard "sdcard\sdcard.img"
 popd
