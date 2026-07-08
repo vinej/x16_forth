@@ -805,6 +805,10 @@ IMG_TOKUSER = TOKENS + ((forth_system + 1) << 1)
 imgsfx_dic: !text ".DIC"
 imgsfx_tok: !text ".TOK"
 imgsfx_var: !text ".VAR"
+!if WD_FARHDR {
+imgsfx_tkb: !text ".TKB"	; TOKBANK user slice (far dispatch needs it)
+IMG_TOKBUSER = TOKBANK + forth_system + 1
+}
 !if WIDEDICT {
 imgsfx_di2: !text ".DI2"	; dictionary-extension slice [$A000..HERE)
 !if WD_ROMBANKS = 0 {
@@ -845,6 +849,15 @@ ivs2:	lda _hightoken,x
 	sta IMGBUF+69
 	lda _incode		; +70: mid-definition flag (normally 0)
 	sta IMGBUF+70
+!if WD_FARHDR {
+	lda _latestbank		; +71: bank of LATEST's header
+	sta IMGBUF+71
+	ldx #WORDLISTS-1	; +72..: per-wordlist head banks
+ivs3:	lda _vocsbank,x
+	sta IMGBUF+72,x
+	dex
+	bpl ivs3
+}
 }
 	rts
 img_vars_load:
@@ -879,6 +892,16 @@ ivl2:	lda IMGBUF+7,x
 	sta _chere+1
 	lda IMGBUF+70
 	sta _incode
+!if WD_FARHDR {
+	lda IMGBUF+71
+	sta _latestbank
+	sta _scanbank
+	ldx #WORDLISTS-1
+ivl3:	lda IMGBUF+72,x
+	sta _vocsbank,x
+	dex
+	bpl ivl3
+}
 }
 	rts
 
@@ -946,6 +969,14 @@ img_name_tok:
 	lda #>imgsfx_tok
 	sta _rscratch+1
 	jmp img_name
+!if WD_FARHDR {
+img_name_tkb:
+	lda #<imgsfx_tkb
+	sta _rscratch
+	lda #>imgsfx_tkb
+	sta _rscratch+1
+	jmp img_name
+}
 !if WIDEDICT {
 img_name_di2:
 	lda #<imgsfx_di2
@@ -1085,7 +1116,10 @@ img_setlfs_load:			; logical 1, device 8, secondary 1 (load to header addr)
 	lda #>IMGBUF
 	sta _scratch+1
 	lda #<_scratch
-!if WIDEDICT {
+!if WD_FARHDR {
+	ldx #<(IMGBUF+72+WORDLISTS)
+	ldy #>(IMGBUF+72+WORDLISTS)
+} else if WIDEDICT {
 	ldx #<(IMGBUF+71)
 	ldy #>(IMGBUF+71)
 } else {
@@ -1144,6 +1178,25 @@ svi_dicdone:
 	tay
 	lda #<_scratch
 	jsr KSAVE
+!if WD_FARHDR {
+	; ---- <name>.TKB : [IMG_TOKBUSER .. TOKBANK + hightoken + 1) - the
+	; per-token bank bytes; far dispatch is dead without them ----
+	jsr img_name_tkb
+	jsr img_setlfs_save
+	lda #<IMG_TOKBUSER
+	sta _scratch
+	lda #>IMG_TOKBUSER
+	sta _scratch+1
+	clc
+	lda _hightoken
+	adc #<(TOKBANK+1)
+	tax
+	lda _hightoken+1
+	adc #>(TOKBANK+1)
+	tay
+	lda #<_scratch
+	jsr KSAVE
+}
 !if WIDEDICT {
 	; ---- <name>.DI2 : [FARBASE .. HERE) - only when the dictionary has
 	; crossed into the extension bank (KSAVE reads it through the window,
@@ -1193,6 +1246,13 @@ li_have:
 	jsr img_setlfs_load
 	lda #0
 	jsr KLOAD
+!if WD_FARHDR {
+	; <name>.TKB -> IMG_TOKBUSER (file header address)
+	jsr img_name_tkb
+	jsr img_setlfs_load
+	lda #0
+	jsr KLOAD
+}
 	; <name>.VAR -> IMGBUF (file header address)
 !if WIDEDICT {
 	lda #0			; defaults for images saved before the .DI2
@@ -1202,6 +1262,13 @@ li_have:
 	sta IMGBUF+67		; +67 _codebank = 0 (no code banks)
 	sta IMGBUF+70		; +70 _incode = 0
 	sta _ribank
+!if WD_FARHDR {
+	sta IMGBUF+71		; +71.. far-header banks default to near
+	ldx #WORDLISTS-1
+ivd3:	sta IMGBUF+72,x
+	dex
+	bpl ivd3
+}
 	lda #<MEMTOP
 	sta IMGBUF+62
 	lda #>MEMTOP

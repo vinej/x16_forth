@@ -12,7 +12,6 @@
 ; * Providing the Search-Order Extensions word set
 ; * version 2.0 add all words to use audio/sprite/string/etc, features find in basic 2.0
 ; * version 2.0 is in par with Basic 2.0 and I kept the same names in forth find in Basic
-; * version 2 is only compatible with commander X16
 ; In addition, some words from String, Programming-Tools, and Facility sets are provided.
 ; File Access functionality is limited by the platform
 
@@ -140,6 +139,7 @@ WIDEDICT = 0
 			; 0 = 8K RAM banks 2-9 via the $A000 window ($00) -
 			;     stock hardware; data stays near-only (the $00
 			;     window is dynamic), x16edit keeps banks 10-255.
+!if WD_FARHDR != 0 and WD_ROMBANKS != 0 { !error "WD_FARHDR requires WD_ROMBANKS=0" }
 
 !if C64 {
 !if X16ROM = 0 {
@@ -475,6 +475,13 @@ WD_HEADROOM = $0400	; xcreate switches banks when less than this remains
 				; (0 = home). Not zero-page - the zp block is
 				; full, and this is only ever loaded/stored
 				; directly, never used as a pointer.
+!if WD_FARHDR {
++hmbuffer ~_latestbank, 1	; code bank of the LATEST header (0 = near)
++hmbuffer ~_scanbank, 1		; bank of the header being examined; the
+				; chain walkers (xfind/nextword/WORDS/FORGET)
+				; keep it in step, wdhpeek/wdhcpeek read via it
++hmbuffer ~_vocsbank, WORDLISTS	; per-wordlist code bank of the head NFA
+}
 }
 +hmbuffer ~RSTACK, RSIZE		; return stack
 +hmbuffer ~DSTACK, DSIZE		; data stack
@@ -525,7 +532,9 @@ IRQ_DSTACK_TOP = irq_dstack + 64 - 2
 
 ; SAVE-IMAGE/LOAD-IMAGE turnkey: 64-byte buffer holding the saved dictionary-state
 ; zero-page block (see x16.asm).
-!if WIDEDICT {
+!if WD_FARHDR {
++hmbuffer ~IMGBUF, 96		; +82 bytes of .VAR state (far-header fields)
+} else if WIDEDICT {
 +hmbuffer ~IMGBUF, 80		; +71 bytes of .VAR state (code-bank fields)
 } else {
 +hmbuffer ~IMGBUF, 64
@@ -1046,6 +1055,16 @@ STACKLIMIT = DSIZE/2 - 2*SSAFE
 	sta _chere
 	lda #>CWIN_BASE
 	sta _chere+1
+!if WD_FARHDR {
+	lda #0			; far-header state: everything near until the
+	sta _latestbank		; first far create
+	sta _scanbank
+	ldx #WORDLISTS-1
+cold_fhvb:
+	sta _vocsbank,x
+	dex
+	bpl cold_fhvb
+}
 !if WD_ROMBANKS {
 	lda #FARBANK		; resting state: the RAM window shows the
 	sta $00			; bank-2 data extension; ROM window = KERNAL
@@ -1739,6 +1758,26 @@ rscratch_sub_wscratch: ; Happens more than once, saving a few bytes here
 +header ~nfatolfa, ~nfatolfa_n
 	+code
 
+!if WD_FARHDR {
+	lda _dtop+1		; far record: [len][name][token:2][nearhere:2]
+	cmp #>CWIN_BASE		; [link:3] - the "LFA" is the link field at
+	bcc +			; NFA+len+5; the len byte reads via _scanbank
+	lda CBANKREG
+	pha
+	lda _scanbank
+	sta CBANKREG
+	ldy #0
+	lda (_dtop),y
+	and #NAMEMASK
+	tay
+	pla
+	sta CBANKREG
+	tya
+	clc
+	adc #5
+	bcc field_adjust	; always (len+5 <= 36 leaves C clear)
++:
+}
 	ldy #0
 	lda (_dtop),y
 	and #NAMEMASK
@@ -1755,6 +1794,15 @@ field_adjust:
 +header ~lfatocfa, ~lfatocfa_n
 	+code
 
+!if WD_FARHDR {
+	lda _dtop+1		; far link field is a fixed 3 bytes; the "CFA"
+	cmp #>CWIN_BASE		; is the record end (colon: the real far stub;
+	bcc +			; data words: fictional, only token@-7 is read)
+	lda #3
+	clc
+	bcc field_adjust
++:
+}
 	ldy #0
 	lda (_dtop),y
 	bpl +
@@ -1771,6 +1819,44 @@ field_adjust:
 ;+:
 ;	jmp next
 
+!if WD_FARHDR {
+; The short-token space is completely full, and the only user of the two
+; hidden navigators below (the classic xforget) is compiled out in far-header
+; builds - so their token slots are recycled for the header-window readers.
++header ~wdhpeek, ~wdhpeek_n	; ( a-addr -- x ) @ via _scanbank (headers)
+	+code
+	lda CBANKREG
+	pha
+	lda _scanbank
+	sta CBANKREG
+	ldy #1
+	lda (_dtop),y
+	tax
+	dey
+	lda (_dtop),y
+	tay
+	pla
+	sta CBANKREG
+	sty _dtop
+	stx _dtop+1
+	jmp next
+
++header ~wdhcpeek, ~wdhcpeek_n	; ( c-addr -- c ) C@ via _scanbank (headers)
+	+code
+	lda CBANKREG
+	pha
+	lda _scanbank
+	sta CBANKREG
+	ldy #0
+	lda (_dtop),y
+	tax
+	pla
+	sta CBANKREG
+	stx _dtop
+	lda #0
+	sta _dtop+1
+	jmp next
+} else {
 +header ~cfatolfa, ~cfatolfa_n
 	+forth
 	+token dup, twominus, cpeek
@@ -1801,6 +1887,7 @@ lfatonfa_next:
 	+token twodrop, zero, exit
 lfatonfa_found:
 	+token drop, exit
+}
 
 +header ~xttocfa, ~xttocfa_n
 	+code
@@ -1825,6 +1912,38 @@ lfatonfa_found:
 +header ~cfatoxt, ~cfatoxt_n
 	+code
 
+!if WD_FARHDR {
+; Far-header records store their own token 7 bytes before the record end
+; (which is what lfatocfa produces as the "CFA"), so no table search is
+; needed - and none would work: window CFAs repeat across banks, so the
+; user half of TOKENS is not value-sorted anymore.
+	lda _dtop+1
+	cmp #>CWIN_BASE
+	bcc cfatoxt_near
+	sec
+	lda _dtop
+	sbc #7
+	sta _dtop
+	bcs +
+	dec _dtop+1
++:
+	lda CBANKREG
+	pha
+	lda _scanbank
+	sta CBANKREG
+	ldy #0
+	lda (_dtop),y
+	tax
+	iny
+	lda (_dtop),y
+	tay
+	pla
+	sta CBANKREG
+	stx _dtop
+	sty _dtop+1
+	jmp next
+cfatoxt_near:
+}
 ; The code needs to be prepared for split system with core and compiled words in
 ; different parts of RAM. For that purpose binsearch should be called twice (words
 ; are sorted within each part)
@@ -3024,6 +3143,82 @@ rat_common:
 !if WIDEDICT {
 +header ~wdcolon, ~wdcolon_n	; ( -- ) start a colon body: claim a code
 	+code			; bank, emit the [RTS][body:2][bank:1] stub at
+!if WD_FARHDR {
+	; far headers: xcreate already claimed the bank and built the record
+	; at _chere's old position; the stub goes right after it IN the bank
+	; (near space untouched). Repoint TOKENS/TOKBANK from the near HERE
+	; (where a data word's CFA would have gone) to the far stub.
+	lda _cbanks_ok
+	bne wdcf_go
+	jmp wdc0		; no code banks: classic near fallback below
+wdcf_go:
+	+ldax _hightoken	; TOKENS[_hightoken] = _chere
+	asl
+	sta _wscratch
+	txa
+	rol
+	adc #>TOKENS
+	sta _wscratch+1
+	ldy #0
+	lda _chere
+	sta (_wscratch),y
+	iny
+	lda _chere+1
+	sta (_wscratch),y
+	clc			; TOKBANK[_hightoken] = _codebank
+	lda _hightoken
+	adc #<TOKBANK
+	sta _wscratch
+	lda _hightoken+1
+	adc #>TOKBANK
+	sta _wscratch+1
+	lda _codebank
+	ldy #0
+	sta (_wscratch),y
+	sta CBANKREG		; pin: the stub write and the body compile
+				; target the code bank (v2 resting rule)
+	lda _chere		; write [RTS][_chere+4][bank] at _chere
+	sta _wscratch
+	lda _chere+1
+	sta _wscratch+1
+	ldy #0
+	lda #RTS_INSTR
+	sta (_wscratch),y
+	clc
+	lda _chere
+	adc #4
+	sta _rscratch		; body start = stub end (also the new HERE)
+	iny
+	sta (_wscratch),y
+	lda _chere+1
+	adc #0
+	sta _rscratch+1
+	iny
+	sta (_wscratch),y
+	iny
+	lda _codebank
+	sta (_wscratch),y
+	lda _here		; park the data-space pointers, swap HERE
+	sta _dhere		; into the code bank
+	lda _here+1
+	sta _dhere+1
+	lda _memtop
+	sta _dmemtop
+	lda _memtop+1
+	sta _dmemtop+1
+	lda _rscratch
+	sta _here
+	lda _rscratch+1
+	sta _here+1
+	lda #<CWIN_TOP
+	sta _memtop
+	lda #>CWIN_TOP
+	sta _memtop+1
+	lda #1
+	sta _incode
+	jmp next
+wdc0:
+}
 	jsr ccw_claim		; the data HERE, then swap HERE to code space
 	ldy #0
 	lda #RTS_INSTR
@@ -3090,7 +3285,6 @@ wdc_nc:
 	sta CBANKREG		; pin: compilation pokes go to the code bank
 	jmp next
 }
-
 
 +header ~twotor, ~twotor_n, "2>R"
 	+code
@@ -4066,7 +4260,19 @@ setorder_exit:
 	+literal _vocs
 	+token add, zero, swap, poke
 	+literal _vocsref
+!if WD_FARHDR {
+	; _vocsref keeps the creator's TOKEN (tokens are definition-ordered;
+	; window NFAs are not comparable across banks), and the new wordlist
+	; starts with a near (empty) head bank
+	+token add
+	+literal _hightoken
+	+token peek, swap, poke
+	+token dup
+	+literal _vocsbank
+	+token add, zero, swap, cpoke
+} else {
 	+token add, latest, swap, poke
+}
 	+token dup, oneplus
 	+literal _numvocs
 	+token cpoke, exit
@@ -4076,6 +4282,30 @@ xwordlist_error:
 
 +header ~search_wordlist, ~search_wordlist_n, "SEARCH-WORDLIST"
 	+forth
+!if WD_FARHDR {
+	; seed the walk with the head's bank; all header reads from here on go
+	; through _scanbank (xfind keeps it in step as the chain hops banks)
+	+token dup
+	+literal _vocsbank
+	+token add, cpeek
+	+literal _scanbank
+	+token cpoke
+	+token cells
+	+literal _vocs
+	+token add, peek
+	+token xfind, dup
+	+qbranch_fwd swf_notfound
+	+token dup, minusone, swap, wdhcpeek
+	+literal $80
+	+token and_op
+	+qbranch_fwd swf_notimm
+	+token negate
+swf_notimm:
+	+token swap, nfatolfa, lfatocfa, cfatoxt
+	+token swap
+swf_notfound:
+	+token exit
+} else {
 	+token cells
 	+literal _vocs
 	+token add, peek
@@ -4091,6 +4321,7 @@ sw_notimm:
 	+token swap
 sw_notfound:
 	+token exit
+}
 
 ;
 ; : (find) (;code) nonstandard
@@ -4147,6 +4378,14 @@ xfind_compare:
 	jmp hash_lookup		; xfind prologue rejects them outright)
 xfc_noredirect:
 }
+!if WD_FARHDR {
+	lda _rscratch+1		; scanning a far header? pin its bank so the
+	cmp #>CWIN_BASE		; name/length reads see the right window
+	bcc xfc_nopin
+	lda _scanbank
+	sta CBANKREG
+xfc_nopin:
+}
 	ldy #0				; compare the word length at the scan pointer to _scratch
 	lda (_rscratch),y
 	and #NAMEMASK
@@ -4164,6 +4403,31 @@ xfind_cmpchar:
 	beq xfind_cmpchar	; same char, continue. otherwise, next word
 
 xfind_nextword:
+!if WD_FARHDR {
+	lda _rscratch+1		; far header: the link is absolute
+	cmp #>CWIN_BASE		; [addr:2][bank:1] at NFA+len+5 (fixed form -
+	bcc xfn_near		; never a diff, so the classic parse below
+	txa			; would misread it). Bank still pinned from
+	clc			; the loop top.
+	adc #5			; len (in X) + 5
+	tay
+	lda (_rscratch),y
+	sta _wscratch
+	iny
+	lda (_rscratch),y
+	sta _wscratch+1
+	iny
+	lda (_rscratch),y
+	sta _scanbank		; the next header's bank (repinned at the top)
+	lda _wscratch
+	sta _rscratch
+	lda _wscratch+1
+	sta _rscratch+1
+	ora _rscratch		; end of chain? (A = 0 exactly when so, which
+	beq xfind_nomorewords	; the exit stores into the result)
+	jmp xfind_compare
+xfn_near:
+}
 	lda #0
 	sta _wscratch+1
 	txa					; expect current length in X
@@ -4202,11 +4466,19 @@ xfind_linkcore:
 xfind_nomorewords:
 	sta _dtop
 	sta _dtop+1
+!if WD_FARHDR {
+	lda _ribank		; un-drift: restore the resting bank
+	sta CBANKREG
+}
 	jmp next
 
 xfind_found:
 	+ldax _rscratch
 	+stax _dtop
+!if WD_FARHDR {
+	lda _ribank		; found: _scanbank = the word's bank; the
+	sta CBANKREG		; register itself goes back to resting state
+}
 	jmp next
 
 
@@ -4773,6 +5045,12 @@ number_try:
 
 +header ~nextword, ~nextword_n
 	+forth
+!if WD_FARHDR {
+	+token dup
+	+literal CWIN_BASE
+	+token uless
+	+qbranch_fwd nextword_far
+}
 	+token dup, nfatolfa
 ; extract the offset from the LFA (this code may look verbose but the
 ; native 6502 code is actually about the same in size)
@@ -4800,6 +5078,17 @@ nextword_core:
 	+token twodrop, drop
 	+literal forth_system_n
 	+token exit
+!if WD_FARHDR {
+nextword_far:
+	; far record: follow the absolute [addr:2][bank:1] link and keep
+	; _scanbank in step (0 marks the end of the chain, like near)
+	+token nfatolfa
+	+token dup, wdhpeek		; ( lfa prev-nfa )
+	+token swap, twoplus, wdhcpeek	; ( prev-nfa prev-bank )
+	+literal _scanbank
+	+token cpoke
+	+token exit
+}
 
 ; ==============================================================================
 ; Outer interpreter
@@ -5057,6 +5346,109 @@ xcw_diffcalc:
 	sbc _latest+1
 	sta _wscratch+1
 	rts
+
+!if WD_FARHDR {
+; Far headers v3: build the ENTIRE header record in the code bank:
+;   [len|flags][name][token:2][nearhere:2][link: addr:2 + bank:1]
+; ( c-addr len ) -> pops len exactly like the classic path (name read via the
+; same decrement trick), leaving c-addr for the shared tail's final +dpop.
+; C=1: done - the record base is LATEST (_latestbank = its bank), _chere
+; points past the record (where wdcolon puts a colon word's [RTS][body][bank]
+; stub; data words keep their classic near CFA at the untouched HERE, so the
+; created/does/dovalue/dodefer runtimes and DOES>/TO/DEFER stay near-classic).
+; C=0: no writable code banks - the caller falls through to the classic
+; near-header build. The link is always absolute (addr 0 = end of chain,
+; bank 0 = a near/core NFA): no diff forms in far space.
+xfh_create:
+	lda _cbanks_ok
+	bne xfh_go
+	clc
+	rts
+xfh_go:
+	jsr ccw_claim		; ensure a claimed bank with WD_HEADROOM left
+	lda _codebank
+	bne xfh_ok
+	clc
+	rts
+xfh_ok:
+	+dpop			; len
+	and #NAMEMASK
+	sta _scratch
+	lda CBANKREG		; pin the code bank around the record build
+	pha
+	lda _codebank
+	sta CBANKREG
+	lda _chere
+	sta _wscratch
+	lda _chere+1
+	sta _wscratch+1
+	ldy #0
+	lda _scratch
+	sta (_wscratch),y	; len byte
+	tax
+	beq xfh_name0
+	lda _dtop		; classic same-index copy from (c-addr - 1)
+	bne xfh_nodec
+	dec _dtop+1
+xfh_nodec:
+	dec _dtop
+	iny
+xfh_copy:
+	lda (_dtop),y
+	sta (_wscratch),y
+	iny
+	dex
+	bne xfh_copy
+xfh_name0:
+	ldy _scratch
+	iny			; y = len+1 -> the token field
+	clc
+	lda _hightoken		; token = _hightoken+1 (the tail increments)
+	adc #1
+	sta (_wscratch),y
+	iny
+	lda _hightoken+1
+	adc #0
+	sta (_wscratch),y
+	iny
+	lda _here		; nearhere = FORGET's near rewind point
+	sta (_wscratch),y
+	iny
+	lda _here+1
+	sta (_wscratch),y
+	iny
+	lda _current		; link = [voc head NFA:2][voc head bank:1]
+	asl
+	tax
+	lda _vocs,x
+	sta (_wscratch),y
+	iny
+	lda _vocs+1,x
+	sta (_wscratch),y
+	iny
+	ldx _current
+	lda _vocsbank,x
+	sta (_wscratch),y
+	iny			; y = len+8 = the record length
+	pla
+	sta CBANKREG		; unpin
+	lda _chere		; LATEST = the record base, in _codebank
+	sta _latest
+	lda _chere+1
+	sta _latest+1
+	lda _codebank
+	sta _latestbank
+	sta _scanbank
+	tya			; _chere += record length
+	clc
+	adc _chere
+	sta _chere
+	bcc xfh_done
+	inc _chere+1
+xfh_done:
+	sec
+	rts
+}
 }
 
 +header ~xcreate, ~xcreate_n
@@ -5068,12 +5460,18 @@ xcw_diffcalc:
 ; check if we have available tokens
 	lda _hightoken+1
 	cmp #>TOKEN_COUNT
-	bcc + 
+	bcc +
 
 	+goforth
 	+branch_fwd create_error
 +:
 
+!if WD_FARHDR {
+	jsr xfh_create		; build the whole header in the code bank
+	bcc +			; C=0: no code banks - classic near header
+	jmp xcreate_join	; far done - skip to the token-table update
++:
+}
 
 ; calculate contents for the new LFA
 ; Temporarily reloading _latest as it will be updated on the next step
@@ -5166,6 +5564,10 @@ xcreate_hupd:
 +:
 
 	; update token table
+!if WD_FARHDR {
+xcreate_join:			; far path: TOKENS[t] = the (untouched) near
+}				; HERE = a data word's classic CFA; wdcolon
+				; repoints colon words to the far stub
 	inc _hightoken
 	bne +
 	inc _hightoken+1
@@ -5204,7 +5606,20 @@ xcreate_hupd:
 +error_message ~create_error
 +header ~create, ~create_n, "CREATE"
 	+forth
-!if WIDEDICT {
+!if WD_FARHDR {
+	; far header, classic near CFA; the reveal also records the header's bank
+	+token bl, word, count, xcreate
+	+literal JMP_INSTR
+	+token ccomma
+	+literal created
+	+token comma, latest, context, poke
+	+literal _latestbank
+	+token cpeek
+	+literal _current
+	+token cpeek
+	+literal _vocsbank
+	+token add, cpoke, exit
+} else if WIDEDICT {
 	; the pre-xcreate HERE capture (= the new NFA) goes stale when xcreate
 	; switches allocation banks - reveal via LATEST (xcreate sets it) instead
 	+token bl, word, count, xcreate
@@ -5246,9 +5661,16 @@ xcode_cfa:
 	+literal _bsp
 	+token cpoke
 }
+!if WD_FARHDR {
+	; the child's CFA comes from the token table (its far header is not
+	; adjacent to the near CFA anymore); the child is always LATEST
+	+literal _hightoken
+	+token peek, xttocfa
+} else {
 	+token latest, count
 	+literal NAMEMASK
 	+token and_op, add, lfatocfa ;twoplus		; CFA of the last defined word
+}
 	+token oneplus ; PFA (!)
 	+token poke, exit							; and this will actually exit the defining word
 
@@ -5402,6 +5824,144 @@ quit_nsw:
 
 +header ~xforget, ~xforget_n	; xt -> (delete all words from this address)
 	+forth
+!if WD_FARHDR {
+; Far headers: window NFAs are not ordered across banks, but tokens are
+; definition-ordered - so the walk compares each header's stored token with
+; the boundary. The boundary word's record supplies the rewind state:
+; _chere/_codebank = its own record base/bank (headers are the first thing
+; a word allocates), _here = its stored nearhere breadcrumb.
+	+token dup
+	+literal forth_system
+	+token greater
+	+qbranch_fwd xfgf_fence
+	+branch_fwd xfgf_go
+xfgf_fence:
+	+token xabortq
+	+string "?FENCE"
+xfgf_go:
+; Reset the search order to default
+	+token minusone, set_order, zero
+	+literal _current
+	+token cpoke
+	+token oneminus			; new _hightoken = xt-1
+	+literal _hightoken
+	+token poke			; ( )
+	+literal forth_system_n		; _latest defaults: the newest survivor
+	+literal _latest		; is tracked during the walk below
+	+token poke
+	+token zero
+	+literal _latestbank
+	+token cpoke
+	+literal forth_system		; ( maxtok ) running max survivor token
+; Walk every wordlist: unlink far heads with token > xt-1, capture the
+; boundary record, keep _vocs/_vocsbank and the LATEST tracking in step
+	+literal _numvocs
+	+token cpeek, zero, xqdo
+	+address xfgf_wdone
+xfgf_wloop:
+	+token i
+	+literal _vocsbank
+	+token add, cpeek
+	+literal _scanbank
+	+token cpoke
+	+token i, cells
+	+literal _vocs
+	+token add, peek		; ( maxtok nfa )
+xfgf_scan:
+	+token dup
+	+literal CWIN_BASE
+	+token uless
+	+qbranch_fwd xfgf_far
+	+branch_fwd xfgf_keep		; near head = core: keep
+xfgf_far:
+	+token dup, dup, wdhcpeek	; token field at NFA+len+1
+	+literal NAMEMASK
+	+token and_op, add, oneplus, wdhpeek	; ( maxtok nfa tok )
+	+token dup
+	+literal _hightoken
+	+token peek, greater
+	+qbranch_fwd xfgf_keepdrop	; tok <= xt-1: survivor
+	+literal _hightoken
+	+token peek, oneplus, equal	; ( maxtok nfa tok==xt ) consumes tok
+	+qbranch_fwd xfgf_hop
+	+token dup			; the boundary: capture the rewind state
+	+literal _chere
+	+token poke
+	+literal _scanbank
+	+token cpeek
+	+literal _codebank
+	+token cpoke
+	+token dup, dup, wdhcpeek	; nearhere field at NFA+len+3
+	+literal NAMEMASK
+	+token and_op, add
+	+literal 3
+	+token add, wdhpeek
+	+literal _here
+	+token poke			; ( maxtok nfa )
+xfgf_hop:
+	+token nextword			; follow the link (updates _scanbank)
+	+branch xfgf_scan
+xfgf_keepdrop:
+	+token drop			; ( maxtok nfa )
+xfgf_keep:
+	+token dup, i, cells		; store the surviving head + its bank
+	+literal _vocs
+	+token add, poke
+	+literal _scanbank
+	+token cpeek, i
+	+literal _vocsbank
+	+token add, cpoke		; ( maxtok nfa )
+	+token dup
+	+literal CWIN_BASE
+	+token uless
+	+qbranch_fwd xfgf_ftok
+	+token drop			; near head: token = forth_system = the
+	+branch_fwd xfgf_next		; seed - never a new max
+xfgf_ftok:
+	+token dup, dup, wdhcpeek	; ( maxtok nfa nfa len' )
+	+literal NAMEMASK
+	+token and_op, add, oneplus, wdhpeek	; ( maxtok nfa tok )
+	+token rot			; ( nfa tok maxtok )
+	+token twodup, greater		; ( nfa tok maxtok tok>maxtok )
+	+qbranch_fwd xfgf_nomax
+	+token drop, swap, dup		; ( tok nfa nfa ) new max: this head
+	+literal _latest		; becomes LATEST
+	+token poke
+	+literal _scanbank
+	+token cpeek
+	+literal _latestbank
+	+token cpoke
+	+token drop			; ( tok ) = the new maxtok
+	+branch_fwd xfgf_next
+xfgf_nomax:
+	+token nip, nip			; ( maxtok )
+xfgf_next:
+	+token xloop
+	+address xfgf_wloop
+xfgf_wdone:
+	+token drop			; ( )
+; Drop wordlists whose creator word is forgotten (creator tokens >= xt)
+	+literal _numvocs
+	+token cpeek, one, xqdo
+	+address xfgf_vndone
+xfgf_vn:
+	+literal _hightoken
+	+token peek, i, cells
+	+literal _vocsref
+	+token add, peek, less
+	+qbranch_fwd xfgf_vnok
+	+token i
+	+literal _numvocs
+	+token cpoke, leave
+xfgf_vnok:
+	+token xloop
+	+address xfgf_vn
+xfgf_vndone:
+	+literal MEMTOP			; data space is near again in full
+	+literal _memtop
+	+token poke
+	+token exit
+} else {
 ; Protect the core
 	+token dup
 	+literal forth_system
@@ -5509,6 +6069,7 @@ xforget_stillfar:
 xforget_error:
 	+token xabortq
 	+string "?FENCE"
+}
 
 +header ~addfield, ~addfield_n, "+FIELD"
 	+forth
@@ -6346,7 +6907,17 @@ included_1:
 	; same stale-HERE hazard as CREATE: reveal the dummy via LATEST instead
 	+token twodup, xcreate			; create a dummy word with the same name as the included file
 	+literal RTS_INSTR
+!if WD_FARHDR {
 	+token ccomma, compile, exit, latest, context, poke
+	+literal _latestbank
+	+token cpeek
+	+literal _current
+	+token cpeek
+	+literal _vocsbank
+	+token add, cpoke
+} else {
+	+token ccomma, compile, exit, latest, context, poke
+}
 } else {
 	+token twodup, here, tor, xcreate	; create a dummy word with the same name as the included file
 	+literal RTS_INSTR
@@ -6820,9 +7391,30 @@ mmuldiv_1:
 ; ==============================================================================
 +header ~immediate, ~immediate_n, "IMMEDIATE"
 	+forth
+!if WD_FARHDR {
+	; LATEST's header sits in a code bank (not necessarily _codebank after
+	; FORGET/LOAD-IMAGE): read via _scanbank, and swing _codebank so the
+	; windowed C! pins the right bank for the flag write
+	+literal _latestbank
+	+token cpeek
+	+literal _scanbank
+	+token cpoke
+	+literal _codebank
+	+token cpeek		; ( oldbank )
+	+literal _latestbank
+	+token cpeek
+	+literal _codebank
+	+token cpoke
+	+token latest, dup, wdhcpeek
+	+literal IMM_FLAG
+	+token or, swap, cpoke	; far C! pins _codebank = the header's bank
+	+literal _codebank
+	+token cpoke, exit
+} else {
 	+token latest, dup, cpeek
 	+literal IMM_FLAG
 	+token or, swap, cpoke, exit
+}
 
 ; Note that while DOES> looks like high-level word its implementation is depended on the opcode for native CALL/JSR
 +header ~doesx, ~doesx_n, "DOES>", IMM_FLAG
@@ -6929,7 +7521,17 @@ doesx_novis:
 	+literal CBANKREG
 	+token cpoke
 wds_noswap:
+!if WD_FARHDR {
+	+token bracket, latest, context, poke
+	+literal _latestbank
+	+token cpeek
+	+literal _current
+	+token cpeek
+	+literal _vocsbank
+	+token add, cpoke, exit
+} else {
 	+token bracket, latest, context, poke, exit
+}
 } else {
 	+token qcomp, compile, exit, bracket, latest, context, poke, exit
 }
@@ -7559,6 +8161,46 @@ free_msg_bytes:
 
 +header ~words, ~words_n, "WORDS"
 	+forth
+!if WD_FARHDR {
+	; header names live in the code banks: seed _scanbank per wordlist and
+	; read length/characters through it (near/core headers read the same way)
+	+token get_order, zero, tuck, xqdo
+	+address words_done
+words_looporder:
+	+token swap, dup
+	+literal _vocsbank
+	+token add, cpeek
+	+literal _scanbank
+	+token cpoke
+	+token cells
+	+literal _vocs
+	+token add, peek
+words_loop:
+	+token qdup
+	+qbranch_fwd words_next
+	+token dup, wdhcpeek
+	+literal NAMEMASK
+	+token and_op, qdup
+	+qbranch_fwd words_continue	; nameless (:NONAME): just follow the link
+	+token over, oneplus, swap	; ( cnt nfa a=nfa+1 len )
+	+token zero, xqdo
+	+address words_pdone
+words_ploop:
+	+token dup, i, add, wdhcpeek, emit, xloop
+	+address words_ploop
+words_pdone:
+	+token drop, space, swap, oneplus, swap
+words_continue:
+	+token nextword
+	+branch words_loop
+words_next:
+	+token xloop
+	+address words_looporder
+words_done:
+	+token cr, dot
+	+literal words_n
+	+token count, type, exit
+} else {
 	+token get_order, zero, tuck, xqdo
 	+address words_done
 words_looporder:
@@ -7586,6 +8228,7 @@ words_done:
 	+token cr, dot
 	+literal words_n
 	+token count, type, exit
+}
 
 +header ~key, ~key_n, "KEY"
 	+code
@@ -7678,7 +8321,21 @@ order_done:
 
 +header ~wordlist, ~wordlist_n, "WORDLIST"
 	+forth
+!if WD_FARHDR {
+	; the pre-xcreate HERE is not the nameless word's NFA anymore (the
+	; header went far) - reveal via LATEST + its bank, like CREATE
+	+token here, zero, dup, xwordlist
+	+token latest, context, poke
+	+literal _latestbank
+	+token cpeek
+	+literal _current
+	+token cpeek
+	+literal _vocsbank
+	+token add, cpoke
+	+token nip, exit
+} else {
 	+token here, zero, dup, xwordlist, swap, context, poke, exit
+}
 
 +header ~forth, ~forth_n, "FORTH"
 	+forth
