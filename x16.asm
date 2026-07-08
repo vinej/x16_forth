@@ -2492,9 +2492,68 @@ mtb_done:
 	jmp next
 }
 
-; I2CPOKE/I2CPEEK were removed to save ROM: rarely used, and they called the
-; KERNAL I2C routines ($FEC6/$FEC9) directly, which is unreachable from the
-; bank-9 ROM anyway. If needed, add a SYSCALL-based version to a toolkit file.
+; --- BASIC system words re-added (2026-07-07). Room reclaimed by moving the
+; bitmap graphics to GFX.FTH (GFXTOOLKIT). All reach the KERNAL through
+; +kcall / jsrfar (via the $FF6E stub), so they work in the bank-9/32 ROM
+; builds too - a direct "jsr $FExx" there would land in the Forth bank.
+
+; I2CPEEK ( dev reg -- byte )   read a byte from an I2C device register
++header ~i2cpeek, ~i2cpeek_n, "I2CPEEK"
+	+code
+	ldy #2
+	lda (_dstack),y		; device
+	tax
+	lda _dtop			; register
+	tay
+	+kcall i2c_read_byte	; A = value
+	+dpop				; drop register; _dtop now holds device
+	sta _dtop			; overwrite with the result
+	lda #0
+	sta _dtop+1
+	jmp next
+
+; I2CPOKE ( dev reg val -- )   write a byte to an I2C device register
++header ~i2cpoke, ~i2cpoke_n, "I2CPOKE"
+	+code
+	ldy #4
+	lda (_dstack),y		; device
+	tax
+	ldy #2
+	lda (_dstack),y		; register
+	tay
+	lda _dtop			; value
+	+kcall i2c_write_byte
+	+dpop
+	+dpop
+	+dpop
+	jmp next
+
+; MONITOR ( -- )   enter the built-in machine-language monitor. Exit with X;
+; note exiting does NOT cleanly return to Forth - reset afterward.
++header ~monitor, ~monitor_n, "MONITOR"
+	+code
+	jsr JSRFAR
+	!word $C000
+	!byte $05			; BANK_MONITOR
+	jmp next
+
+; RESET ( -- )   hardware reset via the SMC
++header ~reset, ~reset_n, "RESET"
+	+code
+	lda #0
+	ldx #SMC_I2C_ADDR
+	ldy #2				; SMC register 2 = reset
+	+kcall i2c_write_byte
+	jmp next
+
+; POWEROFF ( -- )   power off via the SMC
++header ~poweroff, ~poweroff_n, "POWEROFF"
+	+code
+	lda #0
+	ldx #SMC_I2C_ADDR
+	ldy #1				; SMC register 1 = power off
+	+kcall i2c_write_byte
+	jmp next
 
 ; SLEEP ( jiffies -- )   wait 'jiffies' 1/60-second ticks
 +header ~sleep, ~sleep_n, "SLEEP"
