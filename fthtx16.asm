@@ -566,6 +566,9 @@ IRQ_DSTACK_TOP = irq_dstack + 64 - 2
 +hmbuffer ~syscall_stub, 8
 ; CATCH/THROW: the current exception frame (0 = none). See EXCEPTION wordset.
 +hmbuffer ~exc_handler, 2
+; data-stack depth recorded by ':' / ':NONAME' and checked by ';' - catches
+; definitions with an unbalanced IF/DO/BEGIN left open (?PAIRS abort)
++hmbuffer ~_csp, 1
 ; EDIT saves Forth's zero page ($22-$7F, 94 bytes) here across x16edit. Must be
 ; RAM: in the bank-9 ROM the code section is read-only, so this cannot be inline.
 +hmbuffer ~edit_zpsave, $5e
@@ -1294,7 +1297,46 @@ prefix_token:
 ;	RI = W+1	; offset for RTS
 ;	goto NEXT
 
+; Shared stability-guard abort: run the token fragment at A/X via NEXT.
+; Callers are +code contexts dispatched from NEXT (the call-1 pair is on the
+; CPU stack), EXCEPT the call guard which re-pushes its consumed pair first.
+; The whole stability-guard set is disabled on the byte-exact 8K C64 cart.
+!if CART = 0 {
+guard_abort:
+	sta _ri
+	stx _ri+1
+!if WIDEDICT {
+	lda #0
+	sta _ribank
+	sta CBANKREG
+}
+	jmp next
+}
+
 call:
+!if CART = 0 {
+!if X16 {
+	lda irq_busy			; the IRQ callback runs on its own private
+	bne call_rok			; stacks below RSTACK - skip the guard there
+}
+	lda _rstack			; runaway recursion guard: abort with
+	cmp #<(RSTACK+2*SSAFE)		; ?STACK before the return stack tramples
+	lda _rstack+1			; the buffers below it
+	sbc #>(RSTACK+2*SSAFE)
+	bcs call_rok
+	jsr init_rstack			; unwind NOW: the abort machinery itself
+					; makes colon calls, which would re-trip
+					; this guard forever (ABORT resets the
+					; stacks anyway)
+	lda #>call-1			; keep the RTS-trampoline invariant: the
+	pha				; dispatch that entered CALL consumed the
+	lda #<call-1			; call-1 pair, and the abort fragment's
+	pha				; colon dispatch will pop this one
+	lda #<qstack_abort
+	ldx #>qstack_abort
+	jmp guard_abort
+call_rok:
+}
 ; prep for the subsequent call
 	lda #>call-1
 	pha
@@ -1371,7 +1413,7 @@ call_stub:
 	+ldax _w
 	+incax 1
 	+stax _ri
-	+bra next
+	jmp next			; (was +bra - the EXIT guard pushed it out of range)
 
 ; EXIT - return from the current word to the caller (called "return" here to avoid conflict with EXIT word)
 ;	RI = rpop()
@@ -1380,6 +1422,14 @@ call_stub:
 return:
 	+rpop
 	+stax _ri
+!if CART = 0 {
+	cpx #4				; junk left on the return stack (>R without
+	bcs return_ok			; R>) would send the interpreter into page
+	lda #<qstack_abort		; 0-3; abort with ?STACK instead
+	ldx #>qstack_abort
+	jmp guard_abort
+return_ok:
+}
 !if WIDEDICT {
 	dec _bsp		; unstack the caller's bank and re-pin the
 	ldx _bsp		; code-bank register to it
@@ -1387,7 +1437,7 @@ return:
 	sta _ribank
 	sta CBANKREG
 }
-	+bra next
+	jmp next		; (was +bra - the EXIT guard pushed it out of range)
 
 ; INVOKE - this will execute word by CFA and continue to the next word (exposed to the language as EXECUTE)
 ;	W = pop()
@@ -1395,6 +1445,22 @@ return:
 
 invoke:
 	+dpop
+!if CART = 0 {
+	; xt sanity: a garbage EXECUTE argument (an address instead of a
+	; token) jumps through random table bytes - reject anything beyond
+	; the last allocated token
+	cpx _hightoken+1
+	bcc invoke_ok
+	bne invoke_bad
+	cmp _hightoken
+	bcc invoke_ok
+	beq invoke_ok
+invoke_bad:
+	lda #<qstack_abort		; report a garbage xt as ?STACK (a stack
+	ldx #>qstack_abort		; full of wrong values is the usual cause)
+	jmp guard_abort
+invoke_ok:
+}
 invokeax:
 	asl
 	sta _scratch
@@ -1403,11 +1469,8 @@ invokeax:
 	adc #>TOKENS
 	sta _scratch+1
 	ldy #0
-!if WIDEDICT {
-	jmp fragment_1		; the grown CALL pushed this out of beq range
-} else {
-	beq fragment_1
-}
+	jmp fragment_1		; the grown CALL/EXECUTE guards pushed this
+				; out of beq range on every build
 ;	lda (_scratch),y
 ;	sta _w
 ;	iny
@@ -5156,18 +5219,17 @@ QSTACK_LO = DSTACK_INIT - 2*STACKLIMIT
 	lda #>DSTACK_INIT
 	sbc _dstack+1
 	bcc qs_bad			; _dstack > INIT: underflow
+	lda #<RSTACK_INIT
+	cmp _rstack
+	lda #>RSTACK_INIT
+	sbc _rstack+1
+	bcc qs_bad			; _rstack > INIT: return-stack underflow
+					; (R> / UNLOOP typed at the console)
 	jmp next
 qs_bad:
 	lda #<qstack_abort		; run the classic abort fragment (xabortq
-	sta _ri				; reads the "?STACK" name that follows it
-	lda #>qstack_abort		; as its message)
-	sta _ri+1
-!if WIDEDICT {
-	lda #0				; the fragment is near/core code
-	sta _ribank
-	sta CBANKREG
-}
-	jmp next
+	ldx #>qstack_abort		; reads the "?STACK" name that follows it
+	jmp guard_abort			; as its message)
 } else {
 	+forth
 	+token depth, dup, zerolt, swap
@@ -7540,6 +7602,11 @@ doesx_novis:
 	+forth
 	+token bl, word, count
 	+token xcreate
+!if CART = 0 {
+	+token depth			; ';' verifies the compile-time stack is
+	+literal _csp			; balanced (unresolved IF/DO/BEGIN leave
+	+token cpoke			; their control-flow cells behind)
+}
 !if WIDEDICT {
 	+token wdcolon
 } else {
@@ -7561,6 +7628,11 @@ doesx_novis:
 	+forth
 	+token zero, dup
 	+token xcreate
+!if CART = 0 {
+	+token depth, oneplus		; same ?PAIRS bookkeeping as ':' - the xt
+	+literal _csp			; this word pushes (after this point) is
+	+token cpoke			; on the stack when ';' checks the balance
+}
 !if WIDEDICT {
 	+token wdcolon
 } else {
@@ -7575,10 +7647,24 @@ doesx_novis:
 	+forth
 	+token create, allot, exit
 
+!if X16 = 0 and CART = 0 {
+csp_abort:				; X16 builds keep this fragment in
+	+token xabortq			; imgvars.asm (vector-gap padding on the
+	+string "?PAIRS"		; ROM builds)
+}
 +header ~semicolon, ~semicolon_n, ";", IMM_FLAG
 	+forth
+	+token qcomp
+!if CART = 0 {
+	+token depth
+	+literal _csp
+	+token cpeek, equal
+	+qbranch csp_abort		; leftover control-flow cells: the definition
+					; has an IF/DO/BEGIN without its THEN/LOOP/
+					; UNTIL (executing it would crash)
+}
 !if WIDEDICT {
-	+token qcomp, compile, exit
+	+token compile, exit
 	+literal _incode
 	+token cpeek
 	+qbranch_fwd wds_noswap
@@ -7612,7 +7698,7 @@ wds_noswap:
 	+token bracket, latest, context, poke, exit
 }
 } else {
-	+token qcomp, compile, exit, bracket, latest, context, poke, exit
+	+token compile, exit, bracket, latest, context, poke, exit
 }
 
 +header ~variable, ~variable_n, "VARIABLE"
@@ -8656,14 +8742,6 @@ brg_jf_ram:
 ; low-RAM trampolines so an IRQ/NMI taken while the bank is selected is handled
 ; (bank saved, KERNAL entered, bank restored). See inc/banks.inc: irq=$038b,
 ; nmi=$03b7. Pad the image up to the 16K bank's vector table.
-!if X16CART {
-; BASIC ROM CHRGET routine (r49), copied to zp $E7 at cart coldstart (the cart
-; boots before BASIC would install it). Cart-only: keeps bank-9 byte-identical.
-chrget_template:
-	!byte $E6,$EE,$D0,$02,$E6,$EF,$AD,$60,$EA,$C9,$3A,$B0,$0A,$C9
-	!byte $20,$F0,$EF,$38,$E9,$30,$38,$E9,$D0,$60
-chrget_template_end:
-}
 !if FPCORE = 0 {
 ; The official X16 convention places a jsrfar entry at $FF6E in EVERY ROM
 ; bank, so cross-bank callers (e.g. toolkit/FLOAT.FTH's CODE words doing
@@ -8673,6 +8751,17 @@ chrget_template_end:
 ; (FPCORE=0): that's the only caller, and the FP-baked layout has no room.
 	!fill $FF6E - *, $ff
 	jmp brg_jsrfar
+; the gap between here and the $FFFA vectors is padding - use it for the
+; SAVE/LOAD-IMAGE state routines (see imgvars.asm)
+!source "imgvars.asm"
+!if X16CART {
+; BASIC ROM CHRGET routine (r49), copied to zp $E7 at cart coldstart (the cart
+; boots before BASIC would install it). Cart-only, parked in the vector gap.
+chrget_template:
+	!byte $E6,$EE,$D0,$02,$E6,$EF,$AD,$60,$EA,$C9,$3A,$B0,$0A,$C9
+	!byte $20,$F0,$EF,$38,$E9,$30,$38,$E9,$D0,$60
+chrget_template_end:
+}
 }
 	!fill $FFFA - *, $ff
 	!word $03b7		; NMI  -> KERNAL NMI RAM trampoline

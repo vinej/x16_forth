@@ -81,20 +81,20 @@ dictionary; every X16 build can additionally stream data into the high-RAM banks
 
 | Folder | Description | Free (bytes) | Size (bytes) | Where code / data live |
 |---|---|--:|--:|---|
-| ForthC64_6502Prg | C64 program | — | 8227 | code + data in low RAM ($0801+) |
+| ForthC64_6502Prg | C64 program | — | 8319 | code + data in low RAM ($0801+) |
 | ForthC64_6502Cart | C64 8K cartridge | — | 8192 | code in the 8K cart ROM; data + dictionary in low RAM |
-| ForthC64_6502Disk | C64 program on a .d64 | — | 8227¹ | code + data in low RAM (loaded from the .d64) |
-| ForthF256_6502Prg | Foenix F256 .pgz | — | 8785 | code + data in F256 RAM ($200+) |
-| ForthX16_6502Prg | X16 program, 6502 | **16045** | 15612 | code + data in low RAM ($0801+) |
-| ForthX16_6502Bank9 | X16 in ROM bank 9, 65C02 | **30887** | 16213² | **code in ROM bank 9**; data + dictionary in low RAM |
-| ForthX16_6502Bank32 | X16 in ROM bank 32, 65C02 | ~30887 | 16213² | **code in ROM bank 32**; data + dictionary in low RAM |
-| ForthX16_6502Cart | X16 autoboot cart, 6502 | ~16045 | 15612 | code copied to low RAM ($0801) at boot; data + dictionary in low RAM (cart `.bin` is 16 KB) |
-| ForthX16_816Prg | X16 program, 65816 | **16060** | 15597 | code + data in low RAM ($0801+) |
-| ForthX16_816Bank9 | X16 in ROM bank 9, 65816 | **30887** | 16198² | **code in ROM bank 9**; data + dictionary in low RAM, **+ all high-RAM banks free for data** |
-| ForthX16_816Bank32 | X16 in ROM bank 32, 65816 | ~30887 | 16198² | **code in ROM bank 32**; data + dictionary in low RAM, **+ all high-RAM banks** |
-| ForthX16_816WideRom | X16, wide dict in ROM banks | 12753 ³ | 17071 | interpreter code, word headers + data in low RAM; **compiled word bodies in 16K ROM banks 33+** ($C000 window) |
-| ForthX16_816WideRam | X16, wide dict in RAM banks | 12639 ³ | 17185 | interpreter code, word headers + data in low RAM; **compiled word bodies in 8K RAM banks** ($A000 window) |
-| ForthX16_816WideFar | X16, wide dict + far headers | 11777 ³ | 18019 | interpreter code + data in low RAM; **word headers + bodies in 8K RAM banks** ($A000 window) |
+| ForthC64_6502Disk | C64 program on a .d64 | — | 8319¹ | code + data in low RAM (loaded from the .d64) |
+| ForthF256_6502Prg | Foenix F256 .pgz | — | 8879 | code + data in F256 RAM ($200+) |
+| ForthX16_6502Prg | X16 program, 6502 | **15941** | 15715 | code + data in low RAM ($0801+) |
+| ForthX16_6502Bank9 | X16 in ROM bank 9, 65C02 | **30887** | 16242² | **code in ROM bank 9**; data + dictionary in low RAM |
+| ForthX16_6502Bank32 | X16 in ROM bank 32, 65C02 | ~30887 | 16242² | **code in ROM bank 32**; data + dictionary in low RAM |
+| ForthX16_6502Cart | X16 autoboot cart, 6502 | ~15941 | 15715 | code copied to low RAM ($0801) at boot; data + dictionary in low RAM (cart `.bin` is 16 KB) |
+| ForthX16_816Prg | X16 program, 65816 | **15956** | 15700 | code + data in low RAM ($0801+) |
+| ForthX16_816Bank9 | X16 in ROM bank 9, 65816 | **30887** | 16227² | **code in ROM bank 9**; data + dictionary in low RAM, **+ all high-RAM banks free for data** |
+| ForthX16_816Bank32 | X16 in ROM bank 32, 65816 | ~30887 | 16227² | **code in ROM bank 32**; data + dictionary in low RAM, **+ all high-RAM banks** |
+| ForthX16_816WideRom | X16, wide dict in ROM banks | 12650 ³ | 17173 | interpreter code, word headers + data in low RAM; **compiled word bodies in 16K ROM banks 33+** ($C000 window) |
+| ForthX16_816WideRam | X16, wide dict in RAM banks | 12536 ³ | 17287 | interpreter code, word headers + data in low RAM; **compiled word bodies in 8K RAM banks** ($A000 window) |
+| ForthX16_816WideFar | X16, wide dict + far headers | 11674 ³ | 18121 | interpreter code + data in low RAM; **word headers + bodies in 8K RAM banks** ($A000 window) |
 
 ¹ interpreter code; the `.d64` disk image itself is 174848 bytes (it also carries
 the test suite + toolkits). ² **real bytes used in the bank** (not 16384): the raw
