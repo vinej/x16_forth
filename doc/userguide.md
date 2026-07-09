@@ -958,12 +958,8 @@ The two float defining words come with the FP toolkit (`toolkit/FLOAT.FTH`), not
 
 - **`EDIT`** ( c-addr u -- ) — open the named file in the built-in X16 text editor
   (`u`=0 for a new buffer); edit, save (Ctrl-S), quit (Ctrl-Q), then
-  `INCLUDE` the file to compile it. **Known limitation:** the first keyboard line
-  right after quitting `EDIT` is still glitched (a swallowed RETURN — takes
-  several presses). This is now `EDIT`-specific: x16edit leaves more KERNAL state
-  off than a plain file read, so the console-reader reset that fixed `INCLUDED`
-  doesn't fully cover it. Workaround: after `EDIT`, reset Forth (relaunch /
-  cold start), then `INCLUDE` the file. (Plain `INCLUDED` on its own is fine.)
+  `INCLUDE` the file to compile it. The edit-then-INCLUDE round trip works
+  directly — even programmatically (`: ED 2DUP EDIT INCLUDED ;`).
 - **`SETBANK`** ( bank -- ) — select the RAM bank visible at `$A000-$BFFF`.
 - **`B@`** ( bank off -- byte ) — read a byte from banked RAM (`off` = 0..8191 into `$A000`).
 - **`B!`** ( byte bank off -- ) — store a byte into banked RAM.

@@ -39,7 +39,7 @@ Each version's release binary is written **into its own folder**, named after th
 | `version/ForthC64_6502Disk/` | `ForthC64_6502Disk.d64` |
 | `version/ForthF256_6502Prg/` | `ForthF256_6502Prg.pgz` |
 
-| X16 Version folder (slow as now) | Release binary |
+| X16 Version folder | Release binary |
 |---|---|
 | `version/ForthX16_6502Prg/` | `ForthX16_6502Prg.prg` |
 | `version/ForthX16_6502Bank9/` | `ForthX16_6502Bank9.bin` (whole 256 KB ROM — **not in the repo**, see below) |
@@ -49,7 +49,7 @@ Each version's release binary is written **into its own folder**, named after th
 | `version/ForthX16_816Bank9/` | `ForthX16_816Bank9.bin` (whole 256 KB ROM — **not in the repo**, see below) |
 | `version/ForthX16_816Bank32/` | `ForthX16_816Bank32.bin` (16 KB bank-32 image) |
 
-| X16 Experimental Version folder (slow as now) | Release binary |
+| X16 Experimental Version folder | Release binary |
 |---|---|
 | `version/ForthX16_816WideRom/` | `ForthX16_816WideRom.prg` |
 | `version/ForthX16_816WideRam/` | `ForthX16_816WideRam.prg` |

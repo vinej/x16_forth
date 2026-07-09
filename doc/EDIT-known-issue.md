@@ -1,23 +1,31 @@
-# `EDIT` — first-line glitch after quitting the editor (partly fixed)
+# `EDIT` — post-editor console/INCLUDE bug (FIXED 2026-07-09)
 
-Status (2026-07-04):
-- **ROM-build crash — FIXED.**
-- **General "OPEN bug" (swallowed first RETURN after any device-8 file read,
-  e.g. `INCLUDED`) — FIXED and verified.** Forth's X16 `ACCEPT` (in `fthtx16.asm`)
-  now clears the KERNAL screen-editor line-input state — `crsw` `$037F`, `qtsw`
-  `$0381`, `insrt` `$0385`, `rvs` `$0377` — at the start of every console read, so
-  each keyboard line begins clean. Confirmed by the user: `S" X.FTH" INCLUDED`
-  then a command works on the first RETURN.
-- **`EDIT`-specific residual — STILL OPEN.** After quitting x16edit the first
-  keyboard line is still swallowed (needs several RETURNs). So x16edit leaves
-  *additional* KERNAL state off, beyond the four bytes `ACCEPT` now resets — a
-  plain file read is clean, but `EDIT` is not. The extra culprit is not yet
-  identified (candidates: `ldtb1` line-link table — but forcing it broke wrapped
-  lines; cursor tracking `tblx`/`pntr`; x16edit's keystroke-callback vectors
-  `edkeyvec`/`edkeybk`; or IRQ/scancode handler restore). Workaround: after
-  `EDIT`, reset Forth (relaunch / cold start), then `INCLUDE` the file.
+Status (2026-07-09): **FULLY FIXED.** Root cause found and verified (user-confirmed).
+
+**Root cause:** `EDIT`'s exit cleanup calls `CLALL` to close whatever logical
+files x16edit leaves open — but `CLALL` also closes **Forth's own persistent DOS
+command channel (logical file 15)**, opened once at coldstart for I/O-status
+reads. Every later `OPEN-FILE` reads the DOS status via `c64iostatus`
+(`CHKIN 15` + `CHRIN` until newline). With 15 closed, `CHKIN` fails and the
+status read silently falls back to the **keyboard**: it consumed the user's
+RETURNs (the notorious "press ENTER several times" behavior — the keypresses
+were literally being eaten as fake DOS status lines) and made
+`INCLUDE`/`INCLUDED` hang right after printing "compiling ...".
+
+**Fix (x16.asm, EDIT's exit path):** immediately after the `CLALL`, reopen the
+command channel exactly like coldstart does (`SETNAM` empty, `SETLFS 15,8,15`,
+`OPEN`). Two smaller leaks found during the hunt are also cleaned up:
+- x16edit enables the **mouse** and leaves it on (pointer sprite visible) —
+  `MOUSE_CONFIG(0)` on exit now hides it.
+- The current **keymap name** is saved before launching the editor and the
+  keymap is reloaded by name on exit (defensive).
+
+Verified headlessly (editor open → exit → programmatic `INCLUDED` completes)
+and interactively by the user. The historical notes below document the
+investigation.
 
 ---
+
 
 
 **ROM-build crash fixed 2026-07-04** (separate, worse bug — do not confuse with

@@ -801,6 +801,19 @@ IMG_DICT_START = $0801
 IMG_DICT_START = end_of_image
 }
 IMG_TOKUSER = TOKENS + ((forth_system + 1) << 1)
+!if FPCORE = 0 {
+; .VAR also carries the >FLOAT hook (tofloat_vec): FLOAT.FTH installs it, and
+; a reloaded image must keep float literals alive - it lives in an hmbuffer,
+; not in the saved zp block, so it needs its own slot after the per-build
+; fields (the image format is tied to the exact build anyway).
+!if WD_FARHDR {
+IMG_TFV = 72 + WORDLISTS
+} else if WIDEDICT {
+IMG_TFV = 71
+} else {
+IMG_TFV = 61
+}
+}
 
 imgsfx_dic: !text ".DIC"
 imgsfx_tok: !text ".TOK"
@@ -859,6 +872,12 @@ ivs3:	lda _vocsbank,x
 	bpl ivs3
 }
 }
+!if FPCORE = 0 {
+	lda tofloat_vec			; the >FLOAT hook (see IMG_TFV above)
+	sta IMGBUF+IMG_TFV
+	lda tofloat_vec+1
+	sta IMGBUF+IMG_TFV+1
+}
 	rts
 img_vars_load:
 	ldx #6
@@ -902,6 +921,12 @@ ivl3:	lda IMGBUF+72,x
 	dex
 	bpl ivl3
 }
+}
+!if FPCORE = 0 {
+	lda IMGBUF+IMG_TFV		; restore the >FLOAT hook
+	sta tofloat_vec
+	lda IMGBUF+IMG_TFV+1
+	sta tofloat_vec+1
 }
 	rts
 
@@ -1116,7 +1141,10 @@ img_setlfs_load:			; logical 1, device 8, secondary 1 (load to header addr)
 	lda #>IMGBUF
 	sta _scratch+1
 	lda #<_scratch
-!if WD_FARHDR {
+!if FPCORE = 0 {
+	ldx #<(IMGBUF+IMG_TFV+2)	; per-build fields + the >FLOAT hook
+	ldy #>(IMGBUF+IMG_TFV+2)
+} else if WD_FARHDR {
 	ldx #<(IMGBUF+72+WORDLISTS)
 	ldy #>(IMGBUF+72+WORDLISTS)
 } else if WIDEDICT {
@@ -2059,6 +2087,92 @@ usr_call:
 ; The editor uses Forth's zero page ($22-$7F), so we save and restore it around
 ; the call. It keeps its document in RAM banks 10+ and its code in golden RAM
 ; and the top (unused) part of the token table, leaving Forth's state intact.
+!ifdef EDIT_DEBUG {
+; Debug instrumentation (assemble with acme -DEDIT_DEBUG=1): snapshot the
+; KERNAL console state around the editor call so the two copies can be
+; diffed from Forth.  Layout at the destination base page (A = $60 / $64):
+;   +$000-$1FF : $0200-$03FF (KERNAL vectors + screen-editor variables)
+;   +$200-$27F : zero page $80-$FF (KERNAL zp)
+;   +$280-$28F : $AC00-$AC0F of RAM bank 0 (editor keystroke vectors area)
+edit_snap:
+	sta esn_d1+2		; patch the store high bytes
+	clc
+	adc #1
+	sta esn_d2+2
+	adc #1
+	sta esn_d3+2
+	sta esn_d4+2
+	sta esn_d5+2
+	adc #1
+	sta esn_d6+2		; bank0 $A800 copy: 4 pages at base+3..+6
+	ldx #0
+esn_l1:	lda $0200,x
+esn_d1:	sta $6000,x
+	lda $0300,x
+esn_d2:	sta $6100,x
+	inx
+	bne esn_l1
+	ldx #$7F		; zero page $80-$FF (KERNAL zp)
+esn_l2:	lda $80,x
+esn_d3:	sta $6200,x
+	dex
+	bpl esn_l2
+	lda $00			; force RAM bank 0 for the $Axxx reads
+	pha
+	lda #0
+	sta $00
+	ldx #15
+esn_l3:	lda $AC00,x	; editor keystroke vectors area
+esn_d4:	sta $6280,x
+	dex
+	bpl esn_l3
+	ldx #$1F		; VERA $9F20-$9F3F (skip the data ports:
+esn_l4:	cpx #3			; reading them advances ADDR)
+	beq esn_v0
+	cpx #4
+	beq esn_v0
+	lda $9F20,x
+	bne esn_v1
+esn_v0:	lda #0
+esn_v1:
+esn_d5:	sta $6290,x
+	dex
+	bpl esn_l4
+	ldy #0			; bank0 $A800-$ABFF (keyboard/editor state)
+esn_l5:
+	lda $A800,y
+esn_d6:	sta $6300,y
+	iny
+	bne esn_l5
+	inc esn_l5+2		; walk the 4 source pages
+	inc esn_d6+2
+	lda esn_l5+2
+	cmp #$AC
+	bne esn_l5
+	lda #$A8		; restore the patched source page
+	sta esn_l5+2
+	lda esn_d6+2		; bank0 $A000-$A6FF (the loaded KEYMAP tables:
+	clc			; keymap_data/caps/deadkeys/kbdnam) -> base+7..+13
+	adc #0			; (esn_d6+2 is already base+7 after the walk)
+	sta esn_d7+2
+	ldy #0
+esn_l6:
+	lda $A000,y
+esn_d7:	sta $6700,y
+	iny
+	bne esn_l6
+	inc esn_l6+2
+	inc esn_d7+2
+	lda esn_l6+2
+	cmp #$A7
+	bne esn_l6
+	lda #$A0		; restore the patched source page
+	sta esn_l6+2
+	pla
+	sta $00
+	rts
+}
+
 +header ~edit, ~edit_n, "EDIT"
 	+code
 	lda _dtop			; filename length -> r1L
@@ -2091,6 +2205,10 @@ edit_save:
 	inx
 	cpx #$5e
 	bne edit_save
+}
+!ifdef EDIT_DEBUG {
+	lda #$50			; "before" snapshot -> $5000
+	jsr edit_snap
 }
 	ldx #10				; first RAM bank for the editor
 	ldy #255			; last RAM bank
@@ -2152,9 +2270,99 @@ edit_restore:
 }
 	sta $00
 	+kcall $FFE7			; CLALL - close all files + restore default I/O (ROM-safe)
+	; CLALL also closed Forth's persistent DOS command channel (logical file
+	; 15, opened at coldstart for the I/O-status reads). Without it the next
+	; OPEN-FILE status read (c64iostatus: CHKIN 15 + CHRIN-until-newline)
+	; falls back to the KEYBOARD - eating RETURNs and hanging INCLUDE after
+	; EDIT (the long-standing bug). Reopen it exactly like coldstart does.
+	lda #0
+	ldx #0
+	ldy #0
+	jsr SETNAM			; zero-length name
+	lda #15
+	ldx #8
+	ldy #15				; secondary 15 = the command channel
+	jsr SETLFS
+	jsr OPEN
+	lda #0				; x16edit enables the mouse and leaves it on:
+	ldx #0				; pointer sprite visible + PS/2 routing changed.
+	ldy #0				; MOUSE_CONFIG(0) hides it and restores the
+	+kcall $FF68			; keyboard-only data path.
 !if FASTLOAD {
 	jsr build_hashtable		; x16edit uses golden RAM ($0400-$07FF) where
 					; HASHNFA lives - rebuild (idempotent)
+}
+!ifdef EDIT_DEBUG {
+	lda #$60			; "after" snapshot -> $6000 (post-cleanup)
+	jsr edit_snap
+	; write both snapshots ($6000-$6EFF) to DFDUMP.BIN on device 8 right
+	; here, BEFORE any console read - so the data reaches the host even
+	; if the post-editor console is completely stuck.
+	lda #esn_namlen
+	ldx #<esn_nam
+	ldy #>esn_nam
+	jsr $FFBD			; SETNAM
+	lda #1
+	ldx #8
+	ldy #0
+	jsr $FFBA			; SETLFS
+	lda #<$5000
+	sta $02
+	lda #>$5000
+	sta $03
+	lda #$02			; A = zp address of the start pointer
+	ldx #<$6E00
+	ldy #>$6E00
+	jsr $FFD8			; SAVE
+	jmp esn_saved
+esn_nam: !text "@:DFDUMP.BIN"
+esn_namlen = * - esn_nam
+esn_hexd:				; print A as two hex digits + space
+	pha
+	lsr
+	lsr
+	lsr
+	lsr
+	jsr esn_hex1
+	pla
+	and #$0F
+	jsr esn_hex1
+	lda #' '
+	jmp $FFD2
+esn_hex1:
+	cmp #10
+	bcc +
+	adc #6				; carry set: +6+1 -> 'A'-10
++:	adc #'0'
+	jmp $FFD2
+esn_saved:
+	; probe: poll GETIN for a while and echo every received key code as
+	; hex - shows whether keyboard data still ARRIVES after the editor
+	lda #'<'
+	jsr $FFD2
+	lda #0
+	sta esn_cnt
+	sta esn_cnt+1
+	sta esn_cnt+2
+esn_gl:	jsr $FFE4			; GETIN
+	cmp #0
+	beq esn_gnone
+	jsr esn_hexd
+	jmp esn_gl
+esn_gnone:
+	inc esn_cnt
+	bne esn_gl
+	inc esn_cnt+1
+	bne esn_gl
+	inc esn_cnt+2
+	lda esn_cnt+2
+	cmp #6				; ~0.4M polls (~15 s real)
+	bne esn_gl
+	lda #'>'
+	jsr $FFD2
+	jmp esn_probed
+esn_cnt: !byte 0,0,0
+esn_probed:
 }
 	+dpop
 	+dpop
