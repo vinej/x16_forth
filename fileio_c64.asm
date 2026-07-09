@@ -120,6 +120,10 @@ fileio_module_start = *
 rgn_nochkin:
 	+dpop				; u1
 	+stax _scratch_2
+	lda #0				; ior latch: READST error bits (EOF bit $40
+	sta rgn_ior			; excluded) - replaces the per-line DOS
+					; status-channel read (CHKIN 15 + CHRIN loop)
+					; that used to dominate the per-line cost
 	lda _dtop			; cur = c-addr (c-addr itself stays on the
 	sta _rscratch			; stack; it is replaced by u2 at the end)
 	clc
@@ -154,8 +158,11 @@ rgn_nc:
 	pla				; the char, for the NL check
 	cpx #0
 	beq rgn_noeof
-	pha				; EOF: latch the per-file flag (blocks the
-	jsr rgn_seteof			; next read attempt via readgen's pre-check),
+	pha				; EOF/error: latch the per-file flag (blocks
+	txa				; the next read via readgen's pre-check) and
+	and #$BF			; record any ERROR bits (READST minus the EOF
+	sta rgn_ior			; bit) as the ior
+	jsr rgn_seteof
 	pla				; then still handle a simultaneous final NL
 	ldy _scratch
 	beq rgn_done
@@ -182,6 +189,9 @@ rgn_done:
 	+stax _dtop
 	lda #$ff			; flag = true (the EOF-before-anything false
 	tax				; case is readgen's pre-check, not ours)
+	+dpush
+	lda rgn_ior			; ior from the latched READST error bits
+	ldx #0
 	jmp dpush_and_next
 
 rgn_uncount:				; NL: cur--
@@ -213,8 +223,11 @@ rgn_se_or:
 	sta _eoffiles+1
 	rts
 
-; ( c-addr u1 fileid mode -- u2 flag ior ) - the pre-check and the status
-; read stay at the Forth level; only the per-character loop went native.
+; ( c-addr u1 fileid mode -- u2 flag ior ) - the pre-check stays at the Forth
+; level; the per-character loop AND the ior (from READST error bits, latched
+; per byte) are native. The old per-line DOS status-channel read
+; (c64iostatus: CHKIN 15 + a CHRIN loop + CLRCHN) is gone - it cost more than
+; reading the line itself. c64iostatus still guards OPEN-FILE and the writes.
 +header ~readgen, ~readgen_n
 	+forth
 	+token tor, dup			; mode to the rstack; check the EOF flag
@@ -223,7 +236,7 @@ rgn_se_or:
 	+qbranch_fwd readgen_good
 	+token twodrop, drop, rdrop, zero, false, zero, exit	; three 0s, flag false
 readgen_good:
-	+token rfrom, readgen_native, c64iostatus, exit
+	+token rfrom, readgen_native, exit
 } else {
 ; The per-character reader words, used only by the interpreted readgen below
 ; (the FASTLOAD builds read characters inline in readgen_native instead).

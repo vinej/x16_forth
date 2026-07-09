@@ -595,6 +595,8 @@ HASHNFA_MAX = 512		; named core words are ~442 as of this writing
 HASHNFA = $0400
 +hmbuffer ~HASHIDX, 2*HASH_BUCKETS+2	; bucket -> slice start; [128] = end sentinel
 +hmbuffer ~hash_ok, 1			; 1 = table valid; 0 = fall back to linear
++hmbuffer ~rgn_ior, 1			; readgen_native: READST error bits latched
+					; during the read = READ-LINE/READ-FILE ior
 HASHNFA_END = HASHNFA + 2*HASHNFA_MAX
 }
 
@@ -3843,11 +3845,17 @@ refill_1:
 	+literal 80
 	+token accept, numtib, poke, zero, ptrin, poke, true, exit	; console
 refill_2:
+!if FASTLOAD = 0 {
+	; save the pre-refill file position into the source frame (+10) for
+	; RESTORE-INPUT. Dead weight on these platforms: FILE-POSITION and
+	; REPOSITION-FILE are both stubs, so the value can never be used -
+	; the FASTLOAD builds skip the whole dance (it ran once per line).
 	+token sourceid, fileposition, drop
 	+literal _source
 	+token peek
 	+literal 10
 	+token add, twopoke
+}
 	+token tib
 	+literal 98
 	+token sourceid, readline, zeroeq, and_op
@@ -5132,12 +5140,42 @@ qcomp_abort:
 qstack_abort:
 	+token xabortq
 +header ~qstack, ~qstack_n, "?STACK"
+!if FASTLOAD {
+; INTERPRET runs ?STACK before every token, so this is one of the hottest
+; words during compilation. "0 <= DEPTH <= STACKLIMIT" is equivalent to a
+; plain 16-bit range check on the _dstack pointer - no DEPTH arithmetic.
+QSTACK_LO = DSTACK_INIT - 2*STACKLIMIT
+	+code
+	lda _dstack
+	cmp #<QSTACK_LO
+	lda _dstack+1
+	sbc #>QSTACK_LO
+	bcc qs_bad			; _dstack < LO: overflow (grew down too far)
+	lda #<DSTACK_INIT
+	cmp _dstack
+	lda #>DSTACK_INIT
+	sbc _dstack+1
+	bcc qs_bad			; _dstack > INIT: underflow
+	jmp next
+qs_bad:
+	lda #<qstack_abort		; run the classic abort fragment (xabortq
+	sta _ri				; reads the "?STACK" name that follows it
+	lda #>qstack_abort		; as its message)
+	sta _ri+1
+!if WIDEDICT {
+	lda #0				; the fragment is near/core code
+	sta _ribank
+	sta CBANKREG
+}
+	jmp next
+} else {
 	+forth
 	+token depth, dup, zerolt, swap
 	+literal STACKLIMIT
 	+token greater, or, zeroeq
 	+qbranch qstack_abort
 	+token exit
+}
 
 +header ~interpret, ~interpret_n
 	+forth
