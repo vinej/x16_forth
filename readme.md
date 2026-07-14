@@ -21,11 +21,15 @@ The original target platform was Commander X16. However, in the middle of develo
 The instructions below are for Windows-based systems. It should not be difficult to modify them to other platforms as long as the ACME assembler is available there.
 
 ### Tools you must supply yourself (not in this repo / not on GitHub)
-Three folders are **git-ignored** and are **not** part of the GitHub download. After cloning, place them in the project root yourself:
+These third-party tools are **git-ignored** and are **not** part of the GitHub download — they are large vendored binaries, and the X16 emulator carries the copyrighted Commander X16 KERNAL/BASIC ROM, which must not be redistributed. After cloning, download each and place it in the project root exactly as shown:
 
-* `asm/` — the [ACME assembler](https://sourceforge.net/projects/acme-crossass/files/win32/) (`asm/acme.exe`). Required to build every version.
-* `emulator/` — the [official Commander X16 emulator](https://github.com/X16Community/x16-emulator/releases) (`emulator/x16emu.exe` + `emulator/rom.bin`). Required to test the X16 versions.
-* `vice/` — [VICE](https://vice-emu.sourceforge.io/) (`vice/bin/x64sc.exe`, `cartconv.exe`). Required to build/test the C64 versions.
+| Put it in | Tool (files the build/test scripts expect) | Download from | Needed for |
+|---|---|---|---|
+| `asm/` | ACME assembler — `asm/acme.exe` | [ACME (win32)](https://sourceforge.net/projects/acme-crossass/files/win32/) | building **every** version (scripts call `.\asm\acme.exe`) |
+| `emulator/` | X16 emulator — `emulator/x16emu.exe` **and its bundled `emulator/rom.bin`** | [x16-emulator releases](https://github.com/X16Community/x16-emulator/releases) | running/testing the X16 versions |
+| `vice/` | VICE — `vice/bin/x64sc.exe`, `cartconv.exe` | [VICE](https://vice-emu.sourceforge.io/) | building/testing the C64 versions |
+
+> **`rom.bin`** ships *inside* the official X16 emulator release — download the emulator and the ROM comes with it. It is Commander X16 ROM and is intentionally excluded from this repo; never commit it.
 
 The [Foenix F256 IDE](https://github.com/Trinity-11/FoenixIDE) can test the F256 build; there is no scripted support — install it and point its "SD card" at the binary.
 
